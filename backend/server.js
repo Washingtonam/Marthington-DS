@@ -19,17 +19,32 @@ const Pricing = require("./models/Pricing");
 const app = express();
 
 // ==============================
-// ✅ CORS
+// ✅ CORS (FIXED PROPERLY)
 // ==============================
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://www.xcombinator.com.ng",
+  "https://xcombinator.com.ng"
+];
+
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://www.xcombinator.com.ng",
-    "https://xcombinator.com.ng"
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  origin: function (origin, callback) {
+    // allow requests with no origin (mobile apps, postman)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
+
+// 🔥 VERY IMPORTANT (THIS FIXES YOUR ISSUE)
+app.options("*", cors());
 
 // ==============================
 // 🔥 BODY PARSER
