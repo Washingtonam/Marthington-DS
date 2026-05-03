@@ -14,9 +14,7 @@ const slipRoutes = require("./api/slipRoutes");
 const transactionsRoutes = require("./api/transactionsRoutes");
 const ninServicesRoutes = require("./api/ninServicesRoutes");
 
-
 const Pricing = require("./models/Pricing");
-
 
 const app = express();
 
@@ -34,7 +32,7 @@ app.use(cors({
 }));
 
 // ==============================
-// 🔥 BODY PARSER (FIXED)
+// 🔥 BODY PARSER
 // ==============================
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));

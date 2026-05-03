@@ -22,7 +22,7 @@ router.post("/nin-services/request", async (req, res) => {
       nin,
       slipType,
       proof,
-      passport, // ✅ NEW
+      passport,
       formData
     } = req.body;
 
@@ -70,7 +70,7 @@ router.post("/nin-services/request", async (req, res) => {
       slipType: slipType || "none",
       amount: total,
       proof,
-      passport, // ✅ SAVED
+      passport,
       formData: formData || {},
       status: "pending",
       statusHistory: [
@@ -92,30 +92,37 @@ router.post("/nin-services/request", async (req, res) => {
     });
 
     // ==============================
-    // 📊 GOOGLE SHEETS (SAFE)
+    // 📊 GOOGLE SHEETS (FIXED)
     // ==============================
-    addToSheets({
-      summary: [
-        new Date().toLocaleString(),
-        email || "N/A",
-        service,
-        type,
-        nin,
-        total,
-        "pending"
-      ],
+    try {
+      console.log("📊 Sending to Google Sheets...");
 
-      fullData: [
-        new Date().toLocaleString(),
-        email || "N/A",
-        service,
-        type,
-        nin,
-        JSON.stringify(formData || {}, null, 2)
-      ]
-    })
-      .then(() => console.log("✅ Sheets updated"))
-      .catch(err => console.error("❌ SHEETS ERROR:", err.message));
+      await addToSheets({
+        summary: [
+          new Date().toLocaleString(),
+          email || "N/A",
+          service,
+          type,
+          nin,
+          total,
+          "pending"
+        ],
+
+        fullData: [
+          new Date().toLocaleString(),
+          email || "N/A",
+          service,
+          type,
+          nin,
+          JSON.stringify(formData || {}, null, 2)
+        ]
+      });
+
+      console.log("✅ GOOGLE SHEETS SUCCESS");
+
+    } catch (sheetErr) {
+      console.error("❌ GOOGLE SHEETS FAILED:", sheetErr);
+    }
 
     res.json({
       message: "Request submitted successfully",
