@@ -1,21 +1,18 @@
 const { google } = require("googleapis");
 
 // ==============================
-// 🔐 AUTH (ENV-BASED - SAFE)
+// 🔐 AUTH (FIXED)
 // ==============================
 const auth = new google.auth.GoogleAuth({
   credentials: {
     client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    private_key: process.env.GOOGLE_PRIVATE_KEY
+      ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n")
+      : undefined,
   },
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
-const sheets = google.sheets({ version: "v4", auth });
-
-// ==============================
-// 📊 SHEET ID
-// ==============================
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
 
 // ==============================
@@ -23,6 +20,18 @@ const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
 // ==============================
 async function addToSheets({ summary, fullData }) {
   try {
+    if (!SPREADSHEET_ID) {
+      console.error("❌ GOOGLE_SHEET_ID missing");
+      return;
+    }
+
+    const client = await auth.getClient();
+
+    const sheets = google.sheets({
+      version: "v4",
+      auth: client,
+    });
+
     // ======================
     // 📄 SUMMARY SHEET
     // ======================
@@ -47,8 +56,10 @@ async function addToSheets({ summary, fullData }) {
       },
     });
 
+    console.log("✅ Data sent to Google Sheets");
+
   } catch (err) {
-    console.error("GOOGLE SHEETS ERROR:", err.message);
+    console.error("❌ GOOGLE SHEETS FULL ERROR:", err);
   }
 }
 
