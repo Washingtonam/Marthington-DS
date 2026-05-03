@@ -8,14 +8,22 @@ const User = require("../models/User");
 const router = express.Router();
 
 // ==============================
-// 📧 EMAIL CONFIG
+// 📧 EMAIL CONFIG (HARDENED)
 // ==============================
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+});
+
+// 🔍 DEBUG ENV (VERY IMPORTANT)
+console.log("📧 EMAIL CONFIG CHECK:", {
+  user: process.env.EMAIL_USER,
+  passLoaded: !!process.env.EMAIL_PASS,
 });
 
 // ==============================
@@ -59,7 +67,7 @@ router.post("/register", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("REGISTER ERROR:", error);
+    console.error("❌ REGISTER ERROR:", error);
     res.status(500).json({
       error: error.message || "Registration failed",
     });
@@ -109,7 +117,7 @@ router.post("/login", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("LOGIN ERROR:", error);
+    console.error("❌ LOGIN ERROR:", error);
     res.status(500).json({
       error: error.message || "Login failed",
     });
@@ -155,7 +163,7 @@ router.post("/change-password", async (req, res) => {
     res.json({ message: "Password updated successfully" });
 
   } catch (error) {
-    console.error("CHANGE PASSWORD ERROR:", error);
+    console.error("❌ CHANGE PASSWORD ERROR:", error);
     res.status(500).json({
       error: "Failed to update password",
     });
@@ -163,7 +171,7 @@ router.post("/change-password", async (req, res) => {
 });
 
 // ==============================
-// 🔥 FORGOT PASSWORD (TOKEN)
+// 🔥 FORGOT PASSWORD (DEBUG + FIXED)
 // ==============================
 router.post("/forgot-password", async (req, res) => {
   try {
@@ -175,10 +183,12 @@ router.post("/forgot-password", async (req, res) => {
 
     email = email.toLowerCase().trim();
 
+    console.log("📩 Reset request:", email);
+
     const user = await User.findOne({ email });
 
-    // 🔒 Always return success (no email leak)
     if (!user) {
+      console.log("⚠️ No user found");
       return res.json({
         message: "If email exists, reset link has been sent",
       });
@@ -187,28 +197,35 @@ router.post("/forgot-password", async (req, res) => {
     const token = crypto.randomBytes(32).toString("hex");
 
     user.resetToken = token;
-    user.resetTokenExpiry = Date.now() + 15 * 60 * 1000; // 15 mins
+    user.resetTokenExpiry = Date.now() + 15 * 60 * 1000;
     await user.save();
 
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
-    await transporter.sendMail({
+    console.log("🔗 Reset Link:", resetLink);
+
+    const info = await transporter.sendMail({
+      from: `"Xcombinator" <${process.env.EMAIL_USER}>`,
       to: user.email,
       subject: "Reset Your Password",
       html: `
         <h3>Password Reset</h3>
-        <p>Click the link below to reset your password:</p>
+        <p>Click the link below:</p>
         <a href="${resetLink}">${resetLink}</a>
-        <p>This link expires in 15 minutes.</p>
+        <p>Expires in 15 minutes</p>
       `,
     });
+
+    console.log("✅ EMAIL SENT:", info.response);
 
     res.json({
       message: "Reset link sent to your email",
     });
 
   } catch (error) {
-    console.error("FORGOT PASSWORD ERROR:", error);
+    console.error("❌ FORGOT PASSWORD FULL ERROR:");
+    console.error(error);
+
     res.status(500).json({
       error: "Failed to send reset email",
     });
@@ -216,7 +233,7 @@ router.post("/forgot-password", async (req, res) => {
 });
 
 // ==============================
-// 🔥 RESET PASSWORD (TOKEN)
+// 🔥 RESET PASSWORD
 // ==============================
 router.post("/reset-password/:token", async (req, res) => {
   try {
@@ -251,7 +268,7 @@ router.post("/reset-password/:token", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("RESET PASSWORD ERROR:", error);
+    console.error("❌ RESET PASSWORD ERROR:", error);
     res.status(500).json({
       error: "Failed to reset password",
     });
