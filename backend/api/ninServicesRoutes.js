@@ -9,6 +9,9 @@ const Transaction = require("../models/Transaction");
 // ✅ GOOGLE SHEETS
 const { addToSheets } = require("../utils/googleSheets");
 
+// ✅ CLOUDINARY
+const { uploadToCloudinary } = require("../utils/cloudinary");
+
 // ==============================
 // 📤 CREATE REQUEST
 // ==============================
@@ -27,7 +30,9 @@ router.post("/nin-services/request", async (req, res) => {
     } = req.body;
 
     if (!userId || !service || !type || !nin || !proof) {
-      return res.status(400).json({ message: "Missing required fields" });
+      return res.status(400).json({
+        message: "Missing required fields"
+      });
     }
 
     const pricing = await Pricing.getPricing();
@@ -60,6 +65,44 @@ router.post("/nin-services/request", async (req, res) => {
     const total = basePrice + slipCost;
 
     // ==============================
+    // ☁️ CLOUDINARY UPLOADS
+    // ==============================
+    let proofUrl = "";
+    let passportUrl = "";
+
+    try {
+
+      console.log("☁️ Uploading proof...");
+
+      proofUrl = await uploadToCloudinary(
+        proof,
+        "xcombinator/proofs"
+      );
+
+      console.log("✅ Proof uploaded");
+
+      if (passport) {
+
+        console.log("☁️ Uploading passport...");
+
+        passportUrl = await uploadToCloudinary(
+          passport,
+          "xcombinator/passports"
+        );
+
+        console.log("✅ Passport uploaded");
+      }
+
+    } catch (uploadErr) {
+
+      console.error("❌ CLOUDINARY UPLOAD FAILED:", uploadErr);
+
+      return res.status(500).json({
+        message: "File upload failed"
+      });
+    }
+
+    // ==============================
     // 🧾 CREATE REQUEST
     // ==============================
     const request = await ServiceRequest.create({
@@ -69,12 +112,20 @@ router.post("/nin-services/request", async (req, res) => {
       nin,
       slipType: slipType || "none",
       amount: total,
-      proof,
-      passport,
+
+      // ✅ CLOUDINARY URLS
+      proof: proofUrl,
+      passport: passportUrl,
+
       formData: formData || {},
+
       status: "pending",
+
       statusHistory: [
-        { status: "pending", note: "Request submitted" }
+        {
+          status: "pending",
+          note: "Request submitted"
+        }
       ]
     });
 
@@ -87,14 +138,18 @@ router.post("/nin-services/request", async (req, res) => {
       status: "pending",
       userId,
       nin,
-      proof,
+
+      // ✅ CLOUDINARY URL
+      proof: proofUrl,
+
       requestId: request._id,
     });
 
     // ==============================
-    // 📊 GOOGLE SHEETS (FIXED)
+    // 📊 GOOGLE SHEETS
     // ==============================
     try {
+
       console.log("📊 Sending to Google Sheets...");
 
       await addToSheets({
@@ -121,17 +176,31 @@ router.post("/nin-services/request", async (req, res) => {
       console.log("✅ GOOGLE SHEETS SUCCESS");
 
     } catch (sheetErr) {
-      console.error("❌ GOOGLE SHEETS FAILED:", sheetErr);
+
+      console.error(
+        "❌ GOOGLE SHEETS FAILED:",
+        sheetErr
+      );
     }
 
+    // ==============================
+    // ✅ SUCCESS RESPONSE
+    // ==============================
     res.json({
       message: "Request submitted successfully",
       request,
     });
 
   } catch (err) {
-    console.error("CREATE REQUEST ERROR:", err);
-    res.status(500).json({ message: "Failed to submit request" });
+
+    console.error(
+      "❌ CREATE REQUEST ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      message: "Failed to submit request"
+    });
   }
 });
 
@@ -141,7 +210,12 @@ router.post("/nin-services/request", async (req, res) => {
 // ==============================
 router.get("/admin/requests", async (req, res) => {
   try {
-    let { page = 1, limit = 20, status } = req.query;
+
+    let {
+      page = 1,
+      limit = 20,
+      status
+    } = req.query;
 
     page = parseInt(page);
     limit = parseInt(limit);
@@ -152,17 +226,20 @@ router.get("/admin/requests", async (req, res) => {
       query.status = status;
     }
 
-    const total = await ServiceRequest.countDocuments(query);
+    const total =
+      await ServiceRequest.countDocuments(query);
 
-    const data = await ServiceRequest.find(query)
-      .populate("userId", "email")
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    const data =
+      await ServiceRequest.find(query)
+        .populate("userId", "email")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean();
 
     res.json({
       data,
+
       pagination: {
         total,
         page,
@@ -171,8 +248,15 @@ router.get("/admin/requests", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("FETCH REQUESTS ERROR:", err);
-    res.status(500).json({ message: "Failed to fetch requests" });
+
+    console.error(
+      "FETCH REQUESTS ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      message: "Failed to fetch requests"
+    });
   }
 });
 
@@ -182,10 +266,14 @@ router.get("/admin/requests", async (req, res) => {
 // ==============================
 router.post("/admin/requests/:id/approve", async (req, res) => {
   try {
-    const request = await ServiceRequest.findById(req.params.id);
+
+    const request =
+      await ServiceRequest.findById(req.params.id);
 
     if (!request) {
-      return res.status(404).json({ message: "Request not found" });
+      return res.status(404).json({
+        message: "Request not found"
+      });
     }
 
     request.status = "approved";
@@ -202,11 +290,20 @@ router.post("/admin/requests/:id/approve", async (req, res) => {
       { status: "approved" }
     );
 
-    res.json({ message: "Approved" });
+    res.json({
+      message: "Approved"
+    });
 
   } catch (err) {
-    console.error("APPROVE ERROR:", err);
-    res.status(500).json({ message: "Approval failed" });
+
+    console.error(
+      "APPROVE ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      message: "Approval failed"
+    });
   }
 });
 
@@ -216,12 +313,16 @@ router.post("/admin/requests/:id/approve", async (req, res) => {
 // ==============================
 router.post("/admin/requests/:id/reject", async (req, res) => {
   try {
+
     const { reason } = req.body;
 
-    const request = await ServiceRequest.findById(req.params.id);
+    const request =
+      await ServiceRequest.findById(req.params.id);
 
     if (!request) {
-      return res.status(404).json({ message: "Request not found" });
+      return res.status(404).json({
+        message: "Request not found"
+      });
     }
 
     request.status = "rejected";
@@ -238,11 +339,20 @@ router.post("/admin/requests/:id/reject", async (req, res) => {
       { status: "rejected" }
     );
 
-    res.json({ message: "Rejected" });
+    res.json({
+      message: "Rejected"
+    });
 
   } catch (err) {
-    console.error("REJECT ERROR:", err);
-    res.status(500).json({ message: "Rejection failed" });
+
+    console.error(
+      "REJECT ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      message: "Rejection failed"
+    });
   }
 });
 
@@ -252,13 +362,17 @@ router.post("/admin/requests/:id/reject", async (req, res) => {
 // ==============================
 router.post("/admin/requests/:id/upload-slip", async (req, res) => {
   try {
+
     const { pdf } = req.body;
 
     if (!pdf) {
-      return res.status(400).json({ message: "PDF required" });
+      return res.status(400).json({
+        message: "PDF required"
+      });
     }
 
-    const request = await ServiceRequest.findById(req.params.id);
+    const request =
+      await ServiceRequest.findById(req.params.id);
 
     request.resultSlip = pdf;
     request.status = "completed";
@@ -275,11 +389,20 @@ router.post("/admin/requests/:id/upload-slip", async (req, res) => {
       { status: "success" }
     );
 
-    res.json({ message: "Completed" });
+    res.json({
+      message: "Completed"
+    });
 
   } catch (err) {
-    console.error("UPLOAD ERROR:", err);
-    res.status(500).json({ message: "Upload failed" });
+
+    console.error(
+      "UPLOAD ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      message: "Upload failed"
+    });
   }
 });
 
@@ -289,9 +412,11 @@ router.post("/admin/requests/:id/upload-slip", async (req, res) => {
 // ==============================
 router.post("/admin/requests/:id/comment", async (req, res) => {
   try {
+
     const { text, by } = req.body;
 
-    const request = await ServiceRequest.findById(req.params.id);
+    const request =
+      await ServiceRequest.findById(req.params.id);
 
     request.comments.push({
       text,
@@ -301,11 +426,20 @@ router.post("/admin/requests/:id/comment", async (req, res) => {
 
     await request.save();
 
-    res.json({ message: "Comment added" });
+    res.json({
+      message: "Comment added"
+    });
 
   } catch (err) {
-    console.error("COMMENT ERROR:", err);
-    res.status(500).json({ message: "Failed to add comment" });
+
+    console.error(
+      "COMMENT ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      message: "Failed to add comment"
+    });
   }
 });
 
@@ -315,19 +449,30 @@ router.post("/admin/requests/:id/comment", async (req, res) => {
 // ==============================
 router.put("/admin/requests/:id/note", async (req, res) => {
   try {
+
     const { note } = req.body;
 
-    const request = await ServiceRequest.findById(req.params.id);
+    const request =
+      await ServiceRequest.findById(req.params.id);
 
     request.adminNotes = note;
 
     await request.save();
 
-    res.json({ message: "Note saved" });
+    res.json({
+      message: "Note saved"
+    });
 
   } catch (err) {
-    console.error("NOTE ERROR:", err);
-    res.status(500).json({ message: "Failed to save note" });
+
+    console.error(
+      "NOTE ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      message: "Failed to save note"
+    });
   }
 });
 
@@ -337,25 +482,35 @@ router.put("/admin/requests/:id/note", async (req, res) => {
 // ==============================
 router.get("/user/requests/:userId", async (req, res) => {
   try {
-    let { page = 1, limit = 10 } = req.query;
+
+    let {
+      page = 1,
+      limit = 10
+    } = req.query;
 
     page = parseInt(page);
     limit = parseInt(limit);
 
     const query = {
-      userId: new mongoose.Types.ObjectId(req.params.userId)
+      userId:
+        new mongoose.Types.ObjectId(
+          req.params.userId
+        )
     };
 
-    const total = await ServiceRequest.countDocuments(query);
+    const total =
+      await ServiceRequest.countDocuments(query);
 
-    const data = await ServiceRequest.find(query)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    const data =
+      await ServiceRequest.find(query)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean();
 
     res.json({
       data,
+
       pagination: {
         total,
         page,
@@ -364,8 +519,15 @@ router.get("/user/requests/:userId", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("USER REQUEST ERROR:", err);
-    res.status(500).json({ message: "Failed to fetch user requests" });
+
+    console.error(
+      "USER REQUEST ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      message: "Failed to fetch user requests"
+    });
   }
 });
 

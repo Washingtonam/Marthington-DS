@@ -129,6 +129,16 @@ serviceRequestSchema.pre("save", function () {
 
 });
 
+
+// ==============================
+// 🚀 INDEX OPTIMIZATION
+// ==============================
+serviceRequestSchema.index({ status: 1 });
+serviceRequestSchema.index({ userId: 1 });
+serviceRequestSchema.index({ createdAt: -1 });
+serviceRequestSchema.index({ service: 1 });
+serviceRequestSchema.index({ type: 1 });
+
 // ==============================
 // ✅ SAFE EXPORT
 // ==============================

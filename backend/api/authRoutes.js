@@ -1,29 +1,19 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
 const User = require("../models/User");
 
 const router = express.Router();
 
 // ==============================
-// 📧 EMAIL CONFIG (HARDENED)
+// 📧 RESEND CONFIG
 // ==============================
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// 🔍 DEBUG ENV (VERY IMPORTANT)
-console.log("📧 EMAIL CONFIG CHECK:", {
-  user: process.env.EMAIL_USER,
-  passLoaded: !!process.env.EMAIL_PASS,
+console.log("📧 RESEND CHECK:", {
+  keyLoaded: !!process.env.RESEND_API_KEY
 });
 
 // ==============================
@@ -171,7 +161,7 @@ router.post("/change-password", async (req, res) => {
 });
 
 // ==============================
-// 🔥 FORGOT PASSWORD (DEBUG + FIXED)
+// 🔥 FORGOT PASSWORD (RESEND)
 // ==============================
 router.post("/forgot-password", async (req, res) => {
   try {
@@ -188,7 +178,6 @@ router.post("/forgot-password", async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      console.log("⚠️ No user found");
       return res.json({
         message: "If email exists, reset link has been sent",
       });
@@ -198,33 +187,33 @@ router.post("/forgot-password", async (req, res) => {
 
     user.resetToken = token;
     user.resetTokenExpiry = Date.now() + 15 * 60 * 1000;
+
     await user.save();
 
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
     console.log("🔗 Reset Link:", resetLink);
 
-    const info = await transporter.sendMail({
-      from: `"Xcombinator" <${process.env.EMAIL_USER}>`,
+    const response = await resend.emails.send({
+      from: "Xcombinator <onboarding@resend.dev>",
       to: user.email,
       subject: "Reset Your Password",
       html: `
-        <h3>Password Reset</h3>
+        <h2>Password Reset</h2>
         <p>Click the link below:</p>
         <a href="${resetLink}">${resetLink}</a>
-        <p>Expires in 15 minutes</p>
+        <p>This link expires in 15 minutes.</p>
       `,
     });
 
-    console.log("✅ EMAIL SENT:", info.response);
+    console.log("✅ EMAIL SENT:", response);
 
     res.json({
       message: "Reset link sent to your email",
     });
 
   } catch (error) {
-    console.error("❌ FORGOT PASSWORD FULL ERROR:");
-    console.error(error);
+    console.error("❌ RESEND ERROR:", error);
 
     res.status(500).json({
       error: "Failed to send reset email",

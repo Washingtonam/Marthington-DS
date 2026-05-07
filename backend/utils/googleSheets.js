@@ -6,75 +6,134 @@ const { google } = require("googleapis");
 const auth = new google.auth.GoogleAuth({
   credentials: {
     client_email: process.env.GOOGLE_CLIENT_EMAIL,
+
     private_key: process.env.GOOGLE_PRIVATE_KEY
       ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n")
       : undefined,
   },
-  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+
+  scopes: [
+    "https://www.googleapis.com/auth/spreadsheets",
+  ],
 });
 
-const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
+const SPREADSHEET_ID =
+  process.env.GOOGLE_SHEET_ID;
 
 // ==============================
-// 🚀 MAIN FUNCTION
+// 🚀 ADD TO SHEETS
 // ==============================
-async function addToSheets({ summary, fullData }) {
-  console.log("📡 addToSheets FUNCTION TRIGGERED");
+async function addToSheets({
+  summary,
+  fullData,
+}) {
+
+  console.log("📡 GOOGLE SHEETS START");
 
   try {
+
+    // ==========================
+    // 🔥 ENV CHECK
+    // ==========================
     if (!SPREADSHEET_ID) {
-      console.error("❌ GOOGLE_SHEET_ID missing");
-      return;
+      throw new Error(
+        "GOOGLE_SHEET_ID missing"
+      );
     }
 
-    if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
-      console.error("❌ GOOGLE ENV VARIABLES MISSING");
-      return;
+    if (
+      !process.env.GOOGLE_CLIENT_EMAIL
+    ) {
+      throw new Error(
+        "GOOGLE_CLIENT_EMAIL missing"
+      );
     }
 
-    const client = await auth.getClient();
+    if (
+      !process.env.GOOGLE_PRIVATE_KEY
+    ) {
+      throw new Error(
+        "GOOGLE_PRIVATE_KEY missing"
+      );
+    }
 
-    console.log("🔐 Google Auth Successful");
+    // ==========================
+    // 🔐 AUTH
+    // ==========================
+    const client =
+      await auth.getClient();
+
+    console.log(
+      "✅ GOOGLE AUTH SUCCESS"
+    );
 
     const sheets = google.sheets({
       version: "v4",
       auth: client,
     });
 
-    // ======================
-    // 📄 SUMMARY SHEET
-    // ======================
+    // ==========================
+    // 📊 SUMMARY SHEET
+    // ==========================
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: "Summary!A:H",
+
+      range: "Summary!A:G",
+
       valueInputOption: "USER_ENTERED",
+
       requestBody: {
         values: [summary],
       },
     });
 
-    console.log("📊 Summary sheet updated");
+    console.log(
+      "✅ SUMMARY SHEET UPDATED"
+    );
 
-    // ======================
-    // 📄 FULL DATA SHEET
-    // ======================
+    // ==========================
+    // 📦 FULL DATA SHEET
+    // ==========================
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: "FullData!A:B",
+
+      range: "FullData!A:F",
+
       valueInputOption: "USER_ENTERED",
+
       requestBody: {
         values: [fullData],
       },
     });
 
-    console.log("📦 FullData sheet updated");
+    console.log(
+      "✅ FULLDATA SHEET UPDATED"
+    );
 
-    console.log("✅ ALL GOOGLE SHEETS OPERATIONS SUCCESSFUL");
+    console.log(
+      "🎉 GOOGLE SHEETS SUCCESS"
+    );
 
   } catch (err) {
-    console.error("❌ GOOGLE SHEETS FULL ERROR:");
-    console.error(err);
+
+    console.error(
+      "❌ GOOGLE SHEETS ERROR:"
+    );
+
+    console.error(err.message);
+
+    if (err.response?.data) {
+      console.error(
+        JSON.stringify(
+          err.response.data,
+          null,
+          2
+        )
+      );
+    }
   }
 }
 
-module.exports = { addToSheets };
+module.exports = {
+  addToSheets,
+};

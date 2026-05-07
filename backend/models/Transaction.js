@@ -57,6 +57,15 @@ const transactionSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// ==============================
+// 🚀 INDEX OPTIMIZATION
+// ==============================
+transactionSchema.index({ userId: 1 });
+transactionSchema.index({ requestId: 1 });
+transactionSchema.index({ status: 1 });
+transactionSchema.index({ createdAt: -1 });
+transactionSchema.index({ type: 1 });
+
 module.exports =
   mongoose.models.Transaction ||
   mongoose.model("Transaction", transactionSchema);
