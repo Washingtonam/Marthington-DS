@@ -1,21 +1,40 @@
 import { useEffect, useState } from "react";
+
 import axios from "axios";
+import api from "../lib/axios";
+import {
+  CreditCard,
+  Wallet,
+  CheckCircle2,
+  XCircle,
+  Clock3,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  BadgeDollarSign,
+} from "lucide-react";
 
 const API_BASE = "https://xcombinator.onrender.com";
 
 export default function AdminPayments() {
 
   const [payments, setPayments] = useState([]);
+
   const [filter, setFilter] = useState("all");
+
   const [unitPrice, setUnitPrice] = useState(250);
 
   const [loading, setLoading] = useState(true);
+
   const [loadingId, setLoadingId] = useState(null);
+
+  const [preview, setPreview] = useState(null);
 
   // =========================
   // PAGINATION
   // =========================
   const [page, setPage] = useState(1);
+
   const [pages, setPages] = useState(1);
 
   const LIMIT = 20;
@@ -27,7 +46,7 @@ export default function AdminPayments() {
   };
 
   // =========================
-  // 🚀 FETCH PAYMENTS
+  // FETCH PAYMENTS
   // =========================
   const fetchPayments = async () => {
 
@@ -42,7 +61,9 @@ export default function AdminPayments() {
 
       setPayments(res.data?.data || []);
 
-      setPages(res.data?.pagination?.pages || 1);
+      setPages(
+        res.data?.pagination?.pages || 1
+      );
 
     } catch (err) {
 
@@ -57,7 +78,7 @@ export default function AdminPayments() {
   };
 
   // =========================
-  // 💰 FETCH PRICING
+  // FETCH PRICING
   // =========================
   const fetchPricing = async () => {
 
@@ -82,7 +103,7 @@ export default function AdminPayments() {
   };
 
   // =========================
-  // ✅ APPROVE
+  // APPROVE
   // =========================
   const approve = async (id) => {
 
@@ -121,7 +142,7 @@ export default function AdminPayments() {
   };
 
   // =========================
-  // ❌ REJECT
+  // REJECT
   // =========================
   const reject = async (id) => {
 
@@ -168,7 +189,7 @@ export default function AdminPayments() {
   }, []);
 
   // =========================
-  // STATUS COLORS
+  // STATUS STYLE
   // =========================
   const statusStyle = (status) => {
 
@@ -188,30 +209,151 @@ export default function AdminPayments() {
     }
   };
 
+  // =========================
+  // STATS
+  // =========================
+  const pendingCount = payments.filter(
+    p => p.status === "pending"
+  ).length;
+
+  const approvedCount = payments.filter(
+    p => p.status === "approved"
+  ).length;
+
+  const totalAmount = payments.reduce(
+    (acc, curr) => acc + (curr.amount || 0),
+    0
+  );
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto px-4 pb-20">
 
-      {/* HEADER */}
-      <div className="mb-6">
+      {/* HERO */}
+      <div className="bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 rounded-3xl p-8 text-white shadow-2xl mb-8">
 
-        <h1 className="text-3xl font-bold">
-          Payment Requests
-        </h1>
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
 
-        <p className="text-gray-500 mt-1">
-          Unit Price: ₦{unitPrice}
-        </p>
+          <div>
+
+            <div className="flex items-center gap-2 mb-3">
+              <Wallet size={20} />
+              <span className="uppercase tracking-widest text-sm opacity-80">
+                PAYMENT MANAGEMENT
+              </span>
+            </div>
+
+            <h1 className="text-3xl md:text-5xl font-bold mb-3">
+              Payment Requests
+            </h1>
+
+            <p className="text-blue-100 max-w-2xl">
+              Review wallet funding requests, approve unit allocations,
+              and manage customer payment submissions efficiently.
+            </p>
+
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 border border-white/10 min-w-[260px]">
+
+            <p className="text-sm text-blue-100 mb-2">
+              Current Unit Price
+            </p>
+
+            <h2 className="text-5xl font-bold">
+              ₦{unitPrice}
+            </h2>
+
+          </div>
+
+        </div>
 
       </div>
 
-      {/* FILTER */}
-      <div className="flex gap-3 flex-wrap mb-6">
+      {/* STATS */}
+      <div className="grid md:grid-cols-3 gap-5 mb-8">
+
+        <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-800">
+
+          <div className="flex items-center justify-between">
+
+            <div>
+
+              <p className="text-sm text-gray-500 mb-2">
+                Pending Payments
+              </p>
+
+              <h2 className="text-4xl font-bold dark:text-white">
+                {pendingCount}
+              </h2>
+
+            </div>
+
+            <div className="bg-yellow-100 p-4 rounded-2xl">
+              <Clock3 className="text-yellow-700" />
+            </div>
+
+          </div>
+
+        </div>
+
+        <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-800">
+
+          <div className="flex items-center justify-between">
+
+            <div>
+
+              <p className="text-sm text-gray-500 mb-2">
+                Approved
+              </p>
+
+              <h2 className="text-4xl font-bold dark:text-white">
+                {approvedCount}
+              </h2>
+
+            </div>
+
+            <div className="bg-green-100 p-4 rounded-2xl">
+              <CheckCircle2 className="text-green-700" />
+            </div>
+
+          </div>
+
+        </div>
+
+        <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-800">
+
+          <div className="flex items-center justify-between">
+
+            <div>
+
+              <p className="text-sm text-gray-500 mb-2">
+                Total Volume
+              </p>
+
+              <h2 className="text-4xl font-bold dark:text-white">
+                ₦{totalAmount.toLocaleString()}
+              </h2>
+
+            </div>
+
+            <div className="bg-blue-100 p-4 rounded-2xl">
+              <BadgeDollarSign className="text-blue-700" />
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* FILTERS */}
+      <div className="flex gap-3 flex-wrap mb-8">
 
         {[
           "all",
           "pending",
           "approved",
-          "rejected"
+          "rejected",
         ].map((f) => (
 
           <button
@@ -220,10 +362,10 @@ export default function AdminPayments() {
               setFilter(f);
               setPage(1);
             }}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+            className={`px-5 py-3 rounded-2xl text-sm font-semibold transition ${
               filter === f
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 hover:bg-gray-200"
+                ? "bg-blue-600 text-white shadow-lg"
+                : "bg-white dark:bg-[#161616] dark:text-white border border-gray-200 dark:border-gray-800 hover:shadow-md"
             }`}
           >
             {f.toUpperCase()}
@@ -235,133 +377,236 @@ export default function AdminPayments() {
 
       {/* LOADING */}
       {loading && (
-        <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-500">
-          Loading payments...
+
+        <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-10 text-center">
+
+          <p className="text-gray-500 dark:text-gray-400">
+            Loading payments...
+          </p>
+
         </div>
+
       )}
 
       {/* EMPTY */}
       {!loading && payments.length === 0 && (
-        <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-500">
-          No payments found
+
+        <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-10 text-center">
+
+          <p className="text-gray-500 dark:text-gray-400">
+            No payments found
+          </p>
+
         </div>
+
       )}
 
       {/* GRID */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+      {!loading && payments.length > 0 && (
 
-        {payments.map((p) => {
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
 
-          const units = Math.floor(
-            p.amount / unitPrice
-          );
+          {payments.map((p) => {
 
-          return (
+            const units = Math.floor(
+              p.amount / unitPrice
+            );
 
-            <div
-              key={p._id}
-              className="bg-white p-5 rounded-2xl shadow border"
-            >
+            return (
 
-              {/* TOP */}
-              <div className="flex justify-between items-center mb-3">
+              <div
+                key={p._id}
+                className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-800"
+              >
 
-                <p className="font-semibold text-sm truncate">
-                  {p.userId?.email || "Unknown"}
-                </p>
+                {/* TOP */}
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
 
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${statusStyle(p.status)}`}
-                >
-                  {p.status}
-                </span>
+                  <div className="flex justify-between items-start gap-3">
 
-              </div>
+                    <div>
 
-              {/* DETAILS */}
-              <p className="text-sm mb-1">
-                Amount:
-                <b className="ml-1">
-                  ₦{p.amount?.toLocaleString()}
-                </b>
-              </p>
+                      <div className="flex items-center gap-2 mb-2">
 
-              <p className="text-sm text-blue-600 font-semibold mb-3">
-                ≈ {units} units
-              </p>
+                        <div className="bg-white/20 p-2 rounded-xl">
+                          <CreditCard size={18} />
+                        </div>
 
-              {/* IMAGE */}
-              {p.proof && (
-                <img
-                  src={p.proof}
-                  alt="proof"
-                  loading="lazy"
-                  className="w-full h-48 object-cover rounded-xl border mb-4"
-                />
-              )}
+                        <span
+                          className={`text-xs px-3 py-1 rounded-full ${statusStyle(p.status)}`}
+                        >
+                          {p.status}
+                        </span>
 
-              {/* ACTIONS */}
-              {p.status === "pending" && (
+                      </div>
 
-                <div className="flex gap-2">
+                      <h2 className="font-semibold text-sm break-all">
+                        {p.userId?.email || "Unknown"}
+                      </h2>
 
-                  <button
-                    onClick={() => approve(p._id)}
-                    disabled={loadingId === p._id}
-                    className={`flex-1 py-2 rounded-xl text-white text-sm ${
-                      loadingId === p._id
-                        ? "bg-gray-400"
-                        : "bg-green-600 hover:bg-green-700"
-                    }`}
-                  >
+                    </div>
 
-                    {loadingId === p._id
-                      ? "Processing..."
-                      : `Approve (+${units})`}
+                    {p.proof && (
 
-                  </button>
+                      <button
+                        onClick={() => setPreview(p.proof)}
+                        className="bg-white/20 hover:bg-white/30 p-2 rounded-xl transition"
+                      >
+                        <Eye size={18} />
+                      </button>
 
-                  <button
-                    onClick={() => reject(p._id)}
-                    disabled={loadingId === p._id}
-                    className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm"
-                  >
-                    Reject
-                  </button>
+                    )}
+
+                  </div>
 
                 </div>
 
-              )}
+                {/* BODY */}
+                <div className="p-5">
 
-            </div>
-          );
-        })}
-      </div>
+                  <div className="space-y-3 mb-5">
+
+                    <div className="flex justify-between">
+
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        Amount
+                      </span>
+
+                      <span className="font-bold dark:text-white">
+                        ₦{p.amount?.toLocaleString()}
+                      </span>
+
+                    </div>
+
+                    <div className="flex justify-between">
+
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        Units
+                      </span>
+
+                      <span className="font-bold text-blue-600">
+                        +{units}
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  {/* PROOF */}
+                  {p.proof && (
+
+                    <img
+                      src={p.proof}
+                      alt="proof"
+                      loading="lazy"
+                      onClick={() => setPreview(p.proof)}
+                      className="w-full h-56 object-cover rounded-2xl border cursor-pointer hover:scale-[1.01] transition mb-5"
+                    />
+
+                  )}
+
+                  {/* ACTIONS */}
+                  {p.status === "pending" && (
+
+                    <div className="grid grid-cols-2 gap-3">
+
+                      <button
+                        onClick={() => approve(p._id)}
+                        disabled={loadingId === p._id}
+                        className={`py-3 rounded-2xl text-white font-semibold transition flex items-center justify-center gap-2 ${
+                          loadingId === p._id
+                            ? "bg-gray-400"
+                            : "bg-green-600 hover:bg-green-700"
+                        }`}
+                      >
+
+                        <CheckCircle2 size={18} />
+
+                        {loadingId === p._id
+                          ? "Processing..."
+                          : `Approve`}
+
+                      </button>
+
+                      <button
+                        onClick={() => reject(p._id)}
+                        disabled={loadingId === p._id}
+                        className="py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-semibold transition flex items-center justify-center gap-2"
+                      >
+
+                        <XCircle size={18} />
+
+                        Reject
+
+                      </button>
+
+                    </div>
+
+                  )}
+
+                </div>
+
+              </div>
+
+            );
+          })}
+
+        </div>
+
+      )}
 
       {/* PAGINATION */}
       {!loading && pages > 1 && (
 
-        <div className="flex justify-center items-center gap-3 mt-8">
+        <div className="flex justify-center items-center gap-4 mt-10">
 
           <button
             disabled={page === 1}
             onClick={() => setPage(prev => prev - 1)}
-            className="px-4 py-2 rounded-lg bg-gray-100 disabled:opacity-50"
+            className="bg-white dark:bg-[#161616] border border-gray-200 dark:border-gray-800 dark:text-white px-5 py-3 rounded-2xl disabled:opacity-50 flex items-center gap-2"
           >
+            <ChevronLeft size={18} />
             Previous
           </button>
 
-          <div className="text-sm font-medium">
+          <div className="bg-blue-600 text-white px-5 py-3 rounded-2xl font-semibold">
             Page {page} of {pages}
           </div>
 
           <button
             disabled={page === pages}
             onClick={() => setPage(prev => prev + 1)}
-            className="px-4 py-2 rounded-lg bg-gray-100 disabled:opacity-50"
+            className="bg-white dark:bg-[#161616] border border-gray-200 dark:border-gray-800 dark:text-white px-5 py-3 rounded-2xl disabled:opacity-50 flex items-center gap-2"
           >
             Next
+            <ChevronRight size={18} />
           </button>
+
+        </div>
+
+      )}
+
+      {/* IMAGE PREVIEW */}
+      {preview && (
+
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+
+          <div className="relative max-w-4xl w-full">
+
+            <button
+              onClick={() => setPreview(null)}
+              className="absolute -top-14 right-0 bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-2xl"
+            >
+              Close
+            </button>
+
+            <img
+              src={preview}
+              alt="preview"
+              className="w-full max-h-[85vh] object-contain rounded-3xl"
+            />
+
+          </div>
 
         </div>
 

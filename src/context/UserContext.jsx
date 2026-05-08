@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-
+import api from "../lib/axios";
 const API_BASE = "https://xcombinator.onrender.com";
 const ADMIN_EMAIL = "washingtonamedu@gmail.com";
 
@@ -78,7 +78,7 @@ export function UserProvider({ children }) {
 
     const interval = setInterval(() => {
       fetchUnits(user.id);
-    }, 5000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [user]);

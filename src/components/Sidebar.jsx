@@ -1,240 +1,507 @@
+import {
+  LayoutDashboard,
+  ShieldCheck,
+  Wallet,
+  ScrollText,
+  Users,
+  CreditCard,
+  Settings,
+  Bell,
+  User,
+  FileText,
+  LogOut,
+  Menu,
+  X,
+  Briefcase,
+  ChevronRight,
+  MoonStar,
+  SunMedium,
+  Crown,
+  Activity,
+  Sparkles,
+} from "lucide-react";
+
 import { Link, useLocation } from "react-router-dom";
+
 import { useState, useEffect } from "react";
+
 import axios from "axios";
+import api from "../lib/axios";
 import { useTheme } from "../context/ThemeContext";
 
 const API_BASE = "https://xcombinator.onrender.com";
 
 export default function Sidebar() {
+
   const location = useLocation();
+
   const { theme, toggleTheme } = useTheme();
 
   const [open, setOpen] = useState(false);
+
   const [pendingPayments, setPendingPayments] = useState(0);
+
   const [pendingRequests, setPendingRequests] = useState(0);
 
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user =
+    JSON.parse(
+      localStorage.getItem("user")
+    ) || {};
 
-  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
-  const isSuperAdmin = user?.role === "super_admin";
+  const isAdmin =
+    user?.role === "admin" ||
+    user?.role === "super_admin";
+
+  const isSuperAdmin =
+    user?.role === "super_admin";
 
   const headers = {
     email: localStorage.getItem("email"),
   };
 
+  // =========================
+  // LOGOUT
+  // =========================
   const handleLogout = () => {
+
     localStorage.clear();
+
     window.location.href = "/login";
   };
 
+  // =========================
+  // FETCH ADMIN COUNTS
+  // =========================
   useEffect(() => {
+
     if (!isAdmin) return;
 
     const fetchData = async () => {
+
       try {
-        const payRes = await axios.get(`${API_BASE}/api/admin/payments`, { headers });
-        const paymentsData = payRes.data?.data || payRes.data || [];
-        setPendingPayments(
-          paymentsData.filter(p => p.status === "pending").length
+
+        const payRes = await axios.get(
+          `${API_BASE}/api/admin/payments`,
+          { headers }
         );
 
-        const reqRes = await axios.get(`${API_BASE}/api/admin/requests`, { headers });
-        const requestsData = reqRes.data?.data || reqRes.data || [];
+        const paymentsData =
+          payRes.data?.data ||
+          payRes.data ||
+          [];
+
+        setPendingPayments(
+          paymentsData.filter(
+            (p) =>
+              p.status === "pending"
+          ).length
+        );
+
+        const reqRes = await axios.get(
+          `${API_BASE}/api/admin/requests`,
+          { headers }
+        );
+
+        const requestsData =
+          reqRes.data?.data ||
+          reqRes.data ||
+          [];
+
         setPendingRequests(
-          requestsData.filter(r => r.status === "pending").length
+          requestsData.filter(
+            (r) =>
+              r.status === "pending"
+          ).length
         );
 
       } catch (err) {
+
         console.error(err);
       }
     };
 
     fetchData();
+
   }, []);
 
-  const isActive = (path) => location.pathname === path;
+  // =========================
+  // ACTIVE STATE
+  // =========================
+  const isActive = (path) =>
+    location.pathname === path;
 
+  // =========================
+  // STYLES
+  // =========================
   const linkClass = (path) =>
-    `flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
+    `group relative flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 ${
       isActive(path)
-        ? "bg-white/10 border-l-4 border-white"
-        : "hover:bg-white/5"
+        ? "bg-white text-blue-900 shadow-2xl scale-[1.02]"
+        : "text-white/75 hover:bg-white/10 hover:text-white"
     }`;
+
+  // =========================
+  // NAV ITEM
+  // =========================
+  const NavItem = ({
+    to,
+    icon,
+    label,
+    badge,
+  }) => (
+
+    <Link
+      to={to}
+      onClick={() => setOpen(false)}
+      className={linkClass(to)}
+    >
+
+      <div className="flex items-center gap-3">
+
+        <div
+          className={`transition ${
+            isActive(to)
+              ? "scale-110"
+              : "group-hover:scale-105"
+          }`}
+        >
+          {icon}
+        </div>
+
+        <span className="font-medium text-sm">
+          {label}
+        </span>
+
+      </div>
+
+      <div className="flex items-center gap-2">
+
+        {badge > 0 && (
+
+          <span className="bg-red-500 text-white text-[11px] px-2 py-1 rounded-full min-w-[22px] text-center shadow-lg">
+            {badge}
+          </span>
+
+        )}
+
+        <ChevronRight
+          size={15}
+          className={`transition ${
+            isActive(to)
+              ? "opacity-100"
+              : "opacity-0 group-hover:opacity-100"
+          }`}
+        />
+
+      </div>
+
+    </Link>
+  );
 
   return (
     <>
-      {/* TOGGLE */}
+
+      {/* MOBILE BUTTON */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed top-4 left-4 z-50 backdrop-blur-lg bg-black/70 text-white px-3 py-2 rounded-xl shadow-lg hover:scale-105 transition"
+        className="fixed top-4 left-4 z-50 lg:hidden bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-3 rounded-2xl shadow-2xl"
       >
-        ☰
+        <Menu size={20} />
       </button>
 
       {/* OVERLAY */}
       {open && (
+
         <div
           onClick={() => setOpen(false)}
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
         />
+
       )}
 
       {/* SIDEBAR */}
-      <div
-        className={`fixed top-0 left-0 h-full w-72 z-50 transform transition-transform duration-300 ${
-          open ? "translate-x-0" : "-translate-x-full"
+      <aside
+        className={`fixed top-0 left-0 h-screen w-[310px] z-50 transition-transform duration-300 ${
+          open
+            ? "translate-x-0"
+            : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        <div className="h-full bg-gradient-to-b from-blue-900/95 to-blue-800/90 backdrop-blur-xl text-white p-6 flex flex-col justify-between shadow-2xl">
 
-          {/* HEADER + PROFILE */}
-          <div>
+        <div className="h-full overflow-y-auto bg-gradient-to-b from-[#020617] via-[#0F172A] to-[#172554] text-white flex flex-col justify-between border-r border-white/10 shadow-2xl">
 
-            {/* HEADER */}
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-xl font-semibold tracking-tight">
-                Xcombinator
-              </h1>
+          {/* TOP */}
+          <div className="p-6">
+
+            {/* LOGO */}
+            <div className="flex items-center justify-between mb-8">
+
+              <div>
+
+                <img
+                  src="/logofull.png"
+                  alt="Xcombinator"
+                  className="h-10 object-contain"
+                />
+
+                <div className="flex items-center gap-2 mt-3 text-xs text-white/50">
+
+                  <Sparkles size={12} />
+
+                  <span>
+                    Identity Infrastructure Platform
+                  </span>
+
+                </div>
+
+              </div>
 
               <button
                 onClick={() => setOpen(false)}
-                className="text-lg hover:scale-110 transition"
+                className="lg:hidden text-white/70 hover:text-white"
               >
-                ✕
+                <X size={22} />
               </button>
+
             </div>
 
-            {/* 🔥 USER PROFILE BLOCK */}
-            <div className="bg-white/10 p-3 rounded-xl mb-6">
-              <p className="text-sm font-medium truncate">
-                {user?.email}
-              </p>
+            {/* USER CARD */}
+            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 mb-8">
 
-              <p className="text-xs text-white/60">
-                {user?.role?.replace("_", " ") || "user"}
-              </p>
+              {/* GLOW */}
+              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/20 blur-3xl rounded-full" />
 
-              <Link
-                to="/profile"
-                onClick={() => setOpen(false)}
-                className="mt-2 inline-block text-xs text-blue-200 hover:underline"
-              >
-                View Profile →
-              </Link>
+              <div className="relative z-10">
+
+                <div className="flex items-center gap-4">
+
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-center shadow-xl">
+
+                    <User size={24} />
+
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+
+                    <p className="font-semibold truncate text-lg">
+                      {user?.firstName || "User"}
+                    </p>
+
+                    <p className="text-xs text-white/60 truncate">
+                      {user?.email}
+                    </p>
+
+                  </div>
+
+                </div>
+
+                <div className="mt-5 flex items-center justify-between">
+
+                  <div>
+
+                    <p className="text-[10px] uppercase tracking-widest text-white/40">
+                      Access Level
+                    </p>
+
+                    <div className="mt-1 flex items-center gap-2">
+
+                      {user?.role === "super_admin" && (
+                        <Crown
+                          size={14}
+                          className="text-yellow-400"
+                        />
+                      )}
+
+                      <span className="capitalize text-sm font-medium">
+                        {user?.role?.replace("_", " ")}
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  <div className="bg-green-500/20 border border-green-400/20 px-3 py-2 rounded-2xl text-xs flex items-center gap-2">
+
+                    <Activity
+                      size={12}
+                      className="text-green-400"
+                    />
+
+                    Active
+
+                  </div>
+
+                </div>
+
+              </div>
+
             </div>
 
-            {/* NAV */}
-            <ul className="space-y-2 text-sm">
+            {/* MAIN MENU */}
+            <div>
 
-              <li>
-                <Link to="/dashboard" className={linkClass("/dashboard")} onClick={() => setOpen(false)}>
-                  📊 Dashboard
-                </Link>
-              </li>
+              <div className="flex items-center gap-2 px-2 mb-3">
 
-              <li>
-                <Link to="/verify-nin" className={linkClass("/verify-nin")} onClick={() => setOpen(false)}>
-                  🆔 Verify NIN
-                </Link>
-              </li>
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
 
-              <li>
-                <Link to="/nin-services" className={linkClass("/nin-services")} onClick={() => setOpen(false)}>
-                  🏦 NIN Services
-                </Link>
-              </li>
+                <p className="text-[11px] uppercase tracking-[0.25em] text-white/40">
+                  Main Navigation
+                </p>
 
-              <li>
-                <Link to="/transactions" className={linkClass("/transactions")} onClick={() => setOpen(false)}>
-                  📜 Transactions
-                </Link>
-              </li>
+              </div>
 
-              <li>
-                <Link to="/wallet" className={linkClass("/wallet")} onClick={() => setOpen(false)}>
-                  ⚡ Buy Units
-                </Link>
-              </li>
+              <div className="space-y-2">
 
-              <li>
-                <Link to="/my-requests" className={linkClass("/my-requests")} onClick={() => setOpen(false)}>
-                  📦 My Requests
-                </Link>
-              </li>
+                <NavItem
+                  to="/dashboard"
+                  label="Dashboard"
+                  icon={<LayoutDashboard size={18} />}
+                />
 
-              {/* ================= ADMIN ================= */}
-              {isAdmin && (
-                <>
-                  <li className="mt-6 text-xs text-white/50 uppercase tracking-wider">
-                    Admin Panel
-                  </li>
+                <NavItem
+                  to="/verify-nin"
+                  label="Verify NIN"
+                  icon={<ShieldCheck size={18} />}
+                />
 
-                  <li>
-                    <Link to="/admin" className={linkClass("/admin")} onClick={() => setOpen(false)}>
-                      ⚙️ Dashboard
-                    </Link>
-                  </li>
+                <NavItem
+                  to="/nin-services"
+                  label="NIN Services"
+                  icon={<Briefcase size={18} />}
+                />
 
-                  <li>
-                    <Link to="/admin/users" className={linkClass("/admin/users")} onClick={() => setOpen(false)}>
-                      👥 Users
-                    </Link>
-                  </li>
+                <NavItem
+                  to="/wallet"
+                  label="Wallet"
+                  icon={<Wallet size={18} />}
+                />
 
-                  <li>
-                    <Link to="/admin/payments" className={linkClass("/admin/payments")} onClick={() => setOpen(false)}>
-                      <span>💳 Payments</span>
-                      {pendingPayments > 0 && (
-                        <span className="bg-red-500/80 text-xs px-2 py-0.5 rounded-full">
-                          {pendingPayments}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
+                <NavItem
+                  to="/transactions"
+                  label="Transactions"
+                  icon={<ScrollText size={18} />}
+                />
 
-                  <li>
-                    <Link to="/admin/requests" className={linkClass("/admin/requests")} onClick={() => setOpen(false)}>
-                      <span>📥 Requests</span>
-                      {pendingRequests > 0 && (
-                        <span className="bg-yellow-500/80 text-xs px-2 py-0.5 rounded-full">
-                          {pendingRequests}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
+                <NavItem
+                  to="/my-requests"
+                  label="My Requests"
+                  icon={<FileText size={18} />}
+                />
+
+              </div>
+
+            </div>
+
+            {/* ADMIN */}
+            {isAdmin && (
+
+              <div className="mt-10">
+
+                <div className="flex items-center gap-2 px-2 mb-3">
+
+                  <div className="w-2 h-2 rounded-full bg-yellow-400" />
+
+                  <p className="text-[11px] uppercase tracking-[0.25em] text-white/40">
+                    Admin Controls
+                  </p>
+
+                </div>
+
+                <div className="space-y-2">
+
+                  <NavItem
+                    to="/admin"
+                    label="Admin Dashboard"
+                    icon={<Settings size={18} />}
+                  />
+
+                  <NavItem
+                    to="/admin/users"
+                    label="Manage Users"
+                    icon={<Users size={18} />}
+                  />
+
+                  <NavItem
+                    to="/admin/payments"
+                    label="Payment Requests"
+                    icon={<CreditCard size={18} />}
+                    badge={pendingPayments}
+                  />
+
+                  <NavItem
+                    to="/admin/requests"
+                    label="Service Requests"
+                    icon={<Bell size={18} />}
+                    badge={pendingRequests}
+                  />
 
                   {isSuperAdmin && (
-                    <li>
-                      <Link to="/admin/pricing" className={linkClass("/admin/pricing")} onClick={() => setOpen(false)}>
-                        💲 Pricing
-                      </Link>
-                    </li>
+
+                    <NavItem
+                      to="/admin/pricing"
+                      label="Pricing Engine"
+                      icon={<Settings size={18} />}
+                    />
+
                   )}
-                </>
-              )}
-            </ul>
+
+                </div>
+
+              </div>
+
+            )}
+
           </div>
 
           {/* FOOTER */}
-          <div className="space-y-3">
+          <div className="p-6 border-t border-white/10">
 
+            {/* THEME */}
             <button
               onClick={toggleTheme}
-              className="w-full bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl py-2 transition"
+              className="w-full mb-4 bg-white/5 hover:bg-white/10 border border-white/10 py-4 rounded-2xl transition flex items-center justify-center gap-3"
             >
-              {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
+
+              {theme === "dark" ? (
+                <>
+                  <SunMedium size={18} />
+                  Light Mode
+                </>
+              ) : (
+                <>
+                  <MoonStar size={18} />
+                  Dark Mode
+                </>
+              )}
+
             </button>
 
+            {/* LOGOUT */}
             <button
               onClick={handleLogout}
-              className="w-full bg-red-600/90 hover:bg-red-700 rounded-xl py-2 transition"
+              className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:opacity-90 py-4 rounded-2xl font-medium flex items-center justify-center gap-3 transition shadow-xl"
             >
+
+              <LogOut size={18} />
+
               Logout
+
             </button>
 
+            {/* VERSION */}
+            <div className="mt-5 text-center">
+
+              <p className="text-xs text-white/30">
+                Xcombinator SaaS v1.0
+              </p>
+
+            </div>
+
           </div>
+
         </div>
-      </div>
+
+      </aside>
     </>
   );
 }

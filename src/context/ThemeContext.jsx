@@ -1,56 +1,108 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import api from "../lib/axios";
+const ThemeContext =
+  createContext();
 
-const ThemeContext = createContext();
+export function ThemeProvider({
+  children,
+}) {
 
-export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem("theme") || "system";
-  });
+  // =========================
+  // INITIAL THEME
+  // =========================
+  const [theme, setTheme] =
+    useState(() => {
 
-  useEffect(() => {
-    const root = document.documentElement;
+      const saved =
+        localStorage.getItem("theme");
 
-    const applyTheme = () => {
-      if (theme === "dark") {
-        root.classList.add("dark");
-      } 
-      else if (theme === "light") {
-        root.classList.remove("dark");
-      } 
-      else {
-        // system mode
-        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-        if (systemDark) root.classList.add("dark");
-        else root.classList.remove("dark");
+      if (
+        saved === "dark" ||
+        saved === "light"
+      ) {
+        return saved;
       }
-    };
 
-    applyTheme();
+      // DEFAULT
+      return "dark";
+    });
 
-    // listen to system change ONLY if system mode
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const listener = () => {
-      if (theme === "system") applyTheme();
-    };
+  // =========================
+  // APPLY THEME
+  // =========================
+  useEffect(() => {
 
-    media.addEventListener("change", listener);
+    const root =
+      document.documentElement;
 
-    localStorage.setItem("theme", theme);
+    // REMOVE BOTH FIRST
+    root.classList.remove(
+      "light",
+      "dark"
+    );
 
-    return () => media.removeEventListener("change", listener);
+    // APPLY CURRENT
+    root.classList.add(theme);
+
+    // SAVE
+    localStorage.setItem(
+      "theme",
+      theme
+    );
+
   }, [theme]);
 
+  // =========================
+  // TOGGLE
+  // =========================
   const toggleTheme = () => {
-    setTheme(prev =>
-      prev === "dark" ? "light" : "dark"
+
+    setTheme((prev) =>
+      prev === "dark"
+        ? "light"
+        : "dark"
     );
   };
 
+  // =========================
+  // MANUAL SET
+  // =========================
+  const setDarkMode = () => {
+    setTheme("dark");
+  };
+
+  const setLightMode = () => {
+    setTheme("light");
+  };
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+
+    <ThemeContext.Provider
+      value={{
+        theme,
+        toggleTheme,
+        setDarkMode,
+        setLightMode,
+      }}
+    >
+
       {children}
+
     </ThemeContext.Provider>
   );
 }
 
-export const useTheme = () => useContext(ThemeContext);
+// =========================
+// HOOK
+// =========================
+export function useTheme() {
+
+  return useContext(
+    ThemeContext
+  );
+}
