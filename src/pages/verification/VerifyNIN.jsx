@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useUser } from "../../context/UserContext";
-import api from "../lib/axios";
+ 
 import { useNavigate } from "react-router-dom";
 
 import {

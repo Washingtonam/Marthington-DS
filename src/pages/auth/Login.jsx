@@ -12,7 +12,7 @@ import {
   Mail,
   ArrowRight,
 } from "lucide-react";
-import api from "../lib/axios";
+ 
 import { motion } from "framer-motion";
 
 export default function Login() {

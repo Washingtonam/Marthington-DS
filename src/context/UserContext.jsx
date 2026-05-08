@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import api from "../lib/axios";
+ 
 const API_BASE = "https://xcombinator.onrender.com";
 const ADMIN_EMAIL = "washingtonamedu@gmail.com";
 

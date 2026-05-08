@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   CreditCard,
 } from "lucide-react";
-import api from "../lib/axios";
+ 
 import ModificationNoticeModal from "../../components/ModificationNoticeModal";
 
 const API = "https://xcombinator.onrender.com";

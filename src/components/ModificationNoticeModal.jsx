@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../lib/axios";
+ 
 export default function ModificationNoticeModal({ onAccept }) {
   const [open, setOpen] = useState(false);
 

@@ -4,7 +4,7 @@ import {
 } from "react";
 
 import axios from "axios";
-import api from "../lib/axios";
+ 
 const API_BASE =
   "https://xcombinator.onrender.com";
 

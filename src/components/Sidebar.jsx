@@ -26,7 +26,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 
 import axios from "axios";
-import api from "../lib/axios";
+ 
 import { useTheme } from "../context/ThemeContext";
 
 const API_BASE = "https://xcombinator.onrender.com";

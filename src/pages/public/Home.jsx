@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
-import api from "../lib/axios";
+ 
 import {
   ShieldCheck,
   BadgeCheck,

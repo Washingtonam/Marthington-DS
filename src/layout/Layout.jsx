@@ -1,5 +1,5 @@
 import Sidebar from "../components/Sidebar";
-import api from "../lib/axios";
+ 
 export default function Layout({ children }) {
 
   return (

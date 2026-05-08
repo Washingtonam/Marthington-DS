@@ -5,7 +5,7 @@ import {
   Moon,
   Sun,
 } from "lucide-react";
-import api from "../lib/axios";
+ 
 import { useTheme } from "../context/ThemeContext";
 
 export default function Navbar() {
