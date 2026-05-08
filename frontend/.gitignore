@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 backend/google-credentials.json
 .env
+
+node_modules
