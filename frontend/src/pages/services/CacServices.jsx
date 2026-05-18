@@ -8,8 +8,12 @@ import {
   CheckCircle, 
   HelpCircle,
   FileText,
-  Loader2
+  Loader2,
+  Users,
+  Briefcase,
+  Globe
 } from "lucide-react";
+import { motion } from "framer-motion";
 
 const API_BASE = "https://xcombinator.onrender.com";
 
@@ -67,7 +71,6 @@ export default function CacServices() {
 
       if (data?.cacServices) {
         setPrices({
-          // 🔥 Pulling parameters using fields configured in AdminPricing state engine
           sole_proprietorship: data.cacServices.soleProprietorship ?? 30000,
           partnership: data.cacServices.partnership ?? 32000,
           limited_1m: data.cacServices.limited1M ?? 40000,
@@ -181,6 +184,42 @@ export default function CacServices() {
     }
   };
 
+  // Grid layout definitions
+  const serviceCards = [
+    {
+      key: "sole_proprietorship",
+      title: "Sole Proprietorship",
+      desc: "Register a standard Business Name owned by a single individual.",
+      icon: <Briefcase size={24} />,
+      price: prices.sole_proprietorship,
+      badge: "Business Name"
+    },
+    {
+      key: "partnership",
+      title: "Business Partnership",
+      desc: "Register a Business Name owned jointly by two or more partners.",
+      icon: <Users size={24} />,
+      price: prices.partnership,
+      badge: "Partnership"
+    },
+    {
+      key: "limited_1m",
+      title: "Limited Liability (1M Share)",
+      desc: "Incorporate a Private Limited Liability Company with 1 Million authorized share capital.",
+      icon: <Building2 size={24} />,
+      price: prices.limited_1m,
+      badge: "LTD Company"
+    },
+    {
+      key: "custom_ngo",
+      title: "NGO & Special Association",
+      desc: "Incorporate non-profits, organizations, trusts, associations, or high-tier share structures.",
+      icon: <Globe size={24} />,
+      price: 0,
+      badge: "Custom Setup"
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100 p-4 md:p-8 transition-colors duration-200">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -194,25 +233,65 @@ export default function CacServices() {
           </div>
         </div>
 
-        {/* SELECT DROP-DOWN */}
-        <div className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
-          <label className="block text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Choose Service</label>
-          <select 
-            value={service}
-            onChange={(e) => setService(e.target.value)}
-            className="w-full md:w-1/2 p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] focus:ring-2 focus:ring-blue-500 outline-none transition font-medium"
-          >
-            <option value="">-- Select Service --</option>
-            <option value="sole_proprietorship">Business Name Sole Proprietorship (₦{prices.sole_proprietorship.toLocaleString()})</option>
-            <option value="partnership">Business Name Partnership (₦{prices.partnership.toLocaleString()})</option>
-            <option value="limited_1m">Limited Liability 1M Share (₦{prices.limited_1m.toLocaleString()})</option>
-            <option value="custom_ngo">Company more than 1M, NGO, Clubs, Association, Etc. (₦0)</option>
-          </select>
+        {/* 🔥 NEW UPGRADED GRAPHICAL GRID VIEW TABS */}
+        <div className="space-y-3">
+          <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+            Select Corporate Registry Option
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            {serviceCards.map((card) => {
+              const isSelected = service === card.key;
+              return (
+                <motion.div
+                  whileHover={{ y: -3 }}
+                  key={card.key}
+                  onClick={() => setService(card.key)}
+                  className={`relative rounded-2xl p-5 cursor-pointer border transition flex flex-col justify-between overflow-hidden h-full ${
+                    isSelected
+                      ? "bg-gradient-to-b from-blue-600 to-indigo-600 text-white border-blue-600 shadow-xl"
+                      : "bg-white dark:bg-[#121212] border-gray-100 dark:border-gray-800 hover:shadow-lg text-gray-900 dark:text-gray-100"
+                  }`}
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-4">
+                      <div className={`p-3 rounded-xl ${isSelected ? "bg-white/20 text-white" : "bg-blue-50 dark:bg-blue-500/10 text-blue-600"}`}>
+                        {card.icon}
+                      </div>
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${isSelected ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"}`}>
+                        {card.badge}
+                      </span>
+                    </div>
+
+                    <h3 className="font-bold text-base tracking-tight mb-1.5">{card.title}</h3>
+                    <p className={`text-xs leading-relaxed mb-4 ${isSelected ? "text-blue-100" : "text-gray-400"}`}>
+                      {card.desc}
+                    </p>
+                  </div>
+
+                  <div className="flex justify-between items-center border-t pt-3 border-gray-100/10 mt-auto">
+                    <span className={`text-[10px] uppercase font-bold tracking-wider ${isSelected ? "text-blue-200" : "text-gray-400"}`}>
+                      Platform Rate
+                    </span>
+                    <span className="font-black text-base">
+                      {card.price > 0 ? `₦${card.price.toLocaleString()}` : "Manual Quote"}
+                    </span>
+                  </div>
+
+                  {isSelected && (
+                    <div className="absolute top-3 right-3 text-white">
+                      <CheckCircle size={18} />
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
 
         {service && (
-          <form onSubmit={handleSubmit} className="space-y-8 animate-fadeIn">
+          <form onSubmit={handleSubmit} className="space-y-8 animate-fadeIn mt-8">
             
+            {/* CONDITIONAL HANDLING FOR ₦0 OPTIONS */}
             {service === "custom_ngo" ? (
               <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-2xl p-6 text-center space-y-4">
                 <HelpCircle size={40} className="mx-auto text-blue-600" />
