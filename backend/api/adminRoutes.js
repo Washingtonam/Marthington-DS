@@ -119,7 +119,7 @@ router.post("/payments/:id/approve", isAdmin, async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const pricing = await Pricing.findOne();
-    const pricePerUnit = pricing?.nin?.unitPrice || 215; // Set defaults to match your platform setup
+    const pricePerUnit = pricing?.nin?.unitPrice || 215;
 
     let unitsToAdd = payment.units;
 
@@ -376,24 +376,46 @@ router.post("/user/:id/units", isAdmin, async (req, res) => {
   }
 });
 
+// ==============================
+// 💰 UPDATE PRICING (Fully Unified for NIN & CAC Engines)
+// ==============================
 router.put("/pricing", isAdmin, async (req, res) => {
   try {
     let pricing = await Pricing.findOne();
     if (!pricing) pricing = new Pricing({});
 
+    // 1. Sync Base NIN Configuration Margins
     Object.assign(pricing.nin, {
       unitPrice: req.body.unitPrice ?? pricing.nin.unitPrice,
       agentPrice: req.body.agentPrice ?? pricing.nin.agentPrice,
       mode: req.body.mode ?? pricing.nin.mode,
     });
 
+    // 2. Sync NIN Sub-Services Mappings Safely
     if (req.body.validation) Object.assign(pricing.ninServices.validation, req.body.validation);
     if (req.body.ipe) Object.assign(pricing.ninServices.ipe, req.body.ipe);
     if (req.body.modification) Object.assign(pricing.ninServices.modification, req.body.modification);
     if (req.body.slipPrice !== undefined) pricing.ninServices.slipPrice = req.body.slipPrice;
 
+    // 3. 🔥 FIX: Parse and Save Live CAC Services Configuration Values
+    if (req.body.cacServices) {
+      if (!pricing.cacServices) {
+        pricing.cacServices = {};
+      }
+      
+      Object.assign(pricing.cacServices, {
+        soleProprietorship: req.body.cacServices.soleProprietorship ?? pricing.cacServices.soleProprietorship,
+        partnership: req.body.cacServices.partnership ?? pricing.cacServices.partnership,
+        limited1M: req.body.cacServices.limited1M ?? pricing.cacServices.limited1M,
+      });
+    }
+
+    // Explicitly flag schema paths as modified to ensure Mongoose hits nested properties
+    pricing.markModified("cacServices");
+    pricing.markModified("ninServices");
+
     await pricing.save();
-    res.json({ message: "Pricing updated", pricing });
+    res.json({ message: "Pricing engine models updated successfully across all matrix tiers.", pricing });
   } catch (err) {
     console.error("PRICING ERROR:", err);
     res.status(500).json({ message: "Failed to update pricing" });
