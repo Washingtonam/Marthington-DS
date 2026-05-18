@@ -19,9 +19,8 @@ import {
   Crown,
   Activity,
   Sparkles,
-  Building2, // 🔥 Added Building2 icon for CAC services routing link
+  Building2, // 🔥 NEW Icon for CAC Services
 } from "lucide-react";
-
 import { Link, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import axios from "axios";
@@ -40,7 +39,7 @@ export default function Sidebar() {
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
   const isSuperAdmin = user?.role === "super_admin";
 
-  // 🔥 FIX: Extracted email safely from user JSON object to match backend auth expectations
+  // 🔥 FIX: Pull securely from parsed user object to prevent 401 Unauthorized API drops
   const headers = {
     email: user?.email || "",
   };
@@ -65,7 +64,6 @@ export default function Sidebar() {
           `${API_BASE}/api/admin/payments`,
           { headers }
         );
-
         const paymentsData = payRes.data?.data || payRes.data || [];
         setPendingPayments(paymentsData.filter((p) => p.status === "pending").length);
 
@@ -73,11 +71,10 @@ export default function Sidebar() {
           `${API_BASE}/api/admin/requests`,
           { headers }
         );
-
         const requestsData = reqRes.data?.data || reqRes.data || [];
         setPendingRequests(requestsData.filter((r) => r.status === "pending").length);
       } catch (err) {
-        console.error("Sidebar Counts Fetch Error:", err);
+        console.error("Sidebar Badge Load Failure:", err);
       }
     };
 
@@ -127,7 +124,7 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* MOBILE BUTTON */}
+      {/* MOBILE TRIGGER BUTTON */}
       <button
         onClick={() => setOpen(true)}
         className="fixed top-4 left-4 z-50 lg:hidden bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-3 rounded-2xl shadow-2xl"
@@ -135,21 +132,23 @@ export default function Sidebar() {
         <Menu size={20} />
       </button>
 
-      {/* OVERLAY */}
+      {/* BACKDROP OVERLAY */}
       {open && (
         <div onClick={() => setOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden" />
       )}
 
-      {/* SIDEBAR CONTAINER */}
+      {/* SIDEBAR MAIN MENU SLIDER */}
       <aside
         className={`fixed top-0 left-0 h-screen w-[310px] z-50 transition-transform duration-300 ${
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
         <div className="h-full overflow-y-auto bg-gradient-to-b from-[#020617] via-[#0F172A] to-[#172554] text-white flex flex-col justify-between border-r border-white/10 shadow-2xl">
-          {/* TOP AREA */}
+          
+          {/* TOP ELEMENT WRAPPER */}
           <div className="p-6">
-            {/* LOGO */}
+            
+            {/* BRAND LOGO CONTEXT SECTION */}
             <div className="flex items-center justify-between mb-8">
               <div>
                 <img src="/logofull.png" alt="Xcombinator" className="h-10 object-contain" />
@@ -163,7 +162,7 @@ export default function Sidebar() {
               </button>
             </div>
 
-            {/* USER PROFILE ACCESS CONTROL CARD */}
+            {/* IDENTITY METADATA PROFILE INTERFACE */}
             <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 mb-8">
               <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/20 blur-3xl rounded-full" />
               <div className="relative z-10">
@@ -193,7 +192,7 @@ export default function Sidebar() {
               </div>
             </div>
 
-            {/* MAIN NAVIGATION BLOCK */}
+            {/* CORE NAVIGATION CONTAINER LINK LIST */}
             <div>
               <div className="flex items-center gap-2 px-2 mb-3">
                 <div className="w-2 h-2 rounded-full bg-blue-500" />
@@ -203,9 +202,9 @@ export default function Sidebar() {
               <div className="space-y-2">
                 <NavItem to="/dashboard" label="Dashboard" icon={<LayoutDashboard size={18} />} />
                 <NavItem to="/verify-nin" label="Verify NIN" icon={<ShieldCheck size={18} />} />
-                <NavItem to="/nin-services" label="NIMC Services" icon={<Briefcase size={18} />} />
+                <NavItem to="/nin-services" label="NIN Services" icon={<Briefcase size={18} />} />
                 
-                {/* 🔥 INJECTED: New Corporate Registrations Link */}
+                {/* 🔥 NEW LAYER INTEGRATION: CAC CORPORATE SERVICES TAB */}
                 <NavItem to="/cac-services" label="CAC Services" icon={<Building2 size={18} />} />
                 
                 <NavItem to="/wallet" label="Wallet" icon={<Wallet size={18} />} />
@@ -214,7 +213,7 @@ export default function Sidebar() {
               </div>
             </div>
 
-            {/* ADMINISTRATIVE CONTROLS NAVIGATION */}
+            {/* PRIVILEGED ADMIN INTERFACES ACCESS PORT */}
             {isAdmin && (
               <div className="mt-10">
                 <div className="flex items-center gap-2 px-2 mb-3">
@@ -227,40 +226,48 @@ export default function Sidebar() {
                   <NavItem to="/admin/users" label="Manage Users" icon={<Users size={18} />} />
                   <NavItem to="/admin/payments" label="Payment Requests" icon={<CreditCard size={18} />} badge={pendingPayments} />
                   <NavItem to="/admin/requests" label="Service Requests" icon={<Bell size={18} />} badge={pendingRequests} />
-                  {isSuperAdmin && <NavItem to="/admin/pricing" label="Pricing Engine" icon={<Settings size={18} />} />}
+                  {isSuperAdmin && (
+                    <NavItem to="/admin/pricing" label="Pricing Engine" icon={<Settings size={18} />} />
+                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* SIDEBAR FOOTER CONTROL HOOKS */}
+          {/* APP CONTROL STRUCTURAL FOOTER PANEL */}
           <div className="p-6 border-t border-white/10">
+            {/* THEME SWITCHER TOGGLER */}
             <button
               onClick={toggleTheme}
               className="w-full mb-4 bg-white/5 hover:bg-white/10 border border-white/10 py-4 rounded-2xl transition flex items-center justify-center gap-3"
             >
               {theme === "dark" ? (
                 <>
-                  <SunMedium size={18} /> Light Mode
+                  <SunMedium size={18} />
+                  Light Mode
                 </>
               ) : (
                 <>
-                  <MoonStar size={18} /> Dark Mode
+                  <MoonStar size={18} />
+                  Dark Mode
                 </>
               )}
             </button>
 
+            {/* SYSTEM LOGOUT DE-AUTHENTICATOR */}
             <button
               onClick={handleLogout}
               className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:opacity-90 py-4 rounded-2xl font-medium flex items-center justify-center gap-3 transition shadow-xl"
             >
-              <LogOut size={18} /> Logout
+              <LogOut size={18} />
+              Logout
             </button>
 
             <div className="mt-5 text-center">
               <p className="text-xs text-white/30">Xcombinator SaaS v1.0</p>
             </div>
           </div>
+
         </div>
       </aside>
     </>
