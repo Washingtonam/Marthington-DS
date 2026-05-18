@@ -13,6 +13,7 @@ const adminRoutes = require("./api/adminRoutes");
 const slipRoutes = require("./api/slipRoutes");
 const transactionsRoutes = require("./api/transactionsRoutes");
 const ninServicesRoutes = require("./api/ninServicesRoutes");
+const cacRoutes = require("./api/cacRoutes");
 
 const Pricing = require("./models/Pricing");
 
@@ -77,6 +78,7 @@ app.use("/api", transactionsRoutes);
 app.use("/api", ninServicesRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", slipRoutes);
+app.use("/api/cac", cacRoutes);
 
 // ==============================
 // 💰 PRICING
