@@ -5,7 +5,6 @@ export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
 
   useEffect(() => {
-    // Listen directly to the exact custom sidebar toggle event trigger
     const handleToggle = (e) => {
       setSidebarOpen(e.detail);
     };
@@ -17,17 +16,17 @@ export default function Layout({ children }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-[#0B1120] transition-colors duration-300">
+    <div className="min-h-screen bg-gray-100 dark:bg-[#0B1120] transition-colors duration-300 flex">
       
+      {/* SIDEBAR */}
       <Sidebar />
 
-      {/* MAIN VIEWPORT WORKSPACE */}
+      {/* MAIN VIEWPORT WORKSPACE — FORCED VIA INLINE STYLE MARGINS */}
       <main 
-        className={`min-h-screen transition-all duration-300 ${
-          sidebarOpen 
-            ? "lg:pl-[310px]" 
-            : "lg:pl-[85px]"
-        }`}
+        className="min-h-screen flex-1 transition-all duration-300"
+        style={{
+          paddingLeft: window.innerWidth >= 1024 ? (sidebarOpen ? "310px" : "85px") : "0px"
+        }}
       >
         {/* TOP STATUS CONTROL BAR */}
         <div className="sticky top-0 z-30 backdrop-blur-xl bg-white/70 dark:bg-[#0F172A]/70 border-b border-gray-200 dark:border-white/10">
