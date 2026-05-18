@@ -19,8 +19,8 @@ import {
   Crown,
   Activity,
   Sparkles,
-  Building2, // 🔥 Added for corporate registries link styling
-  Sliders,   // 🔥 Added to give Pricing Engine its own distinct look
+  Building2, 
+  Sliders,   
 } from "lucide-react";
 
 import { Link, useLocation } from "react-router-dom";
@@ -33,65 +33,60 @@ const API_BASE = "https://xcombinator.onrender.com";
 export default function Sidebar() {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
-  const [open, setOpen] = useState(false);
+  
+  // 🔥 Default to true on large screens so it starts open, can toggle anywhere
+  const [open, setOpen] = useState(window.innerWidth >= 1024);
   const [pendingPayments, setPendingPayments] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
 
   const user = JSON.parse(localStorage.getItem("user")) || {};
-  
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
   const isSuperAdmin = user?.role === "super_admin";
 
-  // 🔥 FIX: Extract email cleanly from user configuration state block
   const headers = {
     email: user?.email || "",
   };
 
-  // =========================
-  // LOGOUT
-  // =========================
+  // Dynamic window resizing hook to handle breakpoint states seamlessly
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setOpen(true);
+      } else {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const handleLogout = () => {
     localStorage.clear();
     window.location.href = "/login";
   };
 
-  // =========================
-  // FETCH ADMIN COUNTS
-  // =========================
   useEffect(() => {
     if (!isAdmin) return;
 
     const fetchData = async () => {
       try {
-        const payRes = await axios.get(
-          `${API_BASE}/api/admin/payments`,
-          { headers }
-        );
+        const payRes = await axios.get(`${API_BASE}/api/admin/payments`, { headers });
         const paymentsData = payRes.data?.data || payRes.data || [];
         setPendingPayments(paymentsData.filter((p) => p.status === "pending").length);
 
-        const reqRes = await axios.get(
-          `${API_BASE}/api/admin/requests`,
-          { headers }
-        );
+        const reqRes = await axios.get(`${API_BASE}/api/admin/requests`, { headers });
         const requestsData = reqRes.data?.data || reqRes.data || [];
         setPendingRequests(requestsData.filter((r) => r.status === "pending").length);
       } catch (err) {
-        console.error("Sidebar notification fetch error:", err);
+        console.error("Sidebar counts sync error:", err);
       }
     };
 
     fetchData();
   }, [isAdmin]);
 
-  // =========================
-  // ACTIVE STATE
-  // =========================
   const isActive = (path) => location.pathname === path;
 
-  // =========================
-  // STYLES
-  // =========================
   const linkClass = (path) =>
     `group relative flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 ${
       isActive(path)
@@ -99,19 +94,19 @@ export default function Sidebar() {
         : "text-white/75 hover:bg-white/10 hover:text-white"
     }`;
 
-  // =========================
-  // NAV ITEM COMPONENT
-  // =========================
   const NavItem = ({ to, icon, label, badge }) => (
-    <Link to={to} onClick={() => setOpen(false)} className={linkClass(to)}>
+    <Link to={to} onClick={() => window.innerWidth < 1024 && setOpen(false)} className={linkClass(to)}>
       <div className="flex items-center gap-3">
         <div className={`transition ${isActive(to) ? "scale-110" : "group-hover:scale-105"}`}>
           {icon}
         </div>
-        <span className="font-medium text-sm">{label}</span>
+        {/* Hide label text dynamically when menu state shrinks */}
+        <span className={`font-medium text-sm transition-all duration-300 whitespace-nowrap ${open ? "opacity-100 max-w-xs" : "opacity-0 max-w-0 overflow-hidden lg:hidden"}`}>
+          {label}
+        </span>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className={`flex items-center gap-2 ${!open && "lg:hidden"}`}>
         {badge > 0 && (
           <span className="bg-red-500 text-white text-[11px] px-2 py-1 rounded-full min-w-[22px] text-center shadow-lg font-bold">
             {badge}
@@ -127,15 +122,15 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* MOBILE BUTTON */}
+      {/* MOBILE TRIGGER AND DESKTOP TOGGLE BUTTON */}
       <button
-        onClick={() => setOpen(true)}
-        className="fixed top-4 left-4 z-50 lg:hidden bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-3 rounded-2xl shadow-2xl"
+        onClick={() => setOpen(!open)}
+        className="fixed top-4 left-4 z-50 bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-3 rounded-2xl shadow-2xl hover:scale-105 transition"
       >
-        <Menu size={20} />
+        {open ? <X size={20} /> : <Menu size={20} />}
       </button>
 
-      {/* MOBILE OVERLAY BACKGROUND */}
+      {/* BACKDROP OVERLAY FOR SMALL/MOBILE DEVICES */}
       {open && (
         <div
           onClick={() => setOpen(false)}
@@ -143,98 +138,95 @@ export default function Sidebar() {
         />
       )}
 
-      {/* SIDEBAR MAINCONTAINER CONTAINER */}
+      {/* MAIN CONTAINER PANEL */}
       <aside
-        className={`fixed top-0 left-0 h-screen w-[310px] z-50 transition-transform duration-300 ${
-          open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        className={`fixed top-0 left-0 h-screen z-50 transition-all duration-300 ${
+          open ? "translate-x-0 w-[310px]" : "-translate-x-full lg:translate-x-0 lg:w-[85px]"
         }`}
       >
-        <div className="h-full overflow-y-auto bg-gradient-to-b from-[#020617] via-[#0F172A] to-[#172554] text-white flex flex-col justify-between border-r border-white/10 shadow-2xl">
+        <div className="h-full overflow-y-auto bg-gradient-to-b from-[#020617] via-[#0F172A] to-[#172554] text-white flex flex-col justify-between border-r border-white/10 shadow-2xl scrollbar-none">
           
-          {/* TOP SECTION */}
-          <div className="p-6">
+          <div className="p-6 pt-20"> {/* Added top padding to clear floating absolute state button icon layout */}
             
-            {/* LOGO & BRAND */}
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <img src="/logofull.png" alt="Xcombinator" className="h-10 object-contain" />
-                <div className="flex items-center gap-2 mt-3 text-xs text-white/50">
-                  <Sparkles size={12} className="text-blue-400" />
+            {/* PLATFORM BRANDING LOGO */}
+            <div className="flex items-center justify-between mb-8 overflow-hidden">
+              <div className="transition-all duration-300">
+                {open ? (
+                  <img src="/logofull.png" alt="Xcombinator" className="h-10 object-contain animate-fadeIn" />
+                ) : (
+                  <Sparkles size={28} className="text-blue-400 mx-auto" />
+                )}
+                <div className={`flex items-center gap-2 mt-3 text-xs text-white/50 whitespace-nowrap transition-opacity ${open ? "opacity-100" : "opacity-0 hidden"}`}>
                   <span>Identity Infrastructure Platform</span>
                 </div>
               </div>
-              <button onClick={() => setOpen(false)} className="lg:hidden text-white/70 hover:text-white">
-                <X size={22} />
-              </button>
             </div>
 
-            {/* USER ACCREDITATION PROFILE CARD */}
-            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 mb-8">
+            {/* USER CARD BADGE SECTION */}
+            <div className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 mb-8 transition-all duration-300 ${!open && "p-2 text-center"}`}>
               <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/20 blur-3xl rounded-full" />
               <div className="relative z-10">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-center shadow-xl">
-                    <User size={24} />
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-center shadow-xl shrink-0">
+                    <User size={20} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate text-lg">{user?.firstName || "User"}</p>
+                  <div className={`flex-1 min-w-0 transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0 hidden"}`}>
+                    <p className="font-semibold truncate text-base">{user?.firstName || "User"}</p>
                     <p className="text-xs text-white/60 truncate">{user?.email}</p>
                   </div>
                 </div>
 
-                <div className="mt-5 flex items-center justify-between">
+                <div className={`mt-4 flex items-center justify-between transition-all ${!open && "hidden"}`}>
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-white/40">Access Level</p>
-                    <div className="mt-1 flex items-center gap-2">
-                      {isSuperAdmin && <Crown size={14} className="text-yellow-400" />}
-                      <span className="capitalize text-sm font-medium">
-                        {user?.role?.replace("_", " ")}
-                      </span>
+                    <p className="text-[10px] uppercase tracking-widest text-white/40">Access</p>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      {isSuperAdmin && <Crown size={12} className="text-yellow-400" />}
+                      <span className="capitalize text-xs font-medium">{user?.role?.replace("_", " ")}</span>
                     </div>
                   </div>
-                  <div className="bg-green-500/20 border border-green-400/20 px-3 py-2 rounded-2xl text-xs flex items-center gap-2 font-medium">
-                    <Activity size={12} className="text-green-400 animate-pulse" />
-                    Active
+                  <div className="bg-green-500/20 border border-green-400/20 px-2.5 py-1 rounded-xl text-[10px] flex items-center gap-1.5 font-semibold">
+                    <Activity size={10} className="text-green-400 animate-pulse" />
+                    Live
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* MAIN NAVIGATION ROUTING PANEL */}
+            {/* PLATFORM MAIN APP LINKS HUB */}
             <div>
               <div className="flex items-center gap-2 px-2 mb-3">
-                <div className="w-2 h-2 rounded-full bg-blue-500" />
-                <p className="text-[11px] uppercase tracking-[0.25em] text-white/40">Main Navigation</p>
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                <p className={`text-[10px] uppercase tracking-[0.2em] text-white/40 whitespace-nowrap ${!open && "lg:hidden"}`}>
+                  Navigation
+                </p>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <NavItem to="/dashboard" label="Dashboard" icon={<LayoutDashboard size={18} />} />
                 <NavItem to="/verify-nin" label="Verify NIN" icon={<ShieldCheck size={18} />} />
                 <NavItem to="/nin-services" label="NIN Services" icon={<Briefcase size={18} />} />
-                
-                {/* 🔥 NEW LAYER LINK: CONNECTS DIRECTLY TO YOUR COMPONENT */}
                 <NavItem to="/cac-services" label="CAC Services" icon={<Building2 size={18} />} />
-                
                 <NavItem to="/wallet" label="Wallet" icon={<Wallet size={18} />} />
                 <NavItem to="/transactions" label="Transactions" icon={<ScrollText size={18} />} />
                 <NavItem to="/my-requests" label="My Requests" icon={<FileText size={18} />} />
               </div>
             </div>
 
-            {/* CONTROL PANEL LAYER (ADMINISTRATORS ACCESS SECTIONS) */}
+            {/* ELEVATED ACCOUNT PRIVILEGES ACCESSIBLE TABS */}
             {isAdmin && (
-              <div className="mt-10">
+              <div className="mt-8">
                 <div className="flex items-center gap-2 px-2 mb-3">
-                  <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                  <p className="text-[11px] uppercase tracking-[0.25em] text-white/40">Admin Controls</p>
+                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                  <p className={`text-[10px] uppercase tracking-[0.2em] text-white/40 whitespace-nowrap ${!open && "lg:hidden"}`}>
+                    Admin
+                  </p>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <NavItem to="/admin" label="Admin Dashboard" icon={<Settings size={18} />} />
                   <NavItem to="/admin/users" label="Manage Users" icon={<Users size={18} />} />
                   <NavItem to="/admin/payments" label="Payment Requests" icon={<CreditCard size={18} />} badge={pendingPayments} />
                   <NavItem to="/admin/requests" label="Service Requests" icon={<Bell size={18} />} badge={pendingRequests} />
-                  
                   {isSuperAdmin && (
                     <NavItem to="/admin/pricing" label="Pricing Engine" icon={<Sliders size={18} />} />
                   )}
@@ -244,40 +236,36 @@ export default function Sidebar() {
 
           </div>
 
-          {/* FOOTER LAYER CONTROLS */}
+          {/* APPLICATION CONFIG FOOTER CONTROL ROW */}
           <div className="p-6 border-t border-white/10">
-            {/* TOGGLE LIGHT/DARK SYSTEMS */}
             <button
               onClick={toggleTheme}
-              className="w-full mb-4 bg-white/5 hover:bg-white/10 border border-white/10 py-4 rounded-2xl transition flex items-center justify-center gap-3 font-semibold text-sm"
+              className="w-full mb-3 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl transition flex items-center justify-center gap-2 font-semibold text-xs"
             >
               {theme === "dark" ? (
                 <>
-                  <SunMedium size={18} className="text-yellow-400" />
-                  Light Mode
+                  <SunMedium size={16} className="text-yellow-400" />
+                  <span className={!open ? "lg:hidden" : ""}>Light</span>
                 </>
               ) : (
                 <>
-                  <MoonStar size={18} className="text-indigo-400" />
-                  Dark Mode
+                  <MoonStar size={16} className="text-indigo-400" />
+                  <span className={!open ? "lg:hidden" : ""}>Dark</span>
                 </>
               )}
             </button>
 
-            {/* SECURE TERMINATION CLICK ACTION */}
             <button
               onClick={handleLogout}
-              className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 py-4 rounded-2xl font-semibold text-sm flex items-center justify-center gap-3 transition shadow-xl"
+              className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:opacity-95 py-3 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 transition shadow-md"
             >
-              <LogOut size={18} />
-              Logout
+              <LogOut size={16} />
+              <span className={!open ? "lg:hidden" : ""}>Logout</span>
             </button>
 
-            {/* VERSION TAG CONTROL SUMMARY */}
-            <div className="mt-5 text-center">
-              <p className="text-xs text-white/30 tracking-wider">Xcombinator SaaS v1.0</p>
+            <div className={`mt-4 text-center transition-opacity ${open ? "opacity-100" : "opacity-0 lg:hidden"}`}>
+              <p className="text-[10px] text-white/30 tracking-widest">Xcombinator SaaS v1.0</p>
             </div>
-
           </div>
 
         </div>
