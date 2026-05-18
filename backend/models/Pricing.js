@@ -82,6 +82,27 @@ const pricingSchema = new mongoose.Schema({
     },
   },
 
+  // ==============================
+  // 🏢 CAC SERVICES PRICING (NEW)
+  // ==============================
+  cacServices: {
+    soleProprietorship: { 
+      type: Number, 
+      default: 28000,
+      min: 0
+    },
+    partnership: { 
+      type: Number, 
+      default: 32000,
+      min: 0
+    },
+    limited1M: { 
+      type: Number, 
+      default: 40000,
+      min: 0
+    }
+  },
+
 }, {
   timestamps: true,
 });
