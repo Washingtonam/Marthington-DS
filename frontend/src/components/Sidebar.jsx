@@ -199,7 +199,7 @@ export default function Sidebar() {
               <div className="space-y-1.5">
                 <NavItem to="/dashboard" label="Dashboard" icon={<LayoutDashboard size={18} />} />
                 <NavItem to="/verify-nin" label="Verify NIN" icon={<ShieldCheck size={18} />} />
-                <NavItem to="/nin-services" label="NIN Services" icon={<Briefcase size={18} />} />
+                <NavItem to="/nin-services" label="NIMC Services" icon={<Briefcase size={18} />} />
                 <NavItem to="/cac-services" label="CAC Services" icon={<Building2 size={18} />} />
                 <NavItem to="/wallet" label="Wallet" icon={<Wallet size={18} />} />
                 <NavItem to="/transactions" label="Transactions" icon={<ScrollText size={18} />} />
