@@ -142,26 +142,31 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* 🔥 DYNAMIC QUICK ACTIONS CONTAINER GRID GRID GRID */}
+        {/* 🔥 UPDATED: Click handlers moved to the outer wrapper for absolute responsiveness */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
           {[
             { title: "Verify NIN", icon: "🆔", path: "/verify-nin", desc: "Run raw numbers query check validation logs." },
             { title: "NIMC Services", icon: "🏦", path: "/nin-services", desc: "Access adjustments and error clearance hubs." },
-            { title: "CAC Services", icon: "🏢", path: "/cac-services", desc: "Launch new corporate or business registrations." }, // 🔥 NEW ACTIONS LINK BLOCK ADDITION
+            { title: "CAC Services", icon: "🏢", path: "/cac-services", desc: "Launch new corporate or business registrations." },
             { title: "My Requests", icon: "📦", path: "/my-requests", desc: "Track current state and tracking workflow progress." },
             { title: "Transactions", icon: "📜", path: "/transactions", desc: "Verify billing histories and token invoice archives." },
           ].map((item) => (
-            <motion.div whileHover={{ y: -4 }} key={item.title} className="h-full">
+            <motion.div 
+              whileHover={{ y: -4 }} 
+              key={item.title} 
+              className="h-full group"
+              onClick={() => navigate(item.path)} // 🔥 Click event moved here to ensure total click capture
+            >
               <Card
                 className="cursor-pointer hover:shadow-xl border border-gray-100 dark:border-gray-800 transition-all p-5 rounded-3xl bg-white dark:bg-[#111827] flex flex-col justify-between h-full"
-                onClick={() => navigate(item.path)}
               >
                 <div>
                   <div className="text-3xl mb-3.5">{item.icon}</div>
                   <h3 className="font-bold text-base mb-1.5 text-gray-800 dark:text-white tracking-tight">{item.title}</h3>
                   <p className="text-xs text-gray-400 dark:text-gray-500 leading-normal">{item.desc}</p>
                 </div>
-                <div className="mt-4 pt-2 flex items-center gap-1 text-xs text-blue-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Transition opacity helper linked smoothly to parent group hover tracks */}
+                <div className="mt-4 pt-2 flex items-center gap-1 text-xs text-blue-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                   Launch App <ArrowRight size={12} />
                 </div>
               </Card>
