@@ -16,7 +16,6 @@ import {
 const API_BASE = "https://xcombinator.onrender.com";
 
 export default function AdminPricing() {
-  // 🔥 FIX: Correctly extract email from the stored user JSON object string
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const headers = {
     email: user?.email || "",
@@ -42,6 +41,7 @@ export default function AdminPricing() {
     vnin: 1000,
     photoError: 1150,
     bypass: 1150,
+    tracking: 1000, // 🔥 INJECTED: Dedicated dynamic pricing tracker state field
     slipPrice: 150,
   });
 
@@ -66,7 +66,7 @@ export default function AdminPricing() {
   });
 
   // =========================
-  // 🔥 NEW: CAC PRICING ENGINE STATE
+  // CAC PRICING ENGINE STATE
   // =========================
   const [cac, setCac] = useState({
     soleProprietorship: 28000,
@@ -94,6 +94,7 @@ export default function AdminPricing() {
         vnin: data?.ninServices?.validation?.vnin ?? 1000,
         photoError: data?.ninServices?.validation?.photoError ?? 1150,
         bypass: data?.ninServices?.validation?.bypass ?? 1150,
+        tracking: data?.ninServices?.validation?.tracking ?? 1000, // 🔥 Hydrates tracking search field live from database values
         slipPrice: data?.ninServices?.slipPrice ?? 150,
       });
 
@@ -111,7 +112,6 @@ export default function AdminPricing() {
         dob: data?.ninServices?.modification?.dob ?? 50000,
       });
 
-      // Hydrate custom corporate registries if present in collection profile
       if (data?.cacServices) {
         setCac({
           soleProprietorship: data.cacServices.soleProprietorship ?? 28000,
@@ -136,7 +136,6 @@ export default function AdminPricing() {
   const saveSection = async (section, payload) => {
     try {
       setLoadingSection(section);
-      // Calls unified backend admin PUT endpoint route cleanly
       await axios.put(
         `${API_BASE}/api/admin/pricing`,
         payload,
@@ -239,8 +238,8 @@ export default function AdminPricing() {
 
         {/* VALIDATION PROFILE ENGINE METRICS CARD */}
         <PricingCard
-          title="Validation Services"
-          subtitle="Manage transaction costs for system matching and validations"
+          title="Validation & Personalization Services"
+          subtitle="Manage transaction costs for system matching, validations, and tracking queries"
           icon={<ShieldCheck size={24} />}
         >
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -309,7 +308,7 @@ export default function AdminPricing() {
           />
         </PricingCard>
 
-        {/* 🔥 NEW: CORPORATE AFFAIRS COMMISSION (CAC) SERVICE CARD */}
+        {/* CORPORATE AFFAIRS COMMISSION (CAC) SERVICE CARD */}
         <PricingCard
           title="CAC Registration Services"
           subtitle="Configure rates for Business Names and Limited Liability setup forms"

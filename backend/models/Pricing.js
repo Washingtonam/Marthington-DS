@@ -31,7 +31,7 @@ const pricingSchema = new mongoose.Schema({
   ninServices: {
 
     // =========================
-    // VALIDATION
+    // VALIDATION & PERSONALIZATION
     // =========================
     validation: {
       noRecord: { type: Number, default: 1000 },
@@ -40,6 +40,7 @@ const pricingSchema = new mongoose.Schema({
       vnin: { type: Number, default: 1000 },
       photoError: { type: Number, default: 1150 },
       bypass: { type: Number, default: 1150 },
+      tracking: { type: Number, default: 1000 }, // 🔥 FIXED: Added tracking directly into validation layer properties
     },
 
     // =========================
@@ -83,7 +84,7 @@ const pricingSchema = new mongoose.Schema({
   },
 
   // ==============================
-  // 🏢 CAC SERVICES PRICING (NEW)
+  // 🏢 CAC SERVICES PRICING
   // ==============================
   cacServices: {
     soleProprietorship: { 

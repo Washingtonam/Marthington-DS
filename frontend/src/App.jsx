@@ -27,7 +27,9 @@ import IPEClearance from "./pages/services/IPEClearance";
 import Modification from "./pages/services/Modification";
 // 🔥 IMPORT NEW COMPONENT CAPABILITY
 import CacServices from "./pages/services/CacServices";
-
+import Personalization from "./pages/services/Personalization";
+// Inside your Router tree array assignment block:
+<Route path="/nin-services/personalization" element={<Personalization />} />
 import Transactions from "./pages/transactions/Transactions";
 import Wallet from "./pages/wallet/Wallet";
 
