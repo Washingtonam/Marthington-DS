@@ -3,14 +3,8 @@ const router = express.Router();
 const User = require("../models/User");
 const Transaction = require("../models/Transaction");
 const CacRequest = require("../models/CacRequest");
-
-// Pricing mapping matched against your layout specification
-const CAC_PRICING = {
-  sole_proprietorship: 28000,
-  partnership: 32000,
-  limited_1m: 40000,
-  custom_ngo: 0
-};
+// 🔥 Import Pricing model to pull real-time live engine rates
+const Pricing = require("../models/Pricing");
 
 // ==========================================
 // 📥 SUBMIT NEW CAC REGISTRATION
@@ -38,8 +32,22 @@ router.post("/submit", async (req, res) => {
       return res.status(400).json({ message: "Missing required core fields" });
     }
 
-    const cost = CAC_PRICING[serviceType];
-    if (cost === undefined) {
+    // 📥 FETCH LIVE PRICING RECORD FROM DATABASE ENGINES
+    const platformPricing = await Pricing.findOne();
+    
+    // Fallbacks guarantee protection if administrative record documents aren't hydrated yet
+    const soleCost = platformPricing?.cacServices?.soleProprietorship ?? 28000;
+    const partnerCost = platformPricing?.cacServices?.partnership ?? 32000;
+    const limitedCost = platformPricing?.cacServices?.limited1M ?? 40000;
+    const userUnitPrice = platformPricing?.nin?.unitPrice || 215;
+
+    // Dynamically assign processing thresholds cost boundaries
+    let cost = 0;
+    if (serviceType === "sole_proprietorship") cost = soleCost;
+    else if (serviceType === "partnership") cost = partnerCost;
+    else if (serviceType === "limited_1m") cost = limitedCost;
+    else if (serviceType === "custom_ngo") cost = 0;
+    else {
       return res.status(400).json({ message: "Invalid service variant selected" });
     }
 
@@ -47,10 +55,8 @@ router.post("/submit", async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User profile not found" });
 
-    // Validate if user balance (converted units equivalent or explicit currency mapping) covers costs
-    // Assuming your system uses explicit currency equivalent units (e.g. 1 unit = N215)
-    // Modify calculation if your balance is stored natively in Naira currency values
-    const unitsRequired = Math.ceil(cost / 215); 
+    // Calculate structural units required against live administrative database configuration
+    const unitsRequired = Math.ceil(cost / userUnitPrice); 
     
     if (user.units < unitsRequired && cost > 0) {
       return res.status(400).json({ 
@@ -58,7 +64,7 @@ router.post("/submit", async (req, res) => {
       });
     }
 
-    // Deduct units allocation from balance profile
+    // Deduct units allocation from balance profile execution pipeline
     if (cost > 0) {
       user.units -= unitsRequired;
       await user.save();
@@ -89,7 +95,7 @@ router.post("/submit", async (req, res) => {
       type: "CAC_REGISTRATION",
       amount: cost,
       units: unitsRequired,
-      status: "completed", // Deducted transaction tracking profile status
+      status: "completed", 
       proof: `CAC Submission ID: ${newCacJob._id}`
     });
 

@@ -20,13 +20,15 @@ export default function CacServices() {
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
-  // 🔥 NEW: State engine to manage live dynamic rates from DB
+  // Live Pricing State management
   const [prices, setPrices] = useState({
     sole_proprietorship: 28000,
     partnership: 32000,
     limited_1m: 40000,
     custom_ngo: 0
   });
+  // 🔥 Track global retail token unit pricing dynamically from context database settings
+  const [unitPrice, setUnitPrice] = useState(215);
 
   // Core User Information
   const user = JSON.parse(localStorage.getItem("user")) || {};
@@ -59,13 +61,18 @@ export default function CacServices() {
   const currentPrice = prices[service] || 0;
 
   // ==========================================
-  // 📥 NEW: LIVE DYNAMIC PRICING ENGINE FETCH
+  // 📥 LIVE PRICING ENGINE FETCH
   // ==========================================
   const fetchLivePricing = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/pricing`);
       const data = res.data;
       
+      // Sync retail unit base evaluation margin metrics
+      if (data?.nin?.unitPrice) {
+        setUnitPrice(data.nin.unitPrice);
+      }
+
       if (data?.cacServices) {
         setPrices({
           sole_proprietorship: data.cacServices.soleProprietorship ?? 28000,
@@ -97,10 +104,9 @@ export default function CacServices() {
 
   useEffect(() => {
     fetchHistory();
-    fetchLivePricing(); // 🔥 Fetch pricing configurations live on initialization mount
+    fetchLivePricing(); 
   }, [userId]);
 
-  // Reset internal sub-states if service configuration selection shifts
   useEffect(() => {
     if (service === "sole_proprietorship") {
       setProprietors([proprietors[0]]);
@@ -150,8 +156,10 @@ export default function CacServices() {
   // ==========================================
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (currentPrice > 0 && user.units < Math.ceil(currentPrice / 215)) {
-      alert("Insufficient wallet balance. Please add units to process registration.");
+    // 🔥 FIX: Evaluates cost thresholds accurately using live unitPrice database bounds tracker
+    const tokensRequired = Math.ceil(currentPrice / unitPrice);
+    if (currentPrice > 0 && user.units < tokensRequired) {
+      alert(`Insufficient wallet balance. You need ${tokensRequired} units (₦${currentPrice.toLocaleString()}) to process this action.`);
       return;
     }
 
@@ -168,7 +176,6 @@ export default function CacServices() {
       const res = await axios.post(`${API_BASE}/api/cac/submit`, payload);
       alert(res.data.message || "Registration logged successfully!");
       
-      // Reset inputs
       setBusinessInfo({ businessName1: "", businessName2: "", companyEmail: "", companyPhone: "", category: "", state: "", lga: "", shopNo: "", streetAddress: "" });
       setProprietors([{ fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "", signature: "", passport: "" }]);
       setService("");
@@ -204,7 +211,6 @@ export default function CacServices() {
             className="w-full md:w-1/2 p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] focus:ring-2 focus:ring-blue-500 outline-none transition font-medium"
           >
             <option value="">-- Select Service --</option>
-            {/* 🔥 UPDATED: Options now display database state dynamic strings natively */}
             <option value="sole_proprietorship">Business Name Sole Proprietorship (₦{prices.sole_proprietorship.toLocaleString()})</option>
             <option value="partnership">Business Name Partnership (₦{prices.partnership.toLocaleString()})</option>
             <option value="limited_1m">Limited Liability 1M Share (₦{prices.limited_1m.toLocaleString()})</option>
@@ -215,7 +221,6 @@ export default function CacServices() {
         {service && (
           <form onSubmit={handleSubmit} className="space-y-8 animate-fadeIn">
             
-            {/* CONDITIONAL HANDLING FOR ₦0 OPTIONS */}
             {service === "custom_ngo" ? (
               <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-2xl p-6 text-center space-y-4">
                 <HelpCircle size={40} className="mx-auto text-blue-600" />
@@ -274,7 +279,7 @@ export default function CacServices() {
                   </div>
                 </div>
 
-                {/* PROPRIETOR DYNAMIC REPEATER CARD INTERFACES */}
+                {/* PROPRIETOR DYNAMIC REPEATER SECTION */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-bold text-blue-600">
@@ -341,7 +346,6 @@ export default function CacServices() {
                         </div>
                       </div>
 
-                      {/* FILE ATTACHMENT PROCESSING SUB-CARDS */}
                       <div className="grid md:grid-cols-2 gap-4 pt-2">
                         <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl p-4 text-center">
                           <label className="cursor-pointer block">
@@ -364,10 +368,9 @@ export default function CacServices() {
                   ))}
                 </div>
 
-                {/* LIMITED LIABILITY INTERFACES: WITNESS & SECRETARY MODULARS */}
+                {/* LIMITED LIABILITY SECTION */}
                 {service === "limited_1m" && (
                   <>
-                    {/* WITNESS INTERFACE SUB-CARD */}
                     <div className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 space-y-4">
                       <h3 className="text-md font-bold text-blue-600 border-b pb-1 border-gray-100 dark:border-gray-800">Witness Details</h3>
                       <div className="grid md:grid-cols-3 gap-4">
@@ -421,7 +424,6 @@ export default function CacServices() {
                       </div>
                     </div>
 
-                    {/* OPTIONAL SECRETARY TOGGLE INTERFACE CARD */}
                     <div className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 space-y-4">
                       <div className="flex items-center gap-2">
                         <input type="checkbox" id="secToggle" checked={includeSecretary} onChange={(e) => setIncludeSecretary(e.target.checked)} className="w-4 h-4 text-blue-600 focus:ring-blue-500 rounded" />
@@ -452,7 +454,7 @@ export default function CacServices() {
                   </>
                 )}
 
-                {/* TERMS DISCLAIMER & SUBMIT CONFIRMATION FOOTER CARD */}
+                {/* TERMS AND ACTIONS FOOTER */}
                 <div className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
                   <div className="flex items-center gap-2.5">
                     <input required type="checkbox" id="confirmTerms" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="w-5 h-5 text-blue-600 focus:ring-blue-500 rounded cursor-pointer" />
@@ -478,7 +480,7 @@ export default function CacServices() {
           </form>
         )}
 
-        {/* OVERARCHING HISTORICAL LOGS ARCHIVE SUMMARY DATA DATA TABLE */}
+        {/* TRANSACTION HISTORY ARCHIVE */}
         <div className="bg-white dark:bg-[#121212] rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
           <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
             <FileText size={20} className="text-blue-600" />
