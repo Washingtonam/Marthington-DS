@@ -137,7 +137,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-xl font-bold text-gray-800 dark:text-white tracking-tight">Quick Actions</h2>
           <button onClick={() => navigate("/nin-services")} className="text-blue-600 text-sm font-semibold flex items-center gap-1 hover:underline">
-            View All Services
+            View NIMC Services
             <ArrowRight size={16} />
           </button>
         </div>
@@ -146,7 +146,7 @@ export default function Dashboard() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
           {[
             { title: "Verify NIN", icon: "🆔", path: "/verify-nin", desc: "Run raw numbers query check validation logs." },
-            { title: "NIN Services", icon: "🏦", path: "/nin-services", desc: "Access adjustments and error clearance hubs." },
+            { title: "NIMC Services", icon: "🏦", path: "/nin-services", desc: "Access adjustments and error clearance hubs." },
             { title: "CAC Services", icon: "🏢", path: "/cac-services", desc: "Launch new corporate or business registrations." }, // 🔥 NEW ACTIONS LINK BLOCK ADDITION
             { title: "My Requests", icon: "📦", path: "/my-requests", desc: "Track current state and tracking workflow progress." },
             { title: "Transactions", icon: "📜", path: "/transactions", desc: "Verify billing histories and token invoice archives." },
