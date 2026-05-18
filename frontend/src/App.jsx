@@ -29,7 +29,6 @@ import Modification from "./pages/services/Modification";
 import CacServices from "./pages/services/CacServices";
 import Personalization from "./pages/services/Personalization";
 // Inside your Router tree array assignment block:
-<Route path="/nin-services/personalization" element={<Personalization />} />
 import Transactions from "./pages/transactions/Transactions";
 import Wallet from "./pages/wallet/Wallet";
 
@@ -132,7 +131,8 @@ function DashboardRoutes() {
           <Route path="/nin-services/validation" element={<Validation />} />
           <Route path="/nin-services/ipe-clearance" element={<IPEClearance />} />
           <Route path="/nin-services/modification" element={<Modification />} />
-          
+          <Route path="/nin-services/personalization" element={<Personalization />} />
+
           {/* 🔥 INJECT NEW DYNAMIC REGISTRATION SYSTEM LINK TAB */}
           <Route path="/cac-services" element={<CacServices />} />
 
