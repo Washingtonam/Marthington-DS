@@ -34,7 +34,6 @@ export default function Sidebar() {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   
-  // 🔥 Default to true on large screens so it starts open, can toggle anywhere
   const [open, setOpen] = useState(window.innerWidth >= 1024);
   const [pendingPayments, setPendingPayments] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
@@ -47,18 +46,22 @@ export default function Sidebar() {
     email: user?.email || "",
   };
 
-  // Dynamic window resizing hook to handle breakpoint states seamlessly
+  // 🔥 Track state globally to notify Layout.jsx instantly
+  const toggleSidebar = () => {
+    const nextState = !open;
+    setOpen(nextState);
+    window.dispatchEvent(new CustomEvent("sidebar-toggle", { detail: nextState }));
+  };
+
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setOpen(true);
-      } else {
-        setOpen(false);
-      }
+      const isLarge = window.innerWidth >= 1024;
+      setOpen(isLarge);
+      window.dispatchEvent(new CustomEvent("sidebar-toggle", { detail: isLarge }));
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [open]);
 
   const handleLogout = () => {
     localStorage.clear();
@@ -95,18 +98,17 @@ export default function Sidebar() {
     }`;
 
   const NavItem = ({ to, icon, label, badge }) => (
-    <Link to={to} onClick={() => window.innerWidth < 1024 && setOpen(false)} className={linkClass(to)}>
+    <Link to={to} onClick={() => window.innerWidth < 1024 && toggleSidebar()} className={linkClass(to)}>
       <div className="flex items-center gap-3">
         <div className={`transition ${isActive(to) ? "scale-110" : "group-hover:scale-105"}`}>
           {icon}
         </div>
-        {/* Hide label text dynamically when menu state shrinks */}
-        <span className={`font-medium text-sm transition-all duration-300 whitespace-nowrap ${open ? "opacity-100 max-w-xs" : "opacity-0 max-w-0 overflow-hidden lg:hidden"}`}>
+        <span className={`font-medium text-sm transition-all duration-200 whitespace-nowrap ${open ? "opacity-100 max-w-xs" : "opacity-0 max-w-0 overflow-hidden"}`}>
           {label}
         </span>
       </div>
 
-      <div className={`flex items-center gap-2 ${!open && "lg:hidden"}`}>
+      <div className={`flex items-center gap-2 ${!open && "hidden"}`}>
         {badge > 0 && (
           <span className="bg-red-500 text-white text-[11px] px-2 py-1 rounded-full min-w-[22px] text-center shadow-lg font-bold">
             {badge}
@@ -122,55 +124,49 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* MOBILE TRIGGER AND DESKTOP TOGGLE BUTTON */}
+      {/* TRIGGER TRIGGER BUTTON BUTTON */}
       <button
-        onClick={() => setOpen(!open)}
+        onClick={toggleSidebar}
         className="fixed top-4 left-4 z-50 bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-3 rounded-2xl shadow-2xl hover:scale-105 transition"
       >
         {open ? <X size={20} /> : <Menu size={20} />}
       </button>
 
-      {/* BACKDROP OVERLAY FOR SMALL/MOBILE DEVICES */}
       {open && (
         <div
-          onClick={() => setOpen(false)}
+          onClick={toggleSidebar}
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
         />
       )}
 
-      {/* MAIN CONTAINER PANEL */}
+      {/* FIXED SIDEBAR BACKGROUND BODY PANEL */}
       <aside
-        className={`fixed top-0 left-0 h-screen z-50 transition-all duration-300 ${
+        className={`fixed top-0 left-0 h-screen z-50 transition-all duration-300 overflow-hidden ${
           open ? "translate-x-0 w-[310px]" : "-translate-x-full lg:translate-x-0 lg:w-[85px]"
         }`}
       >
         <div className="h-full overflow-y-auto bg-gradient-to-b from-[#020617] via-[#0F172A] to-[#172554] text-white flex flex-col justify-between border-r border-white/10 shadow-2xl scrollbar-none">
           
-          <div className="p-6 pt-20"> {/* Added top padding to clear floating absolute state button icon layout */}
+          <div className="p-6 pt-20">
             
-            {/* PLATFORM BRANDING LOGO */}
-            <div className="flex items-center justify-between mb-8 overflow-hidden">
+            <div className="flex items-center justify-between mb-8 overflow-hidden h-10">
               <div className="transition-all duration-300">
                 {open ? (
                   <img src="/logofull.png" alt="Xcombinator" className="h-10 object-contain animate-fadeIn" />
                 ) : (
-                  <Sparkles size={28} className="text-blue-400 mx-auto" />
+                  <Sparkles size={28} className="text-blue-400 ml-1.5" />
                 )}
-                <div className={`flex items-center gap-2 mt-3 text-xs text-white/50 whitespace-nowrap transition-opacity ${open ? "opacity-100" : "opacity-0 hidden"}`}>
-                  <span>Identity Infrastructure Platform</span>
-                </div>
               </div>
             </div>
 
-            {/* USER CARD BADGE SECTION */}
-            <div className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 mb-8 transition-all duration-300 ${!open && "p-2 text-center"}`}>
+            <div className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl mb-8 transition-all duration-300 ${open ? "p-4" : "p-2 text-center"}`}>
               <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/20 blur-3xl rounded-full" />
               <div className="relative z-10">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 justify-center lg:justify-start">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-center shadow-xl shrink-0">
                     <User size={20} />
                   </div>
-                  <div className={`flex-1 min-w-0 transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0 hidden"}`}>
+                  <div className={`flex-1 min-w-0 transition-opacity duration-200 ${open ? "opacity-100" : "opacity-0 hidden"}`}>
                     <p className="font-semibold truncate text-base">{user?.firstName || "User"}</p>
                     <p className="text-xs text-white/60 truncate">{user?.email}</p>
                   </div>
@@ -192,11 +188,10 @@ export default function Sidebar() {
               </div>
             </div>
 
-            {/* PLATFORM MAIN APP LINKS HUB */}
             <div>
               <div className="flex items-center gap-2 px-2 mb-3">
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                <p className={`text-[10px] uppercase tracking-[0.2em] text-white/40 whitespace-nowrap ${!open && "lg:hidden"}`}>
+                <p className={`text-[10px] uppercase tracking-[0.2em] text-white/40 whitespace-nowrap ${!open && "hidden"}`}>
                   Navigation
                 </p>
               </div>
@@ -212,12 +207,11 @@ export default function Sidebar() {
               </div>
             </div>
 
-            {/* ELEVATED ACCOUNT PRIVILEGES ACCESSIBLE TABS */}
             {isAdmin && (
               <div className="mt-8">
                 <div className="flex items-center gap-2 px-2 mb-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                  <p className={`text-[10px] uppercase tracking-[0.2em] text-white/40 whitespace-nowrap ${!open && "lg:hidden"}`}>
+                  <p className={`text-[10px] uppercase tracking-[0.2em] text-white/40 whitespace-nowrap ${!open && "hidden"}`}>
                     Admin
                   </p>
                 </div>
@@ -236,7 +230,6 @@ export default function Sidebar() {
 
           </div>
 
-          {/* APPLICATION CONFIG FOOTER CONTROL ROW */}
           <div className="p-6 border-t border-white/10">
             <button
               onClick={toggleTheme}
@@ -245,12 +238,12 @@ export default function Sidebar() {
               {theme === "dark" ? (
                 <>
                   <SunMedium size={16} className="text-yellow-400" />
-                  <span className={!open ? "lg:hidden" : ""}>Light</span>
+                  <span className={!open ? "hidden" : ""}>Light</span>
                 </>
               ) : (
                 <>
                   <MoonStar size={16} className="text-indigo-400" />
-                  <span className={!open ? "lg:hidden" : ""}>Dark</span>
+                  <span className={!open ? "hidden" : ""}>Dark</span>
                 </>
               )}
             </button>
@@ -260,12 +253,8 @@ export default function Sidebar() {
               className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:opacity-95 py-3 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 transition shadow-md"
             >
               <LogOut size={16} />
-              <span className={!open ? "lg:hidden" : ""}>Logout</span>
+              <span className={!open ? "hidden" : ""}>Logout</span>
             </button>
-
-            <div className={`mt-4 text-center transition-opacity ${open ? "opacity-100" : "opacity-0 lg:hidden"}`}>
-              <p className="text-[10px] text-white/30 tracking-widest">Xcombinator SaaS v1.0</p>
-            </div>
           </div>
 
         </div>
