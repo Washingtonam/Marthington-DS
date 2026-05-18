@@ -20,6 +20,14 @@ export default function CacServices() {
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
+  // 🔥 NEW: State engine to manage live dynamic rates from DB
+  const [prices, setPrices] = useState({
+    sole_proprietorship: 28000,
+    partnership: 32000,
+    limited_1m: 40000,
+    custom_ngo: 0
+  });
+
   // Core User Information
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const userId = user._id || user.id;
@@ -48,15 +56,28 @@ export default function CacServices() {
   const [includeSecretary, setIncludeSecretary] = useState(false);
   const [secretary, setSecretary] = useState({ fullName: "", phone: "", email: "", nin: "" });
 
-  // Price Mapping Matching UI Specifications
-  const prices = {
-    sole_proprietorship: 28000,
-    partnership: 32000,
-    limited_1m: 40000,
-    custom_ngo: 0
-  };
-
   const currentPrice = prices[service] || 0;
+
+  // ==========================================
+  // 📥 NEW: LIVE DYNAMIC PRICING ENGINE FETCH
+  // ==========================================
+  const fetchLivePricing = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/pricing`);
+      const data = res.data;
+      
+      if (data?.cacServices) {
+        setPrices({
+          sole_proprietorship: data.cacServices.soleProprietorship ?? 28000,
+          partnership: data.cacServices.partnership ?? 32000,
+          limited_1m: data.cacServices.limited1M ?? 40000,
+          custom_ngo: 0
+        });
+      }
+    } catch (err) {
+      console.error("Failed to load live CAC rates:", err);
+    }
+  };
 
   // ==========================================
   // 🔄 FETCH USER CAC HISTORY LOGS
@@ -76,6 +97,7 @@ export default function CacServices() {
 
   useEffect(() => {
     fetchHistory();
+    fetchLivePricing(); // 🔥 Fetch pricing configurations live on initialization mount
   }, [userId]);
 
   // Reset internal sub-states if service configuration selection shifts
@@ -179,12 +201,13 @@ export default function CacServices() {
           <select 
             value={service}
             onChange={(e) => setService(e.target.value)}
-            className="w-full md:w-1/2 p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] focus:ring-2 focus:ring-blue-500 outline-none transition"
+            className="w-full md:w-1/2 p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] focus:ring-2 focus:ring-blue-500 outline-none transition font-medium"
           >
             <option value="">-- Select Service --</option>
-            <option value="sole_proprietorship">Business Name Sole Proprietorship (₦28,000)</option>
-            <option value="partnership">Business Name Partnership (₦32,000)</option>
-            <option value="limited_1m">Limited Liability 1M Share (₦40,000)</option>
+            {/* 🔥 UPDATED: Options now display database state dynamic strings natively */}
+            <option value="sole_proprietorship">Business Name Sole Proprietorship (₦{prices.sole_proprietorship.toLocaleString()})</option>
+            <option value="partnership">Business Name Partnership (₦{prices.partnership.toLocaleString()})</option>
+            <option value="limited_1m">Limited Liability 1M Share (₦{prices.limited_1m.toLocaleString()})</option>
             <option value="custom_ngo">Company more than 1M, NGO, Clubs, Association, Etc. (₦0)</option>
           </select>
         </div>
