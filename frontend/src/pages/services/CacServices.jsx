@@ -22,7 +22,7 @@ export default function CacServices() {
 
   // Live Pricing State management
   const [prices, setPrices] = useState({
-    sole_proprietorship: 28000,
+    sole_proprietorship: 30000,
     partnership: 32000,
     limited_1m: 40000,
     custom_ngo: 0
@@ -75,7 +75,7 @@ export default function CacServices() {
 
       if (data?.cacServices) {
         setPrices({
-          sole_proprietorship: data.cacServices.soleProprietorship ?? 28000,
+          sole_proprietorship: data.cacServices.soleProprietorship ?? 30000,
           partnership: data.cacServices.partnership ?? 32000,
           limited_1m: data.cacServices.limited1M ?? 40000,
           custom_ngo: 0
