@@ -284,7 +284,7 @@ router.get("/audit-logs", isAdmin, async (req, res) => {
 });
 
 // ==============================
-// 🔥 ADMIN CONTROL LEVEL SETTINGS (PROMOTIONS, SUSPENSIONS, PRICING)
+// 🔥 ADMIN CONTROL MAPPINGS
 // ==============================
 router.put("/user/:id/make-admin", isAdmin, isSuperAdmin, async (req, res) => {
   try {
@@ -410,7 +410,7 @@ router.put("/pricing", isAdmin, async (req, res) => {
       });
     }
 
-    // Explicitly flag schema paths as modified to ensure Mongoose hits nested properties
+    // Explicitly flag schema paths as modified to ensure Mongoose updates inner objects
     pricing.markModified("cacServices");
     pricing.markModified("ninServices");
 

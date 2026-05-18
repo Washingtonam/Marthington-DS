@@ -27,7 +27,7 @@ export default function CacServices() {
     limited_1m: 40000,
     custom_ngo: 0
   });
-  // 🔥 Track global retail token unit pricing dynamically from context database settings
+  
   const [unitPrice, setUnitPrice] = useState(215);
 
   // Core User Information
@@ -36,15 +36,8 @@ export default function CacServices() {
 
   // Form State Configurations
   const [businessInfo, setBusinessInfo] = useState({
-    businessName1: "",
-    businessName2: "",
-    companyEmail: "",
-    companyPhone: "",
-    category: "",
-    state: "",
-    lga: "",
-    shopNo: "",
-    streetAddress: ""
+    businessName1: "", businessName2: "", companyEmail: "", companyPhone: "",
+    category: "", state: "", lga: "", shopNo: "", streetAddress: ""
   });
 
   const [proprietors, setProprietors] = useState([
@@ -68,13 +61,13 @@ export default function CacServices() {
       const res = await axios.get(`${API_BASE}/api/pricing`);
       const data = res.data;
       
-      // Sync retail unit base evaluation margin metrics
       if (data?.nin?.unitPrice) {
         setUnitPrice(data.nin.unitPrice);
       }
 
       if (data?.cacServices) {
         setPrices({
+          // 🔥 Pulling parameters using fields configured in AdminPricing state engine
           sole_proprietorship: data.cacServices.soleProprietorship ?? 30000,
           partnership: data.cacServices.partnership ?? 32000,
           limited_1m: data.cacServices.limited1M ?? 40000,
@@ -156,7 +149,6 @@ export default function CacServices() {
   // ==========================================
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // 🔥 FIX: Evaluates cost thresholds accurately using live unitPrice database bounds tracker
     const tokensRequired = Math.ceil(currentPrice / unitPrice);
     if (currentPrice > 0 && user.units < tokensRequired) {
       alert(`Insufficient wallet balance. You need ${tokensRequired} units (₦${currentPrice.toLocaleString()}) to process this action.`);
@@ -368,7 +360,7 @@ export default function CacServices() {
                   ))}
                 </div>
 
-                {/* LIMITED LIABILITY SECTION */}
+                {/* LIMITED LIABILITY INTERFACES */}
                 {service === "limited_1m" && (
                   <>
                     <div className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 space-y-4">
@@ -454,7 +446,6 @@ export default function CacServices() {
                   </>
                 )}
 
-                {/* TERMS AND ACTIONS FOOTER */}
                 <div className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
                   <div className="flex items-center gap-2.5">
                     <input required type="checkbox" id="confirmTerms" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="w-5 h-5 text-blue-600 focus:ring-blue-500 rounded cursor-pointer" />
@@ -480,7 +471,7 @@ export default function CacServices() {
           </form>
         )}
 
-        {/* TRANSACTION HISTORY ARCHIVE */}
+        {/* TRANSACTION HISTORY ARCHIVE SUMMARY */}
         <div className="bg-white dark:bg-[#121212] rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
           <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
             <FileText size={20} className="text-blue-600" />
@@ -493,21 +484,19 @@ export default function CacServices() {
                   <th className="p-4">Ref ID</th>
                   <th className="p-4">Action Variant</th>
                   <th className="p-4">Proposed Name 1</th>
-                  <th className="p-4">Proposed Name 2</th>
                   <th className="p-4">Amount Charged</th>
                   <th className="p-4">Status</th>
-                  <th className="p-4">Progress Notes</th>
                   <th className="p-4">Date Subm.</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {loadingHistory ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-gray-400">Loading history logs...</td>
+                    <td colSpan={6} className="p-8 text-center text-gray-400">Loading history logs...</td>
                   </tr>
                 ) : history.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-gray-400">No transactions recorded yet.</td>
+                    <td colSpan={6} className="p-8 text-center text-gray-400">No transactions recorded yet.</td>
                   </tr>
                 ) : (
                   history.map((h) => (
@@ -515,18 +504,12 @@ export default function CacServices() {
                       <td className="p-4 font-mono text-xs text-gray-400 max-w-[100px] truncate">{h._id}</td>
                       <td className="p-4 capitalize font-medium">{h.serviceType.replace("_", " ")}</td>
                       <td className="p-4 text-gray-700 dark:text-gray-300 font-medium">{h.businessName1}</td>
-                      <td className="p-4 text-gray-700 dark:text-gray-300 font-medium">{h.businessName2}</td>
                       <td className="p-4 font-bold text-slate-800 dark:text-slate-200">₦{h.amountCharged.toLocaleString()}</td>
                       <td className="p-4">
                         <span className={`px-2.5 py-1 text-xs rounded-full font-semibold ${
-                          h.status === "completed" ? "bg-green-100 text-green-700" :
-                          h.status === "rejected" ? "bg-red-100 text-red-700" :
-                          h.status === "processing" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"
-                        }`}>
-                          {h.status}
-                        </span>
+                          h.status === "completed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                        }`}>{h.status}</span>
                       </td>
-                      <td className="p-4 text-gray-500 dark:text-gray-400 text-xs max-w-[150px] truncate">{h.progressNotes}</td>
                       <td className="p-4 text-gray-400 text-xs">{new Date(h.createdAt).toLocaleDateString()}</td>
                     </tr>
                   ))
@@ -535,8 +518,6 @@ export default function CacServices() {
             </table>
           </div>
         </div>
-        
-        <p className="text-center text-xs text-gray-400 pb-4">© 2026 SLT. All rights reserved.</p>
       </div>
     </div>
   );
