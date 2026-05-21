@@ -135,7 +135,7 @@ export default function SelfServiceForm() {
       const userEmail = localStorage.getItem("email"); 
       const userId = localStorage.getItem("userId");   
 
-      // Construct a clean unified payload matching your backend expectations
+      // Construct a clean unified payload matching your backend expectations perfectly
       const payload = {
         userId: userId,
         email: userEmail,
@@ -144,6 +144,7 @@ export default function SelfServiceForm() {
         nin: formData.nin,
         slipType: "none",
         proof: base64Receipt, 
+        passport: "none", // ✅ Provided string alignment parameter to stop data architecture drops
         formData: {
           fullName: formData.fullName,
           phoneNumber: formData.phoneNumber,
@@ -151,7 +152,7 @@ export default function SelfServiceForm() {
         }
       };
 
-      // 🔥 Correct URL route path pairing with your unified server engine routes
+      // Correct URL route path pairing with your unified server engine routes
       const res = await fetch(`${API_BASE}/api/nin-services/request`, {
         method: "POST",
         headers: {
