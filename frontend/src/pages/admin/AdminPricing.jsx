@@ -11,7 +11,7 @@ import {
   BadgeDollarSign,
   TrendingUp,
   CheckCircle2,
-  KeyRound, // Added for Self-Service card header icon
+  KeyRound,
 } from "lucide-react";
 
 const API_BASE = "https://xcombinator.onrender.com";
@@ -67,7 +67,7 @@ export default function AdminPricing() {
   });
 
   // =========================
-  // 🔥 INJECTED: SELF-SERVICE STATE
+  // 🔥 SELF-SERVICE STATE
   // =========================
   const [selfService, setSelfService] = useState({
     emailRetrieval: 1500,
@@ -344,12 +344,9 @@ export default function AdminPricing() {
           <SaveButton
             loading={loadingSection === "selfService"}
             onClick={() => saveSection("selfService", { 
-              ninServices: {
-                ...pricing?.ninServices,
-                selfService: {
-                  emailRetrieval: Number(selfService.emailRetrieval),
-                  deviceUnlink: Number(selfService.deviceUnlink)
-                }
+              selfService: {
+                emailRetrieval: Number(selfService.emailRetrieval),
+                deviceUnlink: Number(selfService.deviceUnlink)
               }
             })}
           />
@@ -381,9 +378,6 @@ export default function AdminPricing() {
   );
 }
 
-// ==========================================
-// RENDER COMPONENT: PRICING CARD
-// ==========================================
 function PricingCard({ title, subtitle, icon, children }) {
   return (
     <div className="bg-white dark:bg-[#121212] rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden transition">
@@ -401,9 +395,6 @@ function PricingCard({ title, subtitle, icon, children }) {
   );
 }
 
-// ==========================================
-// RENDER COMPONENT: FIELD INPUT FORMATTER
-// ==========================================
 function Input({ label, value, set }) {
   return (
     <div>
@@ -423,9 +414,6 @@ function Input({ label, value, set }) {
   );
 }
 
-// ==========================================
-// RENDER COMPONENT: CONTROL ACTION CTA BUTTON
-// ==========================================
 function SaveButton({ onClick, loading }) {
   return (
     <button
@@ -450,9 +438,6 @@ function SaveButton({ onClick, loading }) {
   );
 }
 
-// ==========================================
-// RENDER UTILITY: TEXT PARSING REPLACEMENTS
-// ==========================================
 function formatLabel(text) {
   return text
     .replace(/([A-Z])/g, " $1")
