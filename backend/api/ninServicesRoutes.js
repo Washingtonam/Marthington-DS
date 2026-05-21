@@ -45,7 +45,6 @@ router.post("/nin-services/request", async (req, res) => {
   try {
     const {
       userId,
-      email,
       service, // "validation", "ipe", "modification", "cac", or "self-service"
       type,    // e.g. "emailRetrieval", "deviceUnlink", "soleProprietorship", etc.
       nin,
@@ -55,7 +54,10 @@ router.post("/nin-services/request", async (req, res) => {
       formData
     } = req.body;
 
-    // 🛡️ REFIXED VERIFICATION BLOCK: Let self-service pass without mandatory payment proofs upfront
+    // ⚡ CRITICAL UPGRADE 1: Insulate email capture from either headers or body to prevent Google Sheets crashes
+    const userEmail = req.headers["email"] || req.body.email || "N/A";
+
+    // 🛡️ REFIXED VERIFICATION BLOCK: Core parameter validation
     if (!userId || !service || !type) {
       return res.status(400).json({ message: "Missing required core parameters: userId, service, or type" });
     }
@@ -66,7 +68,7 @@ router.post("/nin-services/request", async (req, res) => {
     }
 
     const pricing = await Pricing.findOne() || new Pricing({});
-    let basePrice = 0;
+    let basePrice = undefined;
 
     // DYNAMIC MATRIX EVALUATION FOR ALL ENGINES NATIVELY
     if (service === "validation") {
@@ -77,9 +79,17 @@ router.post("/nin-services/request", async (req, res) => {
       basePrice = pricing.ninServices?.modification?.[type];
     } else if (service === "cac") {
       basePrice = pricing.cacServices?.[type];
-    } else if (service === "self-service") {
-      // Extracting cost dynamically using the nested configurations
-      basePrice = pricing.ninServices?.selfService?.[type];
+    } else if (service === "self-service" || service === "selfService") {
+      // ⚡ CRITICAL UPGRADE 2: Support both camelCase and hyphenated database naming matrices with absolute hardcoded fallbacks
+      const selfServiceConfig = pricing.ninServices?.selfService || pricing.ninServices?.["self-service"];
+      
+      if (type === "emailRetrieval") {
+        basePrice = selfServiceConfig?.emailRetrieval ?? 1500;
+      } else if (type === "deviceUnlink") {
+        basePrice = selfServiceConfig?.deviceUnlink ?? 2000;
+      } else {
+        basePrice = selfServiceConfig?.[type] ?? 1500;
+      }
     }
 
     // 🛡️ TYPE SAFE GUARD: Verify config existence explicitly, allowing 0 to clear smoothly
@@ -155,14 +165,14 @@ router.post("/nin-services/request", async (req, res) => {
     });
 
     // ==============================
-    // 📊 GOOGLE SHEETS REPORTING
+    // 📊 GOOGLE SHEETS REPORTING (Fully Insulated)
     // ==============================
     try {
       console.log("📊 Archiving data matrices to Google Sheets...");
       await addToSheets({
         summary: [
           new Date().toLocaleString(),
-          email || "N/A",
+          userEmail,
           service.toUpperCase(),
           type,
           nin || "N/A",
@@ -171,7 +181,7 @@ router.post("/nin-services/request", async (req, res) => {
         ],
         fullData: [
           new Date().toLocaleString(),
-          email || "N/A",
+          userEmail,
           service.toUpperCase(),
           type,
           nin || "N/A",
@@ -180,6 +190,7 @@ router.post("/nin-services/request", async (req, res) => {
       });
       console.log("✅ Google Sheets ingestion layer fully synchronized");
     } catch (sheetErr) {
+      // Caught cleanly to prevent a spreadsheet error from rolling back an entire database write execution
       console.error("❌ GOOGLE SHEETS INTEGRATION FAILED:", sheetErr);
     }
 
