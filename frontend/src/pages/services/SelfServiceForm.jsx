@@ -100,6 +100,18 @@ export default function SelfServiceForm() {
     }
   };
 
+  // ==========================================
+  // ☁️ HELPER: CONVERT FILE TO BASE64 STRING
+  // ==========================================
+  const convertToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const fileReader = new FileReader();
+      fileReader.readAsDataURL(file);
+      fileReader.onload = () => resolve(fileReader.result);
+      fileReader.onerror = (error) => reject(error);
+    });
+  };
+
   // =========================
   // SUBMIT REQUEST TO BACKEND
   // =========================
@@ -115,27 +127,39 @@ export default function SelfServiceForm() {
 
     setIsSubmitting(true);
 
-    // Constructing Multipart Form Data Payload for Images & Fields
-    const dataPayload = new FormData();
-    dataPayload.append("serviceType", "Self-Service");
-    dataPayload.append("subService", activeTab === "email" ? "Email Retrieval" : "Device Unlink");
-    dataPayload.append("cost", currentCost);
-    dataPayload.append("paymentMethod", "Manual Bank Transfer");
-    dataPayload.append("nin", formData.nin);
-    dataPayload.append("phoneNumber", formData.phoneNumber);
-    dataPayload.append("fullName", formData.fullName);
-    dataPayload.append("additionalNotes", formData.additionalInfo);
-    dataPayload.append("receipt", receiptFile);
-
     try {
+      // Convert incoming transfer receipt image into a valid base64 stream string
+      const base64Receipt = await convertToBase64(receiptFile);
+      
       const token = localStorage.getItem("token"); 
-      const res = await fetch(`${API_BASE}/api/requests`, {
+      const userEmail = localStorage.getItem("email"); 
+      const userId = localStorage.getItem("userId");   
+
+      // Construct a clean unified payload matching your backend expectations
+      const payload = {
+        userId: userId,
+        email: userEmail,
+        service: "self-service",
+        type: activeTab === "email" ? "emailRetrieval" : "deviceUnlink",
+        nin: formData.nin,
+        slipType: "none",
+        proof: base64Receipt, 
+        formData: {
+          fullName: formData.fullName,
+          phoneNumber: formData.phoneNumber,
+          additionalNotes: formData.additionalInfo
+        }
+      };
+
+      // 🔥 Correct URL route path pairing with your unified server engine routes
+      const res = await fetch(`${API_BASE}/api/nin-services/request`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`
-          // Note: Content-Type header must be omitted when sending FormData so browsers parse custom boundary boundaries perfectly
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          "email": userEmail
         },
-        body: dataPayload
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
