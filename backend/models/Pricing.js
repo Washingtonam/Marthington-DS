@@ -40,7 +40,8 @@ const pricingSchema = new mongoose.Schema({
       vnin: { type: Number, default: 1000 },
       photoError: { type: Number, default: 1150 },
       bypass: { type: Number, default: 1150 },
-      tracking: { type: Number, default: 1000 }, // 🔥 FIXED: Added tracking directly into validation layer properties
+      tracking: { type: Number, default: 1000 }, 
+      selfService: { type: Number, default: 1000 }, // 🔥 FIXED: Added selfService field to the validation schema matrix
     },
 
     // =========================
