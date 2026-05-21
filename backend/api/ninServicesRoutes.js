@@ -55,9 +55,14 @@ router.post("/nin-services/request", async (req, res) => {
       formData
     } = req.body;
 
-    // Standard baseline field verification
-    if (!userId || !service || !type || !proof) {
-      return res.status(400).json({ message: "Missing required parameters" });
+    // 🛡️ REFIXED VERIFICATION BLOCK: Let self-service pass without mandatory payment proofs upfront
+    if (!userId || !service || !type) {
+      return res.status(400).json({ message: "Missing required core parameters: userId, service, or type" });
+    }
+
+    // If it's a standard business tier service (not self-service), proof must remain strict
+    if (service !== "self-service" && !proof) {
+      return res.status(400).json({ message: "Missing required payment proof parameter for this service context" });
     }
 
     const pricing = await Pricing.findOne() || new Pricing({});
@@ -65,20 +70,21 @@ router.post("/nin-services/request", async (req, res) => {
 
     // DYNAMIC MATRIX EVALUATION FOR ALL ENGINES NATIVELY
     if (service === "validation") {
-      basePrice = pricing.ninServices?.validation?.[type] || 0;
+      basePrice = pricing.ninServices?.validation?.[type];
     } else if (service === "ipe") {
-      basePrice = pricing.ninServices?.ipe?.[type] || 0;
+      basePrice = pricing.ninServices?.ipe?.[type];
     } else if (service === "modification") {
-      basePrice = pricing.ninServices?.modification?.[type] || 0;
+      basePrice = pricing.ninServices?.modification?.[type];
     } else if (service === "cac") {
-      basePrice = pricing.cacServices?.[type] || 0;
+      basePrice = pricing.cacServices?.[type];
     } else if (service === "self-service") {
-      // 🔥 Extracting cost dynamically using the updated nested config paths
-      basePrice = pricing.ninServices?.selfService?.[type] || 0;
+      // Extracting cost dynamically using the nested configurations
+      basePrice = pricing.ninServices?.selfService?.[type];
     }
 
-    if (!basePrice && basePrice !== 0) {
-      return res.status(400).json({ message: "Invalid dynamic engine profile or type tier selection" });
+    // 🛡️ TYPE SAFE GUARD: Verify config existence explicitly, allowing 0 to clear smoothly
+    if (basePrice === undefined || basePrice === null) {
+      return res.status(400).json({ message: "Invalid dynamic engine profile matrix or type tier selection configuration match" });
     }
 
     let slipCost = 0;
@@ -89,24 +95,28 @@ router.post("/nin-services/request", async (req, res) => {
     const total = basePrice + slipCost;
 
     // ==============================
-    // ☁️ CLOUDINARY UPLOADS
+    // ☁️ INSULATED CLOUDINARY UPLOADS (Prevents Network Drop Crashdowns)
     // ==============================
     let proofUrl = "";
     let passportUrl = "";
 
     try {
-      console.log("☁️ Uploading proof file...");
-      proofUrl = await uploadToCloudinary(proof, "xcombinator/proofs");
-      console.log("✅ Proof uploaded successfully");
+      // Only invoke upload sequences if payload is a clean, fully compiled base64 data string
+      if (proof && typeof proof === "string" && proof.startsWith("data:")) {
+        console.log("☁️ Uploading proof file...");
+        proofUrl = await uploadToCloudinary(proof, "xcombinator/proofs");
+        console.log("✅ Proof uploaded successfully");
+      }
 
-      if (passport) {
+      if (passport && typeof passport === "string" && passport.startsWith("data:")) {
         console.log("☁️ Uploading passport photo...");
         passportUrl = await uploadToCloudinary(passport, "xcombinator/passports");
         console.log("✅ Passport uploaded successfully");
       }
     } catch (uploadErr) {
-      console.error("❌ CLOUDINARY UPLOAD FAILED:", uploadErr);
-      return res.status(500).json({ message: "Cloud binary resource upload failed" });
+      // Captures network drops, malformed data uris, or socket interruptions cleanly
+      console.error("❌ CLOUDINARY PIPELINE EXCEPTION INTERCEPTED:", uploadErr.message);
+      return res.status(500).json({ message: "Resource upload handshake failed. Please check network and try again." });
     }
 
     // ==============================
@@ -119,8 +129,8 @@ router.post("/nin-services/request", async (req, res) => {
       nin: nin || "N/A",
       slipType: slipType || "none",
       amount: total,
-      proof: proofUrl,
-      passport: passportUrl,
+      proof: proofUrl || "N/A",
+      passport: passportUrl || "N/A",
       formData: formData || {},
       status: "pending",
       statusHistory: [
@@ -140,7 +150,7 @@ router.post("/nin-services/request", async (req, res) => {
       status: "pending",
       userId,
       nin: nin || "N/A",
-      proof: proofUrl,
+      proof: proofUrl || "N/A",
       requestId: request._id,
     });
 
