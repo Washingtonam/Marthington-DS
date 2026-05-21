@@ -39,15 +39,15 @@ const isAdmin = async (req, res, next) => {
 };
 
 // ==============================
-// 📤 CREATE SERVICE REQUEST (NIN & CAC ENGINE UNIFIED)
+// 📤 CREATE SERVICE REQUEST (NIN, SELF-SERVICE & CAC UNIFIED)
 // ==============================
 router.post("/nin-services/request", async (req, res) => {
   try {
     const {
       userId,
       email,
-      service,
-      type,
+      service, // "validation", "ipe", "modification", "cac", or "self-service"
+      type,    // e.g. "emailRetrieval", "deviceUnlink", "soleProprietorship", etc.
       nin,
       slipType,
       proof,
@@ -63,7 +63,7 @@ router.post("/nin-services/request", async (req, res) => {
     const pricing = await Pricing.findOne() || new Pricing({});
     let basePrice = 0;
 
-    // DYNAMIC MATRIX EVALUATION FOR BOTH ENGINES
+    // DYNAMIC MATRIX EVALUATION FOR ALL ENGINES NATIVELY
     if (service === "validation") {
       basePrice = pricing.ninServices?.validation?.[type] || 0;
     } else if (service === "ipe") {
@@ -72,6 +72,9 @@ router.post("/nin-services/request", async (req, res) => {
       basePrice = pricing.ninServices?.modification?.[type] || 0;
     } else if (service === "cac") {
       basePrice = pricing.cacServices?.[type] || 0;
+    } else if (service === "self-service") {
+      // 🔥 Extracting cost dynamically using the updated nested config paths
+      basePrice = pricing.ninServices?.selfService?.[type] || 0;
     }
 
     if (!basePrice && basePrice !== 0) {

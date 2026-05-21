@@ -81,7 +81,7 @@ app.use("/api", slipRoutes);
 app.use("/api/cac", cacRoutes);
 
 // ==============================
-// 💰 PRICING
+// 💰 PRICING DEFAULT SEED PROTECTION
 // ==============================
 app.get("/api/pricing", async (req, res) => {
   try {
@@ -94,11 +94,16 @@ app.get("/api/pricing", async (req, res) => {
           agentPrice: 200,
           mode: "bundle",
         },
+        ninServices: {
+          selfService: {
+            emailRetrieval: 4500,
+            deviceUnlink: 5500
+          }
+        }
       });
     }
 
     res.json(pricing);
-
   } catch (err) {
     console.error("PRICING ERROR:", err.message);
     res.status(500).json({ message: "Failed to fetch pricing" });

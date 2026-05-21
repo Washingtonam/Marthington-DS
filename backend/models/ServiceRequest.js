@@ -36,14 +36,19 @@ const serviceRequestSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
+    required: true,
   },
 
   service: {
     type: String,
-    enum: ["validation", "ipe", "modification", "cac"],
+    // 🔥 Added "self-service" to seamlessly anchor into your current pipeline matrix
+    enum: ["validation", "ipe", "modification", "cac", "self-service"],
+    required: true,
   },
 
+  // Holds sub-categories like "Email Retrieval", "Device Unlink", or specific CAC sub-types
   type: String,
+  
   nin: String,
 
   slipType: {
@@ -52,11 +57,13 @@ const serviceRequestSchema = new mongoose.Schema({
     default: "none",
   },
 
-  amount: Number,
-  proof: String,
+  amount: Number, // Stores the cost (e.g., 1500 or 2000)
+  
+  // 📎 Holds the relative upload route path of the manual bank transfer receipt file
+  proof: String, 
 
   // =========================
-  // 🔥 FULL FORM DATA (Handles dynamic fields like trackingId, files, etc.)
+  // 🔥 FULL FORM DATA (Handles dynamic fields like trackingId, phone numbers, files, etc.)
   // =========================
   formData: {
     type: Object,
