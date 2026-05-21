@@ -11,6 +11,7 @@ import {
   BadgeDollarSign,
   TrendingUp,
   CheckCircle2,
+  KeyRound, // Added for Self-Service card header icon
 } from "lucide-react";
 
 const API_BASE = "https://xcombinator.onrender.com";
@@ -41,7 +42,7 @@ export default function AdminPricing() {
     vnin: 1000,
     photoError: 1150,
     bypass: 1150,
-    tracking: 1000, // 🔥 INJECTED: Dedicated dynamic pricing tracker state field
+    tracking: 1000, 
     slipPrice: 150,
   });
 
@@ -63,6 +64,14 @@ export default function AdminPricing() {
     phone: 12000,
     address: 12000,
     dob: 50000,
+  });
+
+  // =========================
+  // 🔥 INJECTED: SELF-SERVICE STATE
+  // =========================
+  const [selfService, setSelfService] = useState({
+    emailRetrieval: 1500,
+    deviceUnlink: 2000,
   });
 
   // =========================
@@ -94,7 +103,7 @@ export default function AdminPricing() {
         vnin: data?.ninServices?.validation?.vnin ?? 1000,
         photoError: data?.ninServices?.validation?.photoError ?? 1150,
         bypass: data?.ninServices?.validation?.bypass ?? 1150,
-        tracking: data?.ninServices?.validation?.tracking ?? 1000, // 🔥 Hydrates tracking search field live from database values
+        tracking: data?.ninServices?.validation?.tracking ?? 1000, 
         slipPrice: data?.ninServices?.slipPrice ?? 150,
       });
 
@@ -111,6 +120,14 @@ export default function AdminPricing() {
         address: data?.ninServices?.modification?.address ?? 12000,
         dob: data?.ninServices?.modification?.dob ?? 50000,
       });
+
+      // Hydrate Self-Service values live from database records
+      if (data?.ninServices?.selfService) {
+        setSelfService({
+          emailRetrieval: data.ninServices.selfService.emailRetrieval ?? 1500,
+          deviceUnlink: data.ninServices.selfService.deviceUnlink ?? 2000,
+        });
+      }
 
       if (data?.cacServices) {
         setCac({
@@ -305,6 +322,36 @@ export default function AdminPricing() {
           <SaveButton
             loading={loadingSection === "modification"}
             onClick={() => saveSection("modification", { modification })}
+          />
+        </PricingCard>
+
+        {/* 🔥 NEW LAYER: SELF-SERVICE PRICING CARD CONFIGURATOR */}
+        <PricingCard
+          title="Self-Service Portal Management"
+          subtitle="Configure pricing for automated account retrievals and unlinking logs"
+          icon={<KeyRound size={24} />}
+        >
+          <div className="grid md:grid-cols-2 gap-5">
+            {Object.keys(selfService).map((key) => (
+              <Input
+                key={key}
+                label={`${formatLabel(key)} Cost (₦)`}
+                value={selfService[key]}
+                set={(val) => setSelfService({ ...selfService, [key]: val })}
+              />
+            ))}
+          </div>
+          <SaveButton
+            loading={loadingSection === "selfService"}
+            onClick={() => saveSection("selfService", { 
+              ninServices: {
+                ...pricing?.ninServices,
+                selfService: {
+                  emailRetrieval: Number(selfService.emailRetrieval),
+                  deviceUnlink: Number(selfService.deviceUnlink)
+                }
+              }
+            })}
           />
         </PricingCard>
 

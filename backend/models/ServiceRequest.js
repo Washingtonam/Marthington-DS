@@ -40,7 +40,7 @@ const serviceRequestSchema = new mongoose.Schema({
 
   service: {
     type: String,
-    enum: ["validation", "ipe", "modification"],
+    enum: ["validation", "ipe", "modification", "cac"],
   },
 
   type: String,
@@ -56,7 +56,7 @@ const serviceRequestSchema = new mongoose.Schema({
   proof: String,
 
   // =========================
-  // 🔥 FULL FORM DATA
+  // 🔥 FULL FORM DATA (Handles dynamic fields like trackingId, files, etc.)
   // =========================
   formData: {
     type: Object,
@@ -104,8 +104,7 @@ const serviceRequestSchema = new mongoose.Schema({
 // ==============================
 // 🔥 SAFE STATUS TRACKING (FIXED FINAL)
 // ==============================
-serviceRequestSchema.pre("save", function () {
-
+serviceRequestSchema.pre("save", function (next) {
   // 🛑 ensure array exists
   if (!this.statusHistory) {
     this.statusHistory = [];
@@ -113,7 +112,6 @@ serviceRequestSchema.pre("save", function () {
 
   // 🔥 track only when status changes
   if (this.isModified("status")) {
-
     const lastStatus =
       this.statusHistory.length > 0
         ? this.statusHistory[this.statusHistory.length - 1].status
@@ -126,7 +124,8 @@ serviceRequestSchema.pre("save", function () {
       });
     }
   }
-
+  
+  next();
 });
 
 

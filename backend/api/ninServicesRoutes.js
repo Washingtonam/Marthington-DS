@@ -5,15 +5,41 @@ const mongoose = require("mongoose");
 const ServiceRequest = require("../models/ServiceRequest");
 const Pricing = require("../models/Pricing");
 const Transaction = require("../models/Transaction");
+const User = require("../models/User");
 
-// ✅ GOOGLE SHEETS
+// ✅ GOOGLE SHEETS & CLOUDINARY UTILS
 const { addToSheets } = require("../utils/googleSheets");
-
-// ✅ CLOUDINARY
 const { uploadToCloudinary } = require("../utils/cloudinary");
 
 // ==============================
-// 📤 CREATE REQUEST
+// 🔐 AUTH MIDDLEWARE (Unified & Secure)
+// ==============================
+const isAdmin = async (req, res, next) => {
+  try {
+    const email = req.headers["email"];
+    if (!email) {
+      return res.status(401).json({ message: "Unauthorized: Missing Email Header" });
+    }
+
+    const user = await User.findOne({ email }).lean();
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    if (!["admin", "super_admin"].includes(user.role)) {
+      return res.status(403).json({ message: "Access denied: Admins only" });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    console.error("AUTH MIDDLEWARE ERROR:", err);
+    res.status(500).json({ message: "Auth failed" });
+  }
+};
+
+// ==============================
+// 📤 CREATE SERVICE REQUEST (NIN & CAC ENGINE UNIFIED)
 // ==============================
 router.post("/nin-services/request", async (req, res) => {
   try {
@@ -29,37 +55,32 @@ router.post("/nin-services/request", async (req, res) => {
       formData
     } = req.body;
 
-    if (!userId || !service || !type || !nin || !proof) {
-      return res.status(400).json({
-        message: "Missing required fields"
-      });
+    // Standard baseline field verification
+    if (!userId || !service || !type || !proof) {
+      return res.status(400).json({ message: "Missing required parameters" });
     }
 
-    const pricing = await Pricing.getPricing();
-
+    const pricing = await Pricing.findOne() || new Pricing({});
     let basePrice = 0;
 
+    // DYNAMIC MATRIX EVALUATION FOR BOTH ENGINES
     if (service === "validation") {
-      basePrice = pricing.ninServices.validation?.[type];
+      basePrice = pricing.ninServices?.validation?.[type] || 0;
     } else if (service === "ipe") {
-      basePrice = pricing.ninServices.ipe?.[type];
+      basePrice = pricing.ninServices?.ipe?.[type] || 0;
     } else if (service === "modification") {
-      basePrice = pricing.ninServices.modification?.[type];
+      basePrice = pricing.ninServices?.modification?.[type] || 0;
+    } else if (service === "cac") {
+      basePrice = pricing.cacServices?.[type] || 0;
     }
 
-    if (!basePrice) {
-      return res.status(400).json({
-        message: "Invalid service type selected",
-      });
+    if (!basePrice && basePrice !== 0) {
+      return res.status(400).json({ message: "Invalid dynamic engine profile or type tier selection" });
     }
 
     let slipCost = 0;
-
     if (service === "validation") {
-      slipCost =
-        slipType === "none"
-          ? 0
-          : pricing.ninServices.slipPrice || 0;
+      slipCost = slipType === "none" ? 0 : pricing.ninServices?.slipPrice || 0;
     }
 
     const total = basePrice + slipCost;
@@ -71,175 +92,119 @@ router.post("/nin-services/request", async (req, res) => {
     let passportUrl = "";
 
     try {
-
-      console.log("☁️ Uploading proof...");
-
-      proofUrl = await uploadToCloudinary(
-        proof,
-        "xcombinator/proofs"
-      );
-
-      console.log("✅ Proof uploaded");
+      console.log("☁️ Uploading proof file...");
+      proofUrl = await uploadToCloudinary(proof, "xcombinator/proofs");
+      console.log("✅ Proof uploaded successfully");
 
       if (passport) {
-
-        console.log("☁️ Uploading passport...");
-
-        passportUrl = await uploadToCloudinary(
-          passport,
-          "xcombinator/passports"
-        );
-
-        console.log("✅ Passport uploaded");
+        console.log("☁️ Uploading passport photo...");
+        passportUrl = await uploadToCloudinary(passport, "xcombinator/passports");
+        console.log("✅ Passport uploaded successfully");
       }
-
     } catch (uploadErr) {
-
       console.error("❌ CLOUDINARY UPLOAD FAILED:", uploadErr);
-
-      return res.status(500).json({
-        message: "File upload failed"
-      });
+      return res.status(500).json({ message: "Cloud binary resource upload failed" });
     }
 
     // ==============================
-    // 🧾 CREATE REQUEST
+    // 🧾 CREATE COMPREHENSIVE REQUEST
     // ==============================
     const request = await ServiceRequest.create({
       userId,
       service,
       type,
-      nin,
+      nin: nin || "N/A",
       slipType: slipType || "none",
       amount: total,
-
-      // ✅ CLOUDINARY URLS
       proof: proofUrl,
       passport: passportUrl,
-
       formData: formData || {},
-
       status: "pending",
-
       statusHistory: [
         {
           status: "pending",
-          note: "Request submitted"
+          note: "Request systematically submitted and structural payload verified"
         }
       ]
     });
 
     // ==============================
-    // 💰 CREATE TRANSACTION
+    // 💰 CREATE ACCOMPANYING TRANSACTION
     // ==============================
     await Transaction.create({
       type: "SERVICE",
       amount: total,
       status: "pending",
       userId,
-      nin,
-
-      // ✅ CLOUDINARY URL
+      nin: nin || "N/A",
       proof: proofUrl,
-
       requestId: request._id,
     });
 
     // ==============================
-    // 📊 GOOGLE SHEETS
+    // 📊 GOOGLE SHEETS REPORTING
     // ==============================
     try {
-
-      console.log("📊 Sending to Google Sheets...");
-
+      console.log("📊 Archiving data matrices to Google Sheets...");
       await addToSheets({
         summary: [
           new Date().toLocaleString(),
           email || "N/A",
-          service,
+          service.toUpperCase(),
           type,
-          nin,
+          nin || "N/A",
           total,
           "pending"
         ],
-
         fullData: [
           new Date().toLocaleString(),
           email || "N/A",
-          service,
+          service.toUpperCase(),
           type,
-          nin,
+          nin || "N/A",
           JSON.stringify(formData || {}, null, 2)
         ]
       });
-
-      console.log("✅ GOOGLE SHEETS SUCCESS");
-
+      console.log("✅ Google Sheets ingestion layer fully synchronized");
     } catch (sheetErr) {
-
-      console.error(
-        "❌ GOOGLE SHEETS FAILED:",
-        sheetErr
-      );
+      console.error("❌ GOOGLE SHEETS INTEGRATION FAILED:", sheetErr);
     }
 
-    // ==============================
-    // ✅ SUCCESS RESPONSE
-    // ==============================
     res.json({
-      message: "Request submitted successfully",
+      message: "Request processed and recorded successfully",
       request,
     });
 
   } catch (err) {
-
-    console.error(
-      "❌ CREATE REQUEST ERROR:",
-      err
-    );
-
-    res.status(500).json({
-      message: "Failed to submit request"
-    });
+    console.error("❌ CREATE REQUEST COMPILATION ERROR:", err);
+    res.status(500).json({ message: "Failed to compile service submission" });
   }
 });
 
-
 // ==============================
-// 📥 ADMIN GET REQUESTS
+// 📥 ADMIN GET ALL REQUESTS
 // ==============================
-router.get("/admin/requests", async (req, res) => {
+router.get("/admin/requests", isAdmin, async (req, res) => {
   try {
-
-    let {
-      page = 1,
-      limit = 20,
-      status
-    } = req.query;
-
+    let { page = 1, limit = 20, status } = req.query;
     page = parseInt(page);
     limit = parseInt(limit);
 
     const query = {};
-
     if (status && status !== "all") {
       query.status = status;
     }
 
-    const total =
-      await ServiceRequest.countDocuments(query);
-
-    const data =
-      await ServiceRequest.find(query)
-        .populate("userId", "email")
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean();
+    const total = await ServiceRequest.countDocuments(query);
+    const data = await ServiceRequest.find(query)
+      .populate("userId", "email")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
 
     res.json({
       data,
-
       pagination: {
         total,
         page,
@@ -248,39 +213,25 @@ router.get("/admin/requests", async (req, res) => {
     });
 
   } catch (err) {
-
-    console.error(
-      "FETCH REQUESTS ERROR:",
-      err
-    );
-
-    res.status(500).json({
-      message: "Failed to fetch requests"
-    });
+    console.error("FETCH ADMINISTRATIVE REQUESTS ERROR:", err);
+    res.status(500).json({ message: "Failed to aggregate processing models" });
   }
 });
 
-
 // ==============================
-// ✅ APPROVE
+// ✅ ADMINISTRATIVE APPROVAL
 // ==============================
-router.post("/admin/requests/:id/approve", async (req, res) => {
+router.post("/admin/requests/:id/approve", isAdmin, async (req, res) => {
   try {
-
-    const request =
-      await ServiceRequest.findById(req.params.id);
-
+    const request = await ServiceRequest.findById(req.params.id);
     if (!request) {
-      return res.status(404).json({
-        message: "Request not found"
-      });
+      return res.status(404).json({ message: "Target document node not found" });
     }
 
     request.status = "approved";
-
     request.statusHistory.push({
       status: "approved",
-      note: "Approved by admin"
+      note: `Approved operationally by ${req.user.email}`
     });
 
     await request.save();
@@ -290,46 +241,28 @@ router.post("/admin/requests/:id/approve", async (req, res) => {
       { status: "approved" }
     );
 
-    res.json({
-      message: "Approved"
-    });
-
+    res.json({ message: "State execution mutated to: APPROVED" });
   } catch (err) {
-
-    console.error(
-      "APPROVE ERROR:",
-      err
-    );
-
-    res.status(500).json({
-      message: "Approval failed"
-    });
+    console.error("STATE APPROVAL TRANSLATION ERROR:", err);
+    res.status(500).json({ message: "Approval structural lifecycle mutation failure" });
   }
 });
 
-
 // ==============================
-// ❌ REJECT
+// ❌ ADMINISTRATIVE REJECTION
 // ==============================
-router.post("/admin/requests/:id/reject", async (req, res) => {
+router.post("/admin/requests/:id/reject", isAdmin, async (req, res) => {
   try {
-
     const { reason } = req.body;
-
-    const request =
-      await ServiceRequest.findById(req.params.id);
-
+    const request = await ServiceRequest.findById(req.params.id);
     if (!request) {
-      return res.status(404).json({
-        message: "Request not found"
-      });
+      return res.status(404).json({ message: "Target document node not found" });
     }
 
     request.status = "rejected";
-
     request.statusHistory.push({
       status: "rejected",
-      note: reason || "Rejected by admin"
+      note: reason || `Rejected operationally by ${req.user.email}`
     });
 
     await request.save();
@@ -339,47 +272,33 @@ router.post("/admin/requests/:id/reject", async (req, res) => {
       { status: "rejected" }
     );
 
-    res.json({
-      message: "Rejected"
-    });
-
+    res.json({ message: "State execution mutated to: REJECTED" });
   } catch (err) {
-
-    console.error(
-      "REJECT ERROR:",
-      err
-    );
-
-    res.status(500).json({
-      message: "Rejection failed"
-    });
+    console.error("STATE REJECTION TRANSLATION ERROR:", err);
+    res.status(500).json({ message: "Rejection structural lifecycle mutation failure" });
   }
 });
 
-
 // ==============================
-// 📤 UPLOAD RESULT SLIP
+// 📤 UPLOAD COMPLETED RESULT SLIP
 // ==============================
-router.post("/admin/requests/:id/upload-slip", async (req, res) => {
+router.post("/admin/requests/:id/upload-slip", isAdmin, async (req, res) => {
   try {
-
     const { pdf } = req.body;
-
     if (!pdf) {
-      return res.status(400).json({
-        message: "PDF required"
-      });
+      return res.status(400).json({ message: "Cryptographic secure PDF token asset identifier required" });
     }
 
-    const request =
-      await ServiceRequest.findById(req.params.id);
+    const request = await ServiceRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: "Target document node not found" });
+    }
 
     request.resultSlip = pdf;
     request.status = "completed";
-
     request.statusHistory.push({
       status: "completed",
-      note: "Slip uploaded and completed"
+      note: `Finalized file system output attached by ${req.user.email}`
     });
 
     await request.save();
@@ -389,145 +308,90 @@ router.post("/admin/requests/:id/upload-slip", async (req, res) => {
       { status: "success" }
     );
 
-    res.json({
-      message: "Completed"
-    });
-
+    res.json({ message: "System node closed down seamlessly as: COMPLETED" });
   } catch (err) {
-
-    console.error(
-      "UPLOAD ERROR:",
-      err
-    );
-
-    res.status(500).json({
-      message: "Upload failed"
-    });
+    console.error("RESULT SLIP UPDATE PIPELINE ERROR:", err);
+    res.status(500).json({ message: "Failed to stitch processed binary response file link" });
   }
 });
 
-
 // ==============================
-// 💬 ADD COMMENT
+// 💬 ADD OPERATIONAL AUDIT COMMENT
 // ==============================
-router.post("/admin/requests/:id/comment", async (req, res) => {
+router.post("/admin/requests/:id/comment", isAdmin, async (req, res) => {
   try {
-
     const { text, by } = req.body;
-
-    const request =
-      await ServiceRequest.findById(req.params.id);
+    const request = await ServiceRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: "Target document node not found" });
+    }
 
     request.comments.push({
       text,
-      by,
+      by: by || req.user.email,
       role: "admin"
     });
 
     await request.save();
-
-    res.json({
-      message: "Comment added"
-    });
-
+    res.json({ message: "Comment pushed into working runtime buffer tracking array" });
   } catch (err) {
-
-    console.error(
-      "COMMENT ERROR:",
-      err
-    );
-
-    res.status(500).json({
-      message: "Failed to add comment"
-    });
+    console.error("COMMENT THREAD MUTATION ERROR:", err);
+    res.status(500).json({ message: "Failed to register text block stream append" });
   }
 });
 
-
 // ==============================
-// 🧠 SAVE ADMIN NOTE
+// 🧠 SAVE PRIVATE ADMIN NOTE
 // ==============================
-router.put("/admin/requests/:id/note", async (req, res) => {
+router.put("/admin/requests/:id/note", isAdmin, async (req, res) => {
   try {
-
     const { note } = req.body;
-
-    const request =
-      await ServiceRequest.findById(req.params.id);
+    const request = await ServiceRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: "Target document node not found" });
+    }
 
     request.adminNotes = note;
-
     await request.save();
 
-    res.json({
-      message: "Note saved"
-    });
-
+    res.json({ message: "Private administrative operational memory updated" });
   } catch (err) {
-
-    console.error(
-      "NOTE ERROR:",
-      err
-    );
-
-    res.status(500).json({
-      message: "Failed to save note"
-    });
+    console.error("METADATA NOTE PERSISTENCE ERROR:", err);
+    res.status(500).json({ message: "Failed to update target memory variable" });
   }
 });
 
-
 // ==============================
-// 👤 USER GET OWN REQUESTS
+// 👤 USER FETCH HISTORICAL LOGS
 // ==============================
 router.get("/user/requests/:userId", async (req, res) => {
   try {
-
-    let {
-      page = 1,
-      limit = 10
-    } = req.query;
-
+    let { page = 1, limit = 10 } = req.query;
     page = parseInt(page);
     limit = parseInt(limit);
 
     const query = {
-      userId:
-        new mongoose.Types.ObjectId(
-          req.params.userId
-        )
+      userId: new mongoose.Types.ObjectId(req.params.userId)
     };
 
-    const total =
-      await ServiceRequest.countDocuments(query);
-
-    const data =
-      await ServiceRequest.find(query)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean();
+    const total = await ServiceRequest.countDocuments(query);
+    const data = await ServiceRequest.find(query)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
 
     res.json({
       data,
-
       pagination: {
         total,
         page,
         pages: Math.ceil(total / limit),
       },
     });
-
   } catch (err) {
-
-    console.error(
-      "USER REQUEST ERROR:",
-      err
-    );
-
-    res.status(500).json({
-      message: "Failed to fetch user requests"
-    });
+    console.error("USER HISTORY HARVEST ENTRY FAILURE:", err);
+    res.status(500).json({ message: "Failed to gather historical account records" });
   }
 });
 

@@ -25,7 +25,9 @@ import NINServices from "./pages/services/NINServices";
 import Validation from "./pages/services/Validation";
 import IPEClearance from "./pages/services/IPEClearance";
 import Modification from "./pages/services/Modification";
-// 🔥 IMPORT NEW COMPONENT CAPABILITY
+// 1. Add the import at the top of your router file
+import SelfServiceForm from "./pages/services/SelfServiceForm";
+
 import CacServices from "./pages/services/CacServices";
 import Personalization from "./pages/services/Personalization";
 // Inside your Router tree array assignment block:
@@ -132,6 +134,7 @@ function DashboardRoutes() {
           <Route path="/nin-services/ipe-clearance" element={<IPEClearance />} />
           <Route path="/nin-services/modification" element={<Modification />} />
           <Route path="/nin-services/personalization" element={<Personalization />} />
+          <Route path="/nin-services/selfservice" element={<SelfServiceForm />} />
 
           {/* 🔥 INJECT NEW DYNAMIC REGISTRATION SYSTEM LINK TAB */}
           <Route path="/cac-services" element={<CacServices />} />

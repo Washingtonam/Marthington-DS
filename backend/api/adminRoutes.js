@@ -36,8 +36,8 @@ const isAdmin = async (req, res, next) => {
 };
 
 const isSuperAdmin = (req, res, next) => {
-  if (req.user.role !== "super_admin") {
-    return res.status(403).json({ message: "Super admin only" });
+  if (!req.user || req.user.role !== "super_admin") {
+    return res.status(403).json({ message: "Access denied: Super admin authority required" });
   }
   next();
 };
@@ -319,6 +319,7 @@ router.put("/user/:id/remove-admin", isAdmin, isSuperAdmin, async (req, res) => 
 router.put("/user/:id/suspend", isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
     if (user.role === "super_admin") return res.status(400).json({ message: "Cannot suspend super admin" });
 
     user.status = "suspended";
@@ -333,6 +334,8 @@ router.put("/user/:id/suspend", isAdmin, async (req, res) => {
 router.put("/user/:id/activate", isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    
     user.status = "active";
     await user.save();
     res.json({ message: "User activated" });
@@ -345,6 +348,7 @@ router.put("/user/:id/activate", isAdmin, async (req, res) => {
 router.delete("/user/:id", isAdmin, isSuperAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
     if (user.role === "super_admin") return res.status(400).json({ message: "Cannot delete super admin" });
 
     await User.findByIdAndDelete(req.params.id);
@@ -384,6 +388,11 @@ router.put("/pricing", isAdmin, async (req, res) => {
     let pricing = await Pricing.findOne();
     if (!pricing) pricing = new Pricing({});
 
+    // Ensure baseline structures exist safely before updates
+    if (!pricing.nin) pricing.nin = {};
+    if (!pricing.ninServices) pricing.ninServices = { validation: {}, ipe: {}, modification: {} };
+    if (!pricing.cacServices) pricing.cacServices = {};
+
     // 1. Sync Base NIN Configuration Margins
     Object.assign(pricing.nin, {
       unitPrice: req.body.unitPrice ?? pricing.nin.unitPrice,
@@ -399,10 +408,6 @@ router.put("/pricing", isAdmin, async (req, res) => {
 
     // 3. Sync Live CAC Services Configuration Values
     if (req.body.cacServices) {
-      if (!pricing.cacServices) {
-        pricing.cacServices = {};
-      }
-      
       Object.assign(pricing.cacServices, {
         soleProprietorship: req.body.cacServices.soleProprietorship ?? pricing.cacServices.soleProprietorship,
         partnership: req.body.cacServices.partnership ?? pricing.cacServices.partnership,
@@ -410,9 +415,10 @@ router.put("/pricing", isAdmin, async (req, res) => {
       });
     }
 
-    // Explicitly flag schema paths as modified to ensure Mongoose updates inner objects
-    pricing.markModified("cacServices");
+    // Explicitly flag schema paths as modified to ensure Mongoose updates inner objects completely
+    pricing.markModified("nin");
     pricing.markModified("ninServices");
+    pricing.markModified("cacServices");
 
     await pricing.save();
     res.json({ message: "Pricing engine models updated successfully across all matrix tiers.", pricing });

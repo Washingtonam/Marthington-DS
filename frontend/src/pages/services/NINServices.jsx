@@ -8,7 +8,8 @@ import {
   RefreshCcw,
   Fingerprint,
   Loader2,
-  Binary, // Added for the new Personalization tracking sub-icon schema
+  Binary, 
+  KeyRound, // Added for the new Selfservice card module
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -158,9 +159,9 @@ export default function NINServices() {
       </motion.div>
 
       {/* ========================= */}
-      {/* 🚀 UPGRADED 4-COLUMN LOGICAL GRID */}
+      {/* 🚀 UPGRADED 3-4 VARIABLE LOGICAL GRID */}
       {/* ========================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
 
         {/* SERVICE LAYER 1: VALIDATION SYSTEM */}
         <ServiceCard
@@ -210,7 +211,7 @@ export default function NINServices() {
           route="/nin-services/modification"
         />
 
-        {/* 🔥 NEW SERVICE LAYER 4: PERSONALIZATION (TRACKING ID SEARCH VERIFY SYSTEM) */}
+        {/* SERVICE LAYER 4: PERSONALIZATION */}
         <ServiceCard
           title="Personalization"
           description="Trace and extract full identity record structures using raw system data enrollment tracking identifiers."
@@ -224,6 +225,22 @@ export default function NINServices() {
           ]}
           buttonText="Start Tracking"
           route="/nin-services/personalization" 
+        />
+
+        {/* 🔥 NEW SERVICE LAYER 5: SELFSERVICE MODULE */}
+        <ServiceCard
+          title="Selfservice"
+          description="Execute direct NIMC self-service actions, linkage overrides, and active credential extractions."
+          color="bg-purple-500 hover:bg-purple-600"
+          icon={<KeyRound size={28} />}
+          pricingItems={[
+            { label: "Email Retrieval", value: `₦${(pricing?.ninServices?.selfService?.emailRetrieval || 1500).toLocaleString()}` },
+            { label: "Device Unlink Portal", value: `₦${(pricing?.ninServices?.selfService?.deviceUnlink || 2000).toLocaleString()}` },
+            { label: "Session Reset Override", value: "Instant" },
+            { label: "Sync Security Key", value: "Automated" },
+          ]}
+          buttonText="Access Selfservice"
+          route="/nin-services/selfservice" 
         />
 
       </div>
