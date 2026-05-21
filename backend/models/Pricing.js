@@ -10,14 +10,12 @@ const pricingSchema = new mongoose.Schema({
       enum: ["bundle", "single"],
       default: "bundle",
     },
-
     unitPrice: {
       type: Number,
       required: true,
       default: 250,
       min: 1,
     },
-
     agentPrice: {
       type: Number,
       default: 150,
@@ -29,7 +27,6 @@ const pricingSchema = new mongoose.Schema({
   // 🔥 NIN SERVICES (DIRECT PAYMENT)
   // ==============================
   ninServices: {
-
     // =========================
     // VALIDATION & PERSONALIZATION
     // =========================
@@ -41,7 +38,14 @@ const pricingSchema = new mongoose.Schema({
       photoError: { type: Number, default: 1150 },
       bypass: { type: Number, default: 1150 },
       tracking: { type: Number, default: 1000 }, 
-      selfService: { type: Number, default: 1000 }, // 🔥 FIXED: Added selfService field to the validation schema matrix
+    },
+
+    // =========================
+    // 🔥 FIXED: SELF-SERVICE SUBSURFACE OBJECT
+    // =========================
+    selfService: {
+      emailRetrieval: { type: Number, default: 1500 },
+      deviceUnlink: { type: Number, default: 2000 },
     },
 
     // =========================
@@ -55,7 +59,7 @@ const pricingSchema = new mongoose.Schema({
     },
 
     // =========================
-    // 🔥 MODIFICATION (NEW)
+    // MODIFICATION
     // =========================
     modification: {
       name: { type: Number, default: 12000 },
@@ -88,21 +92,9 @@ const pricingSchema = new mongoose.Schema({
   // 🏢 CAC SERVICES PRICING
   // ==============================
   cacServices: {
-    soleProprietorship: { 
-      type: Number, 
-      default: 28000,
-      min: 0
-    },
-    partnership: { 
-      type: Number, 
-      default: 32000,
-      min: 0
-    },
-    limited1M: { 
-      type: Number, 
-      default: 40000,
-      min: 0
-    }
+    soleProprietorship: { type: Number, default: 28000, min: 0 },
+    partnership: { type: Number, default: 32000, min: 0 },
+    limited1M: { type: Number, default: 40000, min: 0 }
   },
 
 }, {
@@ -114,11 +106,9 @@ const pricingSchema = new mongoose.Schema({
 // ==============================
 pricingSchema.statics.getPricing = async function () {
   let pricing = await this.findOne();
-
   if (!pricing) {
     pricing = await this.create({});
   }
-
   return pricing;
 };
 

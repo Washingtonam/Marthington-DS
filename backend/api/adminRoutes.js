@@ -381,7 +381,7 @@ router.post("/user/:id/units", isAdmin, async (req, res) => {
 });
 
 // ==============================
-// 💰 UPDATE PRICING (Fully Unified for NIN & CAC Engines)
+// 💰 UPDATE PRICING (Fully Unified for NIN, Self-Service & CAC Engines)
 // ==============================
 router.put("/pricing", isAdmin, async (req, res) => {
   try {
@@ -390,7 +390,8 @@ router.put("/pricing", isAdmin, async (req, res) => {
 
     // Ensure baseline structures exist safely before updates
     if (!pricing.nin) pricing.nin = {};
-    if (!pricing.ninServices) pricing.ninServices = { validation: {}, ipe: {}, modification: {} };
+    if (!pricing.ninServices) pricing.ninServices = { validation: {}, selfService: {}, ipe: {}, modification: {} };
+    if (!pricing.ninServices.selfService) pricing.ninServices.selfService = {};
     if (!pricing.cacServices) pricing.cacServices = {};
 
     // 1. Sync Base NIN Configuration Margins
@@ -406,7 +407,15 @@ router.put("/pricing", isAdmin, async (req, res) => {
     if (req.body.modification) Object.assign(pricing.ninServices.modification, req.body.modification);
     if (req.body.slipPrice !== undefined) pricing.ninServices.slipPrice = req.body.slipPrice;
 
-    // 3. Sync Live CAC Services Configuration Values
+    // 3. 🔥 Sync Self-Service Portal Management Safely
+    if (req.body.selfService) {
+      Object.assign(pricing.ninServices.selfService, {
+        emailRetrieval: req.body.selfService.emailRetrieval ?? pricing.ninServices.selfService.emailRetrieval,
+        deviceUnlink: req.body.selfService.deviceUnlink ?? pricing.ninServices.selfService.deviceUnlink,
+      });
+    }
+
+    // 4. Sync Live CAC Services Configuration Values
     if (req.body.cacServices) {
       Object.assign(pricing.cacServices, {
         soleProprietorship: req.body.cacServices.soleProprietorship ?? pricing.cacServices.soleProprietorship,
@@ -418,6 +427,10 @@ router.put("/pricing", isAdmin, async (req, res) => {
     // Explicitly flag schema paths as modified to ensure Mongoose updates inner objects completely
     pricing.markModified("nin");
     pricing.markModified("ninServices");
+    pricing.markModified("ninServices.validation");
+    pricing.markModified("ninServices.selfService");
+    pricing.markModified("ninServices.ipe");
+    pricing.markModified("ninServices.modification");
     pricing.markModified("cacServices");
 
     await pricing.save();
