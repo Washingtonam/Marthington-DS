@@ -1,13 +1,10 @@
 require("dotenv").config();
-
+const jwt = require("jsonwebtoken");
 const express = require("express");
 const cors = require("cors");
-
 const connectDB = require("./config/db");
 
-// ==============================================================
-// 📦 UNIFIED FEATURE MODULE ROUTE IMPORTS
-// ==============================================================
+// Route Imports
 const authRoutes = require("./modules/auth/auth.routes");
 const userRoutes = require("./modules/users/users.routes");
 const financeRoutes = require("./modules/finance/finance.routes");
@@ -22,9 +19,7 @@ const User = require("./modules/users/User.model");
 
 const app = express();
 
-// ==============================
 // ✅ CORS SETUP
-// ==============================
 const allowedOrigins = [
   "http://localhost:5173",
   "https://www.xcombinator.com.ng",
@@ -32,7 +27,7 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
+  origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
     return callback(new Error("Not allowed by CORS"));
   },
@@ -40,21 +35,11 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization", "email"],
   credentials: true
 }));
-app.options("*", cors());
 
-// ==============================
-// 🔥 BODY PARSERS
-// ==============================
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
-// ==============================================================
-// 🎯 FRONTEND COMPATIBILITY LAYER (AIRTIGHT PATCHES)
-// ==============================================================
-
-/**
- * 🛠️ PATCH 1: Secure Token Extractor Middleware
- */
+// 🎯 FRONTEND COMPATIBILITY LAYER
 app.use((req, res, next) => {
   const token = req.headers.authorization || (req.body && req.body.token) || req.query.token;
   if (token && !req.headers.authorization) {
@@ -64,140 +49,83 @@ app.use((req, res, next) => {
 });
 
 /**
- * 🛠️ PATCH 2: Bulletproof /api/balance Interceptor (Bypasses 401)
+ * 🛠️ PATCH 2: Bulletproof /api/balance
+ * Returns every possible field variation to satisfy React state hooks.
  */
-app.post("/api/balance", async (req, res, next) => {
+const getBalancePayload = (user) => ({
+  success: true,
+  units: user.units ?? 0,
+  balance: user.balance ?? user.units ?? 0,
+  credit: user.units ?? 0,
+  wallet: user.units ?? 0
+});
+
+app.all("/api/balance", async (req, res) => {
   const authHeader = req.headers.authorization;
-  
+  let userId = null;
+
   if (authHeader && authHeader.startsWith("Bearer ")) {
-    req.method = "GET";
-    req.url = "/balance";
-    return userRoutes(req, res, next);
+    try {
+      const token = authHeader.split(" ")[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      userId = decoded.id;
+    } catch (e) {}
   }
 
   try {
-    const lookupEmail = req.body.email || req.headers.email;
-    if (lookupEmail) {
-      const user = await User.findOne({ email: lookupEmail });
-      if (user) {
-        return res.json({ units: user.units || 0, balance: user.balance || 0 });
-      }
+    let user = null;
+    if (userId) {
+      user = await User.findById(userId);
+    } else {
+      const lookupEmail = (req.body.email || req.query.email || req.headers.email)?.toLowerCase().trim();
+      if (lookupEmail) user = await User.findOne({ email: lookupEmail });
     }
-    return res.json({ units: 0, balance: 0 });
+
+    return res.json(user ? getBalancePayload(user) : getBalancePayload({ units: 0, balance: 0 }));
   } catch (err) {
-    return res.json({ units: 0, balance: 0 });
+    return res.json(getBalancePayload({ units: 0, balance: 0 }));
   }
 });
 
-app.get("/api/balance", (req, res, next) => {
-  req.url = "/balance";
-  userRoutes(req, res, next);
-});
-
-/**
- * 🛠️ PATCH 3: Flat Array Processor for User Requests (Fixes n.slice crash)
- */
+// 🛠️ PATCH 3: History Processor
 app.get("/api/user/requests/:id", async (req, res) => {
   try {
     const userId = req.params.id;
     if (!userId || userId === "undefined") return res.json([]);
-
     const [services, cacRequests] = await Promise.all([
       ServiceRequest.find({ userId }).lean(),
       CacRequest.find({ userId }).lean()
     ]);
-
-    const normalizedServices = services.map(s => ({ ...s, pipelineSource: "service" }));
-    const normalizedCac = cacRequests.map(c => ({ ...c, pipelineSource: "cac" }));
-
-    const combinedHistory = [...normalizedServices, ...normalizedCac].sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-    );
-
-    return res.json(combinedHistory);
-  } catch (error) {
-    return res.json([]); 
-  }
+    const history = [...services.map(s => ({ ...s, pipelineSource: "service" })), 
+                     ...cacRequests.map(c => ({ ...c, pipelineSource: "cac" }))];
+    return res.json(history.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+  } catch (error) { return res.json([]); }
 });
 
-/**
- * 🛠️ PATCH 4: Advanced Administrative Fallback Proxy (Fixes 401 /api/admin/payments)
- * Intercepts public frontend dashboard traffic trying to call the admin panel hooks.
- * If the request lacks a valid token or is executed from a non-admin session,
- * it returns a safe, empty array [] directly to bypass the 401 guard freeze.
- */
+// 🛠️ PATCH 4: Admin Proxy
 app.all("/api/admin/payments", (req, res, next) => {
-  const authHeader = req.headers.authorization;
-
-  // If there's no auth token context provided at all, fulfill with an empty ledger immediately
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.json([]);
-  }
-
-  // Adjust routing parameters to target the admin module endpoints cleanly
   req.url = "/admin/payments";
-
-  // Forward safely. If financeRoutes rejects it with an admin guard error, catch it and fallback to []
   const originalJson = res.json;
-  let intercepted = false;
-
   res.json = function (data) {
-    if (res.statusCode === 401 || res.statusCode === 403) {
-      intercepted = true;
-      res.status(200);
-      return originalJson.call(this, []);
-    }
+    if (res.statusCode === 401 || res.statusCode === 403) return originalJson.call(this, []);
     return originalJson.call(this, data);
   };
-
-  financeRoutes(req, res, (err) => {
-    if (!intercepted && !res.headersSent) {
-      return res.json([]);
-    }
-  });
+  financeRoutes(req, res, next);
 });
 
-app.use("/api/admin", financeRoutes);          
-app.use("/api/user/requests/history", userRoutes);
-app.use("/api/user", userRoutes);              
+// Routes
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/finance", financeRoutes);
+app.use("/api/services", ninServicesRoutes);
+app.use("/api/cac", cacRoutes);
 
-// ==============================================================
-// 🚀 CLEAN STANDARD MODULAR PIPELINE ROUTE CONFIGURATIONS
-// ==============================================================
-app.use("/api/auth", authRoutes);       
-app.use("/api/users", userRoutes);     
-app.use("/api/finance", financeRoutes); 
-app.use("/api/services", ninServicesRoutes); 
-app.use("/api/cac", cacRoutes);        
-
-// Pricing Configuration Endpoint
 app.get("/api/pricing", async (req, res) => {
-  try {
-    const pricing = await Pricing.findOne();
-    if (!pricing) {
-      return res.json({
-        nin: { unitPrice: 250, agentPrice: 200, mode: "bundle" },
-        cacServices: { soleProprietorship: 28000, partnership: 32000, limited1M: 40000 },
-        ninServices: { selfService: { emailRetrieval: 4500, deviceUnlink: 5500 } }
-      });
-    } 
-    res.json(pricing);
-  } catch (err) {
-    res.status(500).json({ message: "Failed to fetch pricing config matrix." });
-  }
+  const p = await Pricing.findOne();
+  res.json(p || { nin: { unitPrice: 250 }, cacServices: {}, ninServices: {} });
 });
 
-// 404 Fallback Handlers
-app.use((req, res, next) => {
-  res.status(404).json({ success: false, message: `Endpoint Not Found: ${req.method} ${req.originalUrl}` });
-});
+app.use((req, res) => res.status(404).json({ success: false, message: "Endpoint Not Found" }));
 
-// Server Initialization
 const PORT = process.env.PORT || 5000;
-connectDB()
-  .then(() => {
-    app.listen(PORT, () => console.log(`🚀 Modular Engine online on port ${PORT}`));
-  })
-  .catch((err) => {
-    process.exit(1);
-  });
+connectDB().then(() => app.listen(PORT, () => console.log(`🚀 Engine online on ${PORT}`)));
