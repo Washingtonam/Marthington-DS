@@ -37,9 +37,9 @@ const corsOptions = {
     return callback(new Error("Not allowed by CORS"));
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization", "email"], // 👈 Added "email" back to match what the frontend sends
+  allowedHeaders: ["Content-Type", "Authorization", "email"], // Matches custom headers passed by your frontend
   credentials: true,
-  optionsSuccessStatus: 200 
+  optionsSuccessStatus: 200 // Fixes potential preflight issues on older mobile gateways/browsers
 };
 
 // Apply CORS globally across all routes immediately
@@ -62,9 +62,13 @@ app.get("/api/health", (req, res) => {
 // ==============================================================
 // 🚀 CLEAN MODULAR PIPELINE ROUTE CONFIGURATIONS
 // ==============================================================
-app.use("/api/auth", authRoutes);       // Mounts /api/auth/register, /api/auth/login, etc.
-app.use("/api/users", userRoutes);     // Mounts /api/users/balance, /api/users/requests/history
+app.use("/api/auth", authRoutes);       // Mounts /api/auth/register, /api/auth/login
+app.use("/api/users", userRoutes);     // Mounts /api/users/balance, etc.
 app.use("/api/finance", financeRoutes); // Mounts /api/finance/submit-payment, /api/finance/transactions
+
+// 👇 ALIAS ROUTE: Routes frontend dashboard panel stats/payments cleanly to the finance module
+app.use("/api/admin", financeRoutes);   
+
 app.use("/api/services", ninServicesRoutes); // Mounts /api/services/request, /api/services/verify
 app.use("/api/cac", cacRoutes);         // Mounts /api/cac/submit, /api/cac/history
 
