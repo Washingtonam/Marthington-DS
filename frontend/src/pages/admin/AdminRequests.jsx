@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import {
   CheckCircle2,
@@ -41,17 +41,17 @@ export default function AdminRequests() {
   const LIMIT = 20;
 
   const headers = {
-    email: localStorage.getItem("email"),
+    email: localStorage.getItem("email") || "",
   };
 
   // =========================
   // FETCH PIPELINE REQUESTS
   // =========================
-const fetchRequests = async () => {
+  const fetchRequests = async () => {
     try {
       setLoading(true);
       
-      // 1. Point this back to the single functional backend route
+      // 1. Point to the single functional backend route using the current filter status
       const res = await axios.get(
         `${API_BASE}/api/admin/requests?page=${page}&limit=${LIMIT}&status=${filter}`,
         { headers }
@@ -71,9 +71,11 @@ const fetchRequests = async () => {
             item.proposedName1
           );
         } else {
-          // Defaults cleanly to NIMC operations
+          // Captures validation, modification, or standard NIMC tracking structures safely
           return (
             item.service?.toLowerCase() === "nimc" || 
+            item.service?.toLowerCase() === "validation" || 
+            item.service?.toLowerCase() === "modification" || 
             item.nin || 
             (!item.proposedName1 && item.service?.toLowerCase() !== "cac")
           );
@@ -101,9 +103,9 @@ const fetchRequests = async () => {
     try {
       setActionLoading(id);
       
-      // Hit the unified operations endpoint with correct path parameter variables
+      // Standardized status transition endpoint targeting unified routing architecture
       const res = await axios.put(
-        `${API_BASE}/api/admin/update-status/${activeTab}/${id}`,
+        `${API_BASE}/api/admin/update-status/${id}`,
         { 
           status: targetStatus,
           note: `Status altered to ${targetStatus} via central management panel.`
@@ -111,12 +113,13 @@ const fetchRequests = async () => {
         { headers }
       );
 
-      if (res.data?.success) {
+      if (res.data?.success || res.status === 200) {
         // Optimistically mutate component view data structures
         setRequests(prev => prev.filter(r => r._id !== id));
         if (selected?._id === id) {
           setSelected(null);
         }
+        fetchRequests(); // Re-sync window frame elements
       } else {
         alert(res.data?.message || "Failed to update record state.");
       }
@@ -138,7 +141,6 @@ const fetchRequests = async () => {
 
   const saveNote = async () => {
     try {
-      // Clean fallback logic for internal tracking updates
       alert("Note staging action complete.");
     } catch (err) {
       alert("Failed to update application records safely.");
@@ -171,15 +173,15 @@ const fetchRequests = async () => {
     }
   };
 
-  // Client side workspace pipeline context stats calculators
+  // Workspace pipeline context live metrics indicators
   const pendingCount = requests.filter(r => r.status === "pending").length;
-  const approvedCount = requests.filter(r => r.status === "approved").length;
-  const completedCount = requests.filter(r => r.status === "completed").length;
+  const approvedCount = requests.filter(r => r.status === "approved" || r.status === "completed").length;
+  const rejectedCount = requests.filter(r => r.status === "rejected" || r.status === "failed").length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 pb-20 pt-6">
 
-      {/* HERO HERO SECTION */}
+      {/* HERO SECTION */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-900 to-blue-900 rounded-3xl p-8 text-white shadow-2xl mb-8">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div>
@@ -250,7 +252,7 @@ const fetchRequests = async () => {
         <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-800">
           <div className="flex justify-between items-center">
             <div>
-              <p className="text-sm font-semibold text-gray-500 mb-1">Approved Batches</p>
+              <p className="text-sm font-semibold text-gray-500 mb-1">Passed / Fulfilled</p>
               <h2 className="text-4xl font-bold dark:text-white">{approvedCount}</h2>
             </div>
             <div className="bg-green-100 dark:bg-green-950/40 p-4 rounded-2xl">
@@ -262,11 +264,11 @@ const fetchRequests = async () => {
         <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-800">
           <div className="flex justify-between items-center">
             <div>
-              <p className="text-sm font-semibold text-gray-500 mb-1">Fulfilled / Closed</p>
-              <h2 className="text-4xl font-bold dark:text-white">{completedCount}</h2>
+              <p className="text-sm font-semibold text-gray-500 mb-1">Failed / Rejected</p>
+              <h2 className="text-4xl font-bold dark:text-white">{rejectedCount}</h2>
             </div>
-            <div className="bg-blue-100 dark:bg-blue-950/40 p-4 rounded-2xl">
-              <CheckCircle2 className="text-blue-700 dark:text-blue-400" />
+            <div className="bg-red-100 dark:bg-red-950/40 p-4 rounded-2xl">
+              <XCircle className="text-red-700 dark:text-red-400" />
             </div>
           </div>
         </div>
@@ -274,7 +276,7 @@ const fetchRequests = async () => {
 
       {/* MATRIX FLOW STATUS FILTERS */}
       <div className="flex gap-2 flex-wrap mb-8">
-        {["pending", "approved", "completed", "failed", "all"].map((f) => (
+        {["pending", "approved", "completed", "rejected", "failed"].map((f) => (
           <button
             key={f}
             onClick={() => { setFilter(f); setPage(1); }}
@@ -320,7 +322,7 @@ const fetchRequests = async () => {
                     <div className="w-full">
                       <div className="flex items-center justify-between mb-2 gap-2">
                         <span className="text-xs font-mono tracking-wider opacity-90 truncate max-w-[150px]">
-                          ID: #{r._id.slice(-6)}
+                          ID: #{r._id ? r._id.slice(-6) : "N/A"}
                         </span>
                         <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase ${statusStyle(r.status)}`}>
                           {r.status || "Pending"}
@@ -342,7 +344,6 @@ const fetchRequests = async () => {
                     </span>
                   </div>
 
-                  {/* Handles both NIN inputs and corporate name requests inside simple data layout lists */}
                   <div className="flex justify-between items-center text-sm border-b border-gray-50 dark:border-gray-800/50 pb-2">
                     <span className="text-gray-400 font-medium">Primary Pointer</span>
                     <span className="font-mono font-bold text-gray-700 dark:text-gray-300 truncate max-w-[180px]">
@@ -362,7 +363,7 @@ const fetchRequests = async () => {
               {/* CARD ACTIONS AREA */}
               <div className="p-5 pt-0 border-t border-gray-50 dark:border-gray-800/40 mt-2">
                 <p className="text-[11px] font-mono text-gray-400 mb-4 pt-3">
-                  STAGED: {new Date(r.createdAt).toLocaleString()}
+                  STAGED: {r.createdAt ? new Date(r.createdAt).toLocaleString() : "N/A"}
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -383,7 +384,7 @@ const fetchRequests = async () => {
                         Pass
                       </button>
                       <button
-                        onClick={() => handleStatusTransition(r._id, "failed")}
+                        onClick={() => handleStatusTransition(r._id, "rejected")}
                         disabled={actionLoading === r._id}
                         className="px-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white font-bold rounded-xl text-xs transition"
                       >
@@ -403,7 +404,7 @@ const fetchRequests = async () => {
         <div className="flex justify-center items-center gap-4 mt-12">
           <button
             disabled={page === 1}
-            onClick={() => setPage(prev => prev - 1)}
+            onClick={() => setPage(prev => Math.max(prev - 1, 1))}
             className="bg-white dark:bg-[#161616] border border-gray-200 dark:border-gray-800 dark:text-white px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 transition"
           >
             <ChevronLeft size={16} /> Prev
@@ -413,7 +414,7 @@ const fetchRequests = async () => {
           </div>
           <button
             disabled={page === pages}
-            onClick={() => setPage(prev => prev + 1)}
+            onClick={() => setPage(prev => Math.min(prev + 1, pages))}
             className="bg-white dark:bg-[#161616] border border-gray-200 dark:border-gray-800 dark:text-white px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 transition"
           >
             Next <ChevronRight size={16} />
@@ -426,7 +427,7 @@ const fetchRequests = async () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-center items-center p-4 animate-fadeIn">
           <div className="bg-white dark:bg-[#111111] w-full max-w-5xl rounded-3xl max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-100 dark:border-gray-800">
             
-            {/* STICKY PANEL TITLE BAR */}
+            {/* PANEL TITLE BAR */}
             <div className="sticky top-0 bg-white/90 dark:bg-[#111111]/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-6 z-10 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Inspection Monitor</h2>
@@ -440,7 +441,7 @@ const fetchRequests = async () => {
               </button>
             </div>
 
-            {/* EXPANDED SYSTEM DATA FIELDS GRID */}
+            {/* EXPANDED DATA GRID */}
             <div className="p-6 space-y-6">
               <div className="bg-gray-50 dark:bg-[#181818] rounded-2xl p-5 border border-gray-100 dark:border-gray-800">
                 <div className="flex items-center gap-2.5 mb-4">
@@ -463,13 +464,12 @@ const fetchRequests = async () => {
                 </div>
               </div>
 
-              {/* ITERATE THROUGH FORM SUBMISSION FIELDS ACCURATELY */}
+              {/* SCHEMA PAYLOAD ATTRIBUTES DETECTOR */}
               <div className="bg-gray-50 dark:bg-[#181818] rounded-2xl p-5 border border-gray-100 dark:border-gray-800">
                 <h3 className="font-extrabold text-sm mb-4 dark:text-white uppercase tracking-wider">Decoded Schema Metadata Payload</h3>
                 <div className="grid sm:grid-cols-2 gap-3">
                   {Object.entries({
                     ...(selected.formData || {}),
-                    // Pull top level variables directly if inner payload dictionary objects are absent
                     serviceType: selected.service || selected.type || "Undefined",
                     ...(selected.proposedName1 && { nameOption1: selected.proposedName1 }),
                     ...(selected.proposedName2 && { nameOption2: selected.proposedName2 }),
@@ -483,7 +483,7 @@ const fetchRequests = async () => {
                 </div>
               </div>
 
-              {/* MULTI-MEDIA FILE UPLOADS GRID STORAGE RENDER PIPELINE */}
+              {/* MULTI-MEDIA MEDIA CONTAINER */}
               {(selected.proof || selected.passport || selected.documentUrl) && (
                 <div className="grid md:grid-cols-2 gap-6">
                   {selected.proof && (
@@ -512,7 +512,7 @@ const fetchRequests = async () => {
                 </div>
               )}
 
-              {/* TEAM COMMENTS PANEL SECTION */}
+              {/* AUDIT LOG COMMENTS SECTION */}
               <div className="bg-gray-50 dark:bg-[#181818] rounded-2xl p-5 border border-gray-100 dark:border-gray-800">
                 <div className="flex items-center gap-2 mb-4">
                   <MessageSquare size={16} className="text-blue-500" />
@@ -555,7 +555,7 @@ const fetchRequests = async () => {
         </div>
       )}
 
-      {/* FULL LAYER DIALOG OVERLAY LIGHTBOX FOR IMAGE FILES */}
+      {/* FULL LAYER LIGHTBOX FOR IMAGES */}
       {previewImage && (
         <div className="fixed inset-0 bg-black/95 z-[100] flex justify-center items-center p-4">
           <div className="relative max-w-4xl w-full flex flex-col items-end">
@@ -567,7 +567,7 @@ const fetchRequests = async () => {
             </button>
             <img
               src={previewImage}
-              alt="High Definition Fullscreen View Document"
+              alt="Fullscreen View Document"
               className="w-full max-h-[82vh] object-contain rounded-2xl bg-zinc-900 shadow-2xl border border-zinc-800"
             />
           </div>
