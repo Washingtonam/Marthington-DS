@@ -68,7 +68,7 @@ export default function Sidebar() {
     window.location.href = "/login";
   };
 
- useEffect(() => {
+useEffect(() => {
     if (!isAdmin) return;
 
     const fetchData = async () => {
