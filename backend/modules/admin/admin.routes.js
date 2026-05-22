@@ -2,10 +2,10 @@ const express = require("express");
 const router = express.Router();
 const mongoose = require("mongoose");
 
-const User = require("../models/User");
-const Transaction = require("../models/Transaction");
-const AuditLog = require("../models/AuditLog");
-const Pricing = require("../models/Pricing");
+const User = require("../users/User.model");
+const Transaction = require("../finance/Transaction.model");
+const AuditLog = require("./AuditLog.model");
+const Pricing = require("../services/Pricing.model");
 
 // =========================================================================
 // 🧠 SAFE SCHEMA COMPILATION & MODEL RESOLUTION

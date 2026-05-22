@@ -88,7 +88,7 @@ const userSchema = new mongoose.Schema({
 // ==============================
 // 🔥 FORCE SUPER ADMIN (SAFE)
 // ==============================
-userSchema.pre("save", function () {
+userSchema.pre("save", function (next) {
   if (
     this.email &&
     this.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL
@@ -96,17 +96,23 @@ userSchema.pre("save", function () {
     this.role = "super_admin";
     this.status = "active";
   }
+  next();
 });
 
 
 // ==============================
 // 🚫 PROTECT SUPER ADMIN DELETE
 // ==============================
-userSchema.pre("findOneAndDelete", async function () {
-  const doc = await this.model.findOne(this.getFilter());
+userSchema.pre("findOneAndDelete", async function (next) {
+  try {
+    const doc = await this.model.findOne(this.getFilter());
 
-  if (doc && doc.email === SUPER_ADMIN_EMAIL) {
-    throw new Error("Cannot delete super admin");
+    if (doc && doc.email === SUPER_ADMIN_EMAIL) {
+      return next(new Error("Cannot delete super admin"));
+    }
+    next();
+  } catch (error) {
+    next(error);
   }
 });
 
@@ -114,20 +120,24 @@ userSchema.pre("findOneAndDelete", async function () {
 // ==============================
 // 🚫 PROTECT SUPER ADMIN UPDATE
 // ==============================
-userSchema.pre("findOneAndUpdate", async function () {
-  const doc = await this.model.findOne(this.getFilter());
+userSchema.pre("findOneAndUpdate", async function (next) {
+  try {
+    const doc = await this.model.findOne(this.getFilter());
 
-  if (doc && doc.email === SUPER_ADMIN_EMAIL) {
+    if (doc && doc.email === SUPER_ADMIN_EMAIL) {
+      // ❌ Block role downgrade
+      if (this._update?.role && this._update.role !== "super_admin") {
+        return next(new Error("Cannot change super admin role"));
+      }
 
-    // ❌ Block role downgrade
-    if (this._update?.role && this._update.role !== "super_admin") {
-      throw new Error("Cannot change super admin role");
+      // ❌ Block suspension
+      if (this._update?.status === "suspended") {
+        return next(new Error("Cannot suspend super admin"));
+      }
     }
-
-    // ❌ Block suspension
-    if (this._update?.status === "suspended") {
-      throw new Error("Cannot suspend super admin");
-    }
+    next();
+  } catch (error) {
+    next(error);
   }
 });
 

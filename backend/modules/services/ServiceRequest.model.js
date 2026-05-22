@@ -4,15 +4,15 @@ const ServiceRequestSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User", 
-    required: false // Fallback friendly to avoid workspace token rejection loops
+    required: true
   },
   service: {
     type: String,
-    required: true
+    required: true // e.g., "validation", "modification", "nimc_manual"
   },
   type: {
     type: String,
-    required: true
+    required: true // e.g., "nameCorrection", "trackingLookup", "vnin"
   },
   nin: {
     type: String,
@@ -24,7 +24,12 @@ const ServiceRequestSchema = new mongoose.Schema({
   },
   amount: {
     type: Number,
-    required: true
+    required: true,
+    default: 0
+  },
+  unitsUsed: {
+    type: Number,
+    default: 0
   },
   proof: {
     type: String,
@@ -34,12 +39,14 @@ const ServiceRequestSchema = new mongoose.Schema({
     type: String,
     default: "N/A"
   },
-  // Handles structural variations inside modern identity service requests cleanly
   formData: {
     type: mongoose.Schema.Types.Mixed, 
     default: {}
   },
-  // 🔄 ALIGNED ENUM STRINGS TO REJECT MATCH CODES
+  apiResponseData: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null // Stores raw data directly returned by your third-party portal
+  },
   status: {
     type: String,
     enum: ["pending", "processing", "completed", "rejected", "failed"],
@@ -54,5 +61,4 @@ const ServiceRequestSchema = new mongoose.Schema({
   ]
 }, { timestamps: true });
 
-// Checks if the model already exists in Mongoose memory before creating a new one
 module.exports = mongoose.models.ServiceRequest || mongoose.model("ServiceRequest", ServiceRequestSchema);

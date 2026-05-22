@@ -3,19 +3,19 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 
-const connectDB = require("./utils/db");
+const connectDB = require("./config/db");
 
-const authRoutes = require("./api/authRoutes");
-const userRoutes = require("./api/userRoutes");
-const verificationRoutes = require("./api/verificationRoutes");
-const paymentRoutes = require("./api/paymentRoutes");
-const adminRoutes = require("./api/adminRoutes");
-const slipRoutes = require("./api/slipRoutes");
-const transactionsRoutes = require("./api/transactionsRoutes");
+// ==============================================================
+// 📦 UNIFIED FEATURE MODULE ROUTE IMPORTS
+// ==============================================================
+const authRoutes = require("./modules/auth/auth.routes");
+const userRoutes = require("./modules/users/users.routes");
+const financeRoutes = require("./modules/finance/finance.routes");
+const ninServicesRoutes = require("./modules/services/nin.routes");
+const cacRoutes = require("./modules/services/cac.routes");
 
-const cacRoutes = require("./api/cacRoutes");
-const ninServicesRoutes = require("./api/ninServicesRoutes");
-const Pricing = require("./models/Pricing");
+// Models
+const Pricing = require("./modules/services/Pricing.model");
 
 const app = express();
 
@@ -37,9 +37,9 @@ const corsOptions = {
     return callback(new Error("Not allowed by CORS"));
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "email"],
+  allowedHeaders: ["Content-Type", "Authorization"], // Dropped raw 'email' headers since we use JWT tokens natively now
   credentials: true,
-  optionsSuccessStatus: 200 // Fixes potential preflight issues on older browsers/gateways
+  optionsSuccessStatus: 200 // Fixes potential preflight issues on older mobile gateways/browsers
 };
 
 // Apply CORS globally across all routes immediately
@@ -56,21 +56,17 @@ app.use(express.urlencoded({ limit: "10mb", extended: true }));
 // 🧠 HEALTH CHECK
 // ==============================
 app.get("/api/health", (req, res) => {
-  res.json({ status: "OK" });
+  res.json({ status: "OK", timestamp: new Date() });
 });
 
-// ==============================
-// 🚀 ROUTE CONFIGURATIONS
-// ==============================
-app.use("/api", authRoutes);
-app.use("/api", userRoutes);
-app.use("/api", verificationRoutes);
-app.use("/api", paymentRoutes);
-app.use("/api", transactionsRoutes);
-app.use("/api/nin-services", ninServicesRoutes); 
-app.use("/api/admin", adminRoutes); // 👈 This maps explicitly to /api/admin/*
-app.use("/api", slipRoutes);
-app.use("/api/cac", cacRoutes);
+// ==============================================================
+// 🚀 CLEAN MODULAR PIPELINE ROUTE CONFIGURATIONS
+// ==============================================================
+app.use("/api/auth", authRoutes);       // Mounts /api/auth/register, /api/auth/login, etc.
+app.use("/api/users", userRoutes);     // Mounts /api/users/balance, /api/users/requests/history
+app.use("/api/finance", financeRoutes); // Mounts /api/finance/submit-payment, /api/finance/transactions
+app.use("/api/services", ninServicesRoutes); // Mounts /api/services/request, /api/services/verify
+app.use("/api/cac", cacRoutes);         // Mounts /api/cac/submit, /api/cac/history
 
 // ==============================
 // 💰 PRICING SEED PROTECTION
@@ -86,6 +82,11 @@ app.get("/api/pricing", async (req, res) => {
           agentPrice: 200,
           mode: "bundle",
         },
+        cacServices: {
+          soleProprietorship: 28000,
+          partnership: 32000,
+          limited1M: 40000
+        },
         ninServices: {
           selfService: {
             emailRetrieval: 4500,
@@ -98,19 +99,17 @@ app.get("/api/pricing", async (req, res) => {
     res.json(pricing);
   } catch (err) {
     console.error("PRICING ERROR:", err.message);
-    res.status(500).json({ message: "Failed to fetch pricing" });
+    res.status(500).json({ message: "Failed to fetch pricing config matrix." });
   }
 });
 
 // ==============================
 // 🛑 404 FALLBACK HANDLER
 // ==============================
-// This ensures that any incorrect endpoint returns a clean JSON error message 
-// instead of breaking the frontend fetch pipeline with raw HTML.
 app.use((req, res, next) => {
   res.status(404).json({ 
     success: false, 
-    message: `Endpoint Not Found: ${req.method} ${req.originalUrl}` 
+    message: `Endpoint Not Found on Engine Matrix: ${req.method} ${req.originalUrl}` 
   });
 });
 
@@ -124,7 +123,7 @@ connectDB()
     console.log("✅ MongoDB Connected Successfully");
 
     app.listen(PORT, () => {
-      console.log(`🚀 Server running smoothly on port ${PORT}`);
+      console.log(`🚀 Modular Engine running smoothly on port ${PORT}`);
     });
   })
   .catch((err) => {

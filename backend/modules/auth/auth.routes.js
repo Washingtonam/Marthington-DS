@@ -1,9 +1,12 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 const { Resend } = require("resend");
 
-const User = require("../models/User");
+// Localized feature path configuration
+const User = require("../users/User.model");
+const { verifyToken } = require("../../shared/authGuard");
 
 const router = express.Router();
 
@@ -11,10 +14,6 @@ const router = express.Router();
 // 📧 RESEND CONFIG
 // ==============================
 const resend = new Resend(process.env.RESEND_API_KEY);
-
-console.log("📧 RESEND CHECK:", {
-  keyLoaded: !!process.env.RESEND_API_KEY
-});
 
 // ==============================
 // 🔐 REGISTER
@@ -38,15 +37,22 @@ router.post("/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Explicit check: If it's your primary email, automatically enforce super_admin role
+    let assignedRole = "user";
+    if (email === "washingtonamedu@gmail.com") {
+      assignedRole = "super_admin";
+    }
+
     const newUser = await User.create({
       firstName: firstName || "",
       lastName: lastName || "",
       nin: nin || "",
       email,
       password: hashedPassword,
+      role: assignedRole, // Dynamic role assignment
     });
 
-    res.json({
+    res.status(201).json({
       message: "User registered successfully",
       user: {
         id: newUser._id,
@@ -93,11 +99,24 @@ router.post("/login", async (req, res) => {
       return res.status(403).json({ error: "Account suspended" });
     }
 
+    // Double check system fallback safety: ensure role matches email on-login
+    if (user.email === "washingtonamedu@gmail.com" && user.role !== "super_admin") {
+      user.role = "super_admin";
+    }
+
     user.lastLogin = new Date();
     await user.save();
 
+    // Generate JWT Token for seamless frontend storage and cross-platform mobile compatibility
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" } // Token remains active for 7 days
+    );
+
     res.json({
       message: "Login successful",
+      token, // Passed down back to frontend application instances
       user: {
         id: user._id,
         email: user.email,
@@ -115,13 +134,14 @@ router.post("/login", async (req, res) => {
 });
 
 // ==============================
-// 🔐 CHANGE PASSWORD
+// 🔐 CHANGE PASSWORD (AUTHENTICATED)
 // ==============================
-router.post("/change-password", async (req, res) => {
+router.post("/change-password", verifyToken, async (req, res) => {
   try {
-    const { userId, currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id; // Pulled directly from verifyToken payload safely
 
-    if (!userId || !currentPassword || !newPassword) {
+    if (!currentPassword || !newPassword) {
       return res.status(400).json({
         error: "All fields are required",
       });
@@ -173,8 +193,6 @@ router.post("/forgot-password", async (req, res) => {
 
     email = email.toLowerCase().trim();
 
-    console.log("📩 Reset request:", email);
-
     const user = await User.findOne({ email });
 
     if (!user) {
@@ -192,9 +210,7 @@ router.post("/forgot-password", async (req, res) => {
 
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
-    console.log("🔗 Reset Link:", resetLink);
-
-    const response = await resend.emails.send({
+    await resend.emails.send({
       from: "Xcombinator <onboarding@resend.dev>",
       to: user.email,
       subject: "Reset Your Password",
@@ -206,15 +222,12 @@ router.post("/forgot-password", async (req, res) => {
       `,
     });
 
-    console.log("✅ EMAIL SENT:", response);
-
     res.json({
       message: "Reset link sent to your email",
     });
 
   } catch (error) {
     console.error("❌ RESEND ERROR:", error);
-
     res.status(500).json({
       error: "Failed to send reset email",
     });

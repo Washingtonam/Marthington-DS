@@ -10,8 +10,8 @@ const ProprietorSchema = new mongoose.Schema({
   state: { type: String },
   lga: { type: String },
   address: { type: String },
-  signature: { type: String, required: true }, // Cloudinary or base64 URI string
-  passport: { type: String, required: true }   // Cloudinary or base64 URI string
+  signature: { type: String, required: true }, // Cloudinary storage asset link
+  passport: { type: String, required: true }   // Cloudinary storage asset link
 });
 
 const CacRequestSchema = new mongoose.Schema({
@@ -23,7 +23,7 @@ const CacRequestSchema = new mongoose.Schema({
   },
   amountCharged: { type: Number, required: true },
   
-  // Business Core Info
+  // Business Core Information Block
   businessName1: { type: String, required: true },
   businessName2: { type: String, required: true },
   companyEmail: { type: String, required: true },
@@ -34,7 +34,6 @@ const CacRequestSchema = new mongoose.Schema({
   shopNo: { type: String },
   streetAddress: { type: String, required: true },
 
-  // Arrays and Conditional objects
   proprietors: [ProprietorSchema],
   
   witness: {
@@ -58,15 +57,13 @@ const CacRequestSchema = new mongoose.Schema({
     nin: String
   },
 
-  // 🔄 ALIGNED STATE WITH UNIFIED CONTROLLER MATRIX
   status: { 
     type: String, 
     default: "pending", 
     enum: ["pending", "processing", "completed", "rejected", "failed"] 
   },
-  progressNotes: { type: String, default: "Awaiting review" },
+  progressNotes: { type: String, default: "Awaiting administrative document review" },
 
-  // 💡 FIXED: Explicitly added statusHistory so the timeline logic tracks seamlessly
   statusHistory: [
     {
       status: { type: String },
@@ -76,5 +73,4 @@ const CacRequestSchema = new mongoose.Schema({
   ]
 }, { timestamps: true });
 
-// Checks if the model already exists in Mongoose memory before creating a new one
 module.exports = mongoose.models.CacRequest || mongoose.model("CacRequest", CacRequestSchema);

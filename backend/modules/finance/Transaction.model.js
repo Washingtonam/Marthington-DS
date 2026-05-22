@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const transactionSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ["UNIT_ADD", "UNIT_DEDUCT", "NIN", "BVN", "SERVICE"],
+    enum: ["UNIT_ADD", "UNIT_DEDUCT", "NIN", "BVN", "SERVICE", "NIN_AUTO"], // Added NIN_AUTO to match our streamlined service router
     required: true,
   },
 
@@ -41,6 +41,7 @@ const transactionSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
+    required: true
   },
 
   nin: String,
@@ -52,7 +53,7 @@ const transactionSchema = new mongoose.Schema({
 
   proof: {
     type: String,
-    default: null,
+    default: null, // Holds the Cloudinary storage URL for manual payment receipts
   },
 
 }, { timestamps: true });

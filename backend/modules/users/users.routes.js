@@ -1,26 +1,25 @@
 const express = require("express");
 
-const User = require("../models/User");
-const Transaction = require("../models/Transaction");
-// 💡 Added model imports to pull unified individual histories safely
-const ServiceRequest = require("../models/ServiceRequest");
-const CacRequest = require("../models/CacRequest");
+const User = require("./User.model");
+const { verifyToken, isAdmin } = require("../../shared/authGuard");
+
+// Lazy-loaded model definitions for localized structural feature calls
+// (These paths look straight into your adjacent modules folder structure seamlessly)
+const Transaction = require("../finance/Transaction.model");
+const ServiceRequest = require("../services/ServiceRequest.model");
+const CacRequest = require("../services/CacRequest.model");
 
 const router = express.Router();
 
 // ==============================
-// 🔥 GET USER UNITS (MAIN SYSTEM)
+// 🔥 GET USER UNITS (SECURED VIA JWT)
 // ==============================
-router.post("/balance", async (req, res) => {
-  const { userId } = req.body;
-
+router.get("/balance", verifyToken, async (req, res) => {
   try {
-    if (!userId) {
-      return res.status(400).json({ error: "User ID required" });
-    }
+    // Securely pull identity straight from token string instead of loose body values
+    const userId = req.user.id; 
 
     const user = await User.findById(userId);
-
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -32,7 +31,6 @@ router.post("/balance", async (req, res) => {
 
   } catch (error) {
     console.error("🔥 BALANCE ERROR:", error.message);
-
     return res.status(500).json({
       error: "Failed to fetch balance",
     });
@@ -40,15 +38,11 @@ router.post("/balance", async (req, res) => {
 });
 
 // ==============================
-// 📜 GET USER TRANSACTIONS
+// 📜 GET USER TRANSACTIONS (SECURED VIA JWT)
 // ==============================
-router.post("/transactions", async (req, res) => {
-  const { userId } = req.body;
-
+router.get("/transactions", verifyToken, async (req, res) => {
   try {
-    if (!userId) {
-      return res.status(400).json({ error: "User ID required" });
-    }
+    const userId = req.user.id; // Securely pulled from request payload
 
     const transactions = await Transaction.find({ userId })
       .sort({ createdAt: -1 });
@@ -68,7 +62,6 @@ router.post("/transactions", async (req, res) => {
 
   } catch (error) {
     console.error("🔥 TRANSACTION ERROR:", error.message);
-
     return res.status(500).json({
       error: "Failed to fetch transactions",
     });
@@ -76,15 +69,11 @@ router.post("/transactions", async (req, res) => {
 });
 
 // ==============================================================
-// 📥 GET COMBINED USER REQUESTS HISTORY (Resolves Frontend 404 loops)
+// 📥 GET COMBINED USER REQUESTS HISTORY (SECURED VIA JWT)
 // ==============================================================
-router.get("/requests/:userId", async (req, res) => {
+router.get("/requests/history", verifyToken, async (req, res) => {
   try {
-    const { userId } = req.params;
-
-    if (!userId) {
-      return res.status(400).json({ success: false, message: "User ID parameter required" });
-    }
+    const userId = req.user.id; // Fully token authenticated
 
     // Execute database scans concurrently to save memory cycles
     const [services, cacRequests] = await Promise.all([
@@ -120,6 +109,19 @@ router.get("/requests/:userId", async (req, res) => {
       success: false, 
       message: "Server error querying target user data logs." 
     });
+  }
+});
+
+// ==============================================================
+// 🛠️ ADMIN ROUTE: GET ALL REGISTERED SYSTEM USERS (FOR ADMIN CONTROL)
+// ==============================================================
+router.get("/admin/all-users", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const users = await User.find({}, "-password").sort({ createdAt: -1 });
+    return res.json({ success: true, data: users });
+  } catch (error) {
+    console.error("🔥 ADMIN USERS LOG ERROR:", error.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch user index." });
   }
 });
 
