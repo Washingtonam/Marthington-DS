@@ -58,12 +58,22 @@ const CacRequestSchema = new mongoose.Schema({
     nin: String
   },
 
+  // 🔄 ALIGNED STATE WITH UNIFIED CONTROLLER MATRIX
   status: { 
     type: String, 
     default: "pending", 
-    enum: ["pending", "processing", "completed", "rejected"] 
+    enum: ["pending", "processing", "completed", "rejected", "failed"] 
   },
-  progressNotes: { type: String, default: "Awaiting review" }
+  progressNotes: { type: String, default: "Awaiting review" },
+
+  // 💡 FIXED: Explicitly added statusHistory so the timeline logic tracks seamlessly
+  statusHistory: [
+    {
+      status: { type: String },
+      note: { type: String },
+      createdAt: { type: Date, default: Date.now }
+    }
+  ]
 }, { timestamps: true });
 
 module.exports = mongoose.model("CacRequest", CacRequestSchema);

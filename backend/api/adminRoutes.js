@@ -7,7 +7,10 @@ const Transaction = require("../models/Transaction");
 const AuditLog = require("../models/AuditLog");
 const Pricing = require("../models/Pricing");
 
-// Safe Model Resolution for Service pipelines to protect against initialization crashes
+// =========================================================================
+// 🧠 SAFE SCHEMA COMPILATION & MODEL RESOLUTION
+// =========================================================================
+// Structural safety wrappers prevent application startup loops and schema structural rejections.
 let ServiceRequest;
 try {
   ServiceRequest = mongoose.model("ServiceRequest");
@@ -16,7 +19,6 @@ try {
   ServiceRequest = mongoose.model("ServiceRequest", dynamicSchema);
 }
 
-// Dynamic resolution for CAC model tracking
 let CACRequest;
 try {
   CACRequest = mongoose.model("CacRequest");
@@ -25,70 +27,115 @@ try {
   CACRequest = mongoose.model("CacRequest", dynamicCacSchema);
 }
 
-// ==============================
-// 🔐 AUTH MIDDLEWARE (Unified & Secure)
-// ==============================
+// =========================================================================
+// 🔐 AUTHENTICATION MIDDLEWARES (Unified & Multi-Tier Guard System)
+// =========================================================================
 const isAdmin = async (req, res, next) => {
   try {
     const email = req.headers["email"];
 
     if (!email) {
-      return res.status(401).json({ message: "Unauthorized: Missing Email Header" });
+      return res.status(401).json({ success: false, message: "Unauthorized: Missing Email Verification Header" });
     }
 
     const user = await User.findOne({ email }).lean();
 
     if (!user) {
-      return res.status(401).json({ message: "User not found" });
+      return res.status(401).json({ success: false, message: "User workspace context not found" });
     }
 
     if (!["admin", "super_admin"].includes(user.role)) {
-      return res.status(403).json({ message: "Access denied: Admins only" });
+      return res.status(403).json({ success: false, message: "Access denied: Administrative clearance required" });
     }
 
     req.user = user;
     next();
   } catch (err) {
-    console.error("AUTH ERROR:", err);
-    res.status(500).json({ message: "Auth failed" });
+    console.error("🔥 SYSTEM AUTHORIZATION ERROR:", err);
+    res.status(500).json({ success: false, message: "Authentication sequence failure" });
   }
 };
 
 const isSuperAdmin = (req, res, next) => {
   if (!req.user || req.user.role !== "super_admin") {
-    return res.status(403).json({ message: "Access denied: Super admin authority required" });
+    return res.status(403).json({ success: false, message: "Access denied: Super admin token signature required" });
   }
   next();
 };
 
-// ==============================
-// 🚀 FAST DASHBOARD STATS
-// ==============================
+// =========================================================================
+// 🚀 ADMINISTRATIVE OPERATION ENDPOINTS
+// =========================================================================
+
+// 📥 FIXES 404 CONSOLE ERROR: UNIFIED CENTRAL PIPELINE FOR REQUEST ENTITIES
+// Handles pagination, matching statuses (pending, approved, completed), and coordinates cross-model streams.
+router.get("/requests", isAdmin, async (req, res) => {
+  try {
+    let { page = 1, limit = 20, status } = req.query;
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
+
+    // Construct precise cross-model filter queries
+    const filterQuery = {};
+    if (status) {
+      filterQuery.status = String(status).toLowerCase();
+    }
+
+    // Execute safe structural operations concurrently
+    const [nimcRequests, cacRequests] = await Promise.all([
+      ServiceRequest.find(filterQuery)
+        .populate("userId", "email firstName lastName phoneNumber")
+        .lean(),
+      CACRequest.find(filterQuery)
+        .populate("userId", "email firstName lastName phoneNumber")
+        .lean()
+    ]);
+
+    // Format fields seamlessly into a unified pipeline stream
+    const normalizedNimc = nimcRequests.map(r => ({ ...r, pipelineSource: "nimc" }));
+    const normalizedCac = cacRequests.map(r => ({ ...r, pipelineSource: "cac" }));
+
+    // Merge operations chronologically (Newest items floating to top)
+    const combinedCollection = [...normalizedNimc, ...normalizedCac].sort(
+      (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+    );
+
+    // Compute localized system pagination profiles 
+    const totalRecords = combinedCollection.length;
+    const totalPages = Math.ceil(totalRecords / limit);
+    const startIndex = (page - 1) * limit;
+    const paginatedSlice = combinedCollection.slice(startIndex, startIndex + limit);
+
+    res.json({
+      success: true,
+      data: paginatedSlice,
+      pagination: {
+        total: totalRecords,
+        page,
+        pages: totalPages,
+        limit
+      }
+    });
+  } catch (error) {
+    console.error("🔥 CENTRAL PIPELINE REQUEST STREAM ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to assemble systemic registration requests pipeline." });
+  }
+});
+
+// 🚀 FAST DASHBOARD PERFORMANCE STATS
 router.get("/stats", isAdmin, async (req, res) => {
   try {
-    const [
-      totalUsers,
-      totalTransactions,
-      pendingPayments,
-      balanceData
-    ] = await Promise.all([
+    const [totalUsers, totalTransactions, pendingPayments, balanceData] = await Promise.all([
       User.countDocuments(),
       Transaction.countDocuments(),
-      Transaction.countDocuments({
-        type: "UNIT_ADD",
-        status: "pending"
-      }),
+      Transaction.countDocuments({ type: "UNIT_ADD", status: "pending" }),
       User.aggregate([
-        {
-          $group: {
-            _id: null,
-            total: { $sum: "$balance" }
-          }
-        }
+        { $group: { _id: null, total: { $sum: { $ifNull: ["$balance", 0] } } } }
       ])
     ]);
 
     res.json({
+      success: true,
       totalUsers,
       totalTransactions,
       pendingPayments,
@@ -96,18 +143,17 @@ router.get("/stats", isAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error("STATS ERROR:", err);
-    res.status(500).json({ message: "Failed to load stats" });
+    res.status(500).json({ success: false, message: "Failed to compile aggregate system dashboard stats" });
   }
 });
 
-// ==========================================
-// 📥 NIMC PIPELINE: FETCH ALL NIMC REQUESTS
-// ==========================================
+// 📥 NIMC PIPELINE ROUTE
 router.get("/nimc-requests", isAdmin, async (req, res) => {
   try {
     const requests = await ServiceRequest.find()
       .populate("userId", "email firstName lastName phoneNumber")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
     
     res.json({ success: true, data: requests });
   } catch (error) {
@@ -116,14 +162,13 @@ router.get("/nimc-requests", isAdmin, async (req, res) => {
   }
 });
 
-// ==========================================
-// 🏢 CAC PIPELINE: FETCH ALL CAC REGISTRATIONS
-// ==========================================
+// 🏢 CAC PIPELINE ROUTE
 router.get("/cac-requests", isAdmin, async (req, res) => {
   try {
     const requests = await CACRequest.find()
       .populate("userId", "email firstName lastName phoneNumber")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({ success: true, data: requests });
   } catch (error) {
@@ -132,185 +177,185 @@ router.get("/cac-requests", isAdmin, async (req, res) => {
   }
 });
 
-// ==========================================
-// 🔄 UNIFIED OPERATIONS STATUS UPDATE CONTROLLER
-// ==========================================
+// 🔄 UNIFIED OPERATIONS LIFECYCLE CONTROLLER
 router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
   const { targetModule, id } = req.params;
   const { status, note } = req.body; 
   const adminEmail = req.user.email;
 
   try {
-    // Select correct data repository module target
-    const TargetModel = targetModule === "cac" ? CACRequest : ServiceRequest;
-    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid system document identification signature format." });
+    }
+
+    const normalizedModule = String(targetModule).toLowerCase();
+    if (!["cac", "nimc", "service"].includes(normalizedModule)) {
+      return res.status(400).json({ success: false, message: "Invalid pipeline module tracking assignment type profile." });
+    }
+
+    const TargetModel = normalizedModule === "cac" ? CACRequest : ServiceRequest;
     const normalizedStatus = String(status).toLowerCase();
 
-    // Check if item exists before altering attributes
     const record = await TargetModel.findById(id);
     if (!record) {
-      return res.status(404).json({ success: false, message: "Requested application profile context not found." });
+      return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
     }
 
-    // Perform updates using atomic setters to keep schema history happy
+    // Safely configure structural historical arrays using atomic paths to avoid Mongoose validation rejections
     record.status = normalizedStatus;
     
-    if (record.statusHistory) {
-      record.statusHistory.push({
-        status: normalizedStatus,
-        note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`,
-        createdAt: new Date()
-      });
+    if (!record.statusHistory || !Array.isArray(record.statusHistory)) {
+      record.statusHistory = [];
     }
+
+    record.statusHistory.push({
+      status: normalizedStatus,
+      note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`,
+      createdAt: new Date()
+    });
+
+    // Enforce modification flags for raw schemaless properties
+    record.markModified("status");
+    record.markModified("statusHistory");
 
     await record.save();
 
-    // Side-chain logging inside unified operational system audit trails
+    // Secondary logging processing via sandboxed internal try-catch mechanics
     try {
       await AuditLog.create({
-        action: `UPDATE_${targetModule.toUpperCase()}_STATUS`,
+        action: `UPDATE_${normalizedModule.toUpperCase()}_STATUS`,
         performedBy: adminEmail,
         userId: record.userId || null,
         amount: record.amount || 0,
         note: `Record ${id} shifted to ${normalizedStatus}. Comment: ${note || 'None'}`
       });
     } catch (logErr) {
-      console.warn("Audit tracking step skipped cleanly:", logErr.message);
+      console.warn("Audit log background compilation bypassed cleanly:", logErr.message);
     }
 
     res.json({ success: true, message: `Pipeline document successfully marked as ${normalizedStatus}`, data: record });
   } catch (err) {
     console.error("🔥 UNIFIED STATUS TRANSITION ERROR:", err);
-    res.status(500).json({ success: false, message: "Failed to modulate application timeline lifecycle state." });
+    res.status(500).json({ success: false, message: "Failed to transform application pipeline lifecycle state environment variables." });
   }
 });
 
-// ==============================
-// 📥 ADMIN GET ALL USER UNIT/PAYMENT REQUESTS
-// ==============================
+// 📥 PAYMENTS VERIFICATION SUB-SYSTEM
 router.get("/payments", isAdmin, async (req, res) => {
   try {
-    const payments = await Transaction.find({
-      type: "UNIT_ADD",
-    })
+    const payments = await Transaction.find({ type: "UNIT_ADD" })
       .populate("userId", "email units")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json(payments);
   } catch (error) {
     console.error("🔥 FETCH PAYMENTS ERROR:", error);
-    res.status(500).json({ message: "Failed to fetch payments" });
+    res.status(500).json({ success: false, message: "Failed to fetch ledger credit payment entries" });
   }
 });
 
-// ==============================
-// ✅ APPROVE PAYMENT REQUEST
-// ==============================
+// ✅ APPROVE LEDGER WALLET FUNDING CONTEXT
 router.post("/payments/:id/approve", isAdmin, async (req, res) => {
   try {
     const adminEmail = req.user.email;
 
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Malformed Transaction Reference ID token identifier" });
+    }
+
     const payment = await Transaction.findById(req.params.id);
-    if (!payment) return res.status(404).json({ message: "Payment request not found" });
+    if (!payment) return res.status(404).json({ message: "Payment authorization intent profile not found" });
 
     if (payment.status !== "pending") {
-      return res.status(400).json({
-        message: `Cannot approve a ${payment.status} payment`,
-      });
+      return res.status(400).json({ message: `Cannot authorize historical transaction mapped as: ${payment.status}` });
     }
 
     const user = await User.findById(payment.userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) return res.status(404).json({ message: "Target workspace wallet account structure absent" });
 
-    const pricing = await Pricing.findOne();
-    const pricePerUnit = pricing?.nin?.unitPrice || 215;
+    const pricing = await Pricing.findOne().lean();
+    const pricePerUnit = pricing?.nin?.unitPrice || 250;
 
     let unitsToAdd = payment.units;
-
     if (!unitsToAdd || unitsToAdd < 1) {
       unitsToAdd = Math.floor(payment.amount / pricePerUnit);
     }
 
     if (unitsToAdd < 1) {
-      return res.status(400).json({
-        message: "Amount too small to generate units",
-      });
+      return res.status(400).json({ message: "Inbound capital allocation insufficient to generate minimal unit allocation thresholds" });
     }
 
-    const beforeUnits = user.units;
+    const beforeUnits = user.units || 0;
 
-    user.units += unitsToAdd;
+    user.units = (user.units || 0) + unitsToAdd;
     await user.save();
 
     payment.status = "approved";
     payment.units = unitsToAdd;
     await payment.save();
 
-    await AuditLog.create({
-      action: "APPROVE_PAYMENT",
-      performedBy: adminEmail,
-      userId: user._id,
-      amount: payment.amount,
-      unitsAdded: unitsToAdd,
-      unitsBefore: beforeUnits,
-      unitsAfter: user.units,
-    });
+    try {
+      await AuditLog.create({
+        action: "APPROVE_PAYMENT",
+        performedBy: adminEmail,
+        userId: user._id,
+        amount: payment.amount,
+        unitsAdded: unitsToAdd,
+        unitsBefore: beforeUnits,
+        unitsAfter: user.units,
+      });
+    } catch (aud) {
+      console.warn("Telemetry entry dropped during core transaction settlement execution:", aud.message);
+    }
 
     res.json({
-      message: `Approved. ${unitsToAdd} units added successfully.`,
+      message: `Systemic balance settlement finalized. ${unitsToAdd} resource units dispatched seamlessly.`,
       units: user.units,
     });
   } catch (error) {
-    console.error("🔥 APPROVAL ERROR:", error);
-    res.status(500).json({
-      message: "Approval failed",
-      error: error.message,
-    });
+    console.error("🔥 CLEARING SETTLEMENT ALLOCATION ERROR:", error);
+    res.status(500).json({ message: "Ledger transaction structural approval runtime crash", error: error.message });
   }
 });
 
-// ==============================
-// ❌ REJECT PAYMENT REQUEST
-// ==============================
+// ❌ REJECT PAYMENT SEGMENT
 router.post("/payments/:id/reject", isAdmin, async (req, res) => {
   try {
-    const payment = await Transaction.findById(req.params.id);
-
-    if (!payment) {
-      return res.status(404).json({ message: "Payment request not found" });
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Malformed pipeline unique transaction object footprint token signature" });
     }
 
+    const payment = await Transaction.findById(req.params.id);
+    if (!payment) return res.status(404).json({ message: "Credit application target request profile context not found." });
+
     if (payment.status !== "pending") {
-      return res.status(400).json({
-        message: `Cannot reject a ${payment.status} payment`,
-      });
+      return res.status(400).json({ message: `Cannot invalidate transaction currently processing state contexts labeled: ${payment.status}` });
     }
 
     payment.status = "rejected";
     await payment.save();
 
-    res.json({ message: "Payment request rejected successfully" });
+    res.json({ message: "Inbound resource verification request record canceled successfully." });
   } catch (error) {
-    console.error("🔥 REJECT ERROR:", error);
-    res.status(500).json({ message: "Rejection failed" });
+    console.error("🔥 REJECT ROUTE RUNTIME CRASH:", error);
+    res.status(500).json({ message: "Transaction registry rejection failure status loop triggered" });
   }
 });
 
-// ==============================
-// 👥 GET USERS
-// ==============================
+// 👥 PAGINATED USERS REGISTRY DIRECTORY
 router.get("/users", isAdmin, async (req, res) => {
   try {
     let { page = 1, limit = 20, search = "" } = req.query;
-    page = parseInt(page);
-    limit = parseInt(limit);
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
 
     const query = search
       ? {
           $or: [
-            { email: { $regex: search, $options: "i" } },
-            { firstName: { $regex: search, $options: "i" } },
-            { lastName: { $regex: search, $options: "i" } }
+            { email: { $regex: String(search), $options: "i" } },
+            { firstName: { $regex: String(search), $options: "i" } },
+            { lastName: { $regex: String(search), $options: "i" } }
           ]
         }
       : {};
@@ -329,18 +374,16 @@ router.get("/users", isAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error("FETCH USERS ERROR:", err);
-    res.status(500).json({ message: "Error fetching users" });
+    res.status(500).json({ message: "Error mapping client network infrastructure logs." });
   }
 });
 
-// ==============================
-// 📊 TRANSACTIONS (PAGINATED)
-// ==============================
+// 📊 TRANSACTIONS LOG PIPELINE (PAGINATED)
 router.get("/transactions", isAdmin, async (req, res) => {
   try {
     let { page = 1, limit = 20 } = req.query;
-    page = parseInt(page);
-    limit = parseInt(limit);
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
 
     const total = await Transaction.countDocuments();
     const transactions = await Transaction.find()
@@ -356,18 +399,16 @@ router.get("/transactions", isAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error("TRANSACTION ERROR:", err);
-    res.status(500).json({ message: "Error fetching transactions" });
+    res.status(500).json({ message: "Error compiling enterprise transaction audit records" });
   }
 });
 
-// ==============================
-// 📜 AUDIT LOGS
-// ==============================
+// 📜 SYSTEM AUDIT LOG REPOSITORY TRAIL
 router.get("/audit-logs", isAdmin, async (req, res) => {
   try {
     let { page = 1, limit = 20 } = req.query;
-    page = parseInt(page);
-    limit = parseInt(limit);
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
 
     const total = await AuditLog.countDocuments();
     const logs = await AuditLog.find()
@@ -383,110 +424,118 @@ router.get("/audit-logs", isAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error("AUDIT ERROR:", err);
-    res.status(500).json({ message: "Failed to fetch audit logs" });
+    res.status(500).json({ message: "Failed to pull infrastructure operational audit files" });
   }
 });
 
-// ==============================
-// 🔥 ADMIN CONTROL MAPPINGS
-// ==============================
+// =========================================================================
+// 🔥 ACCESS CONTROL CONTEXT MUTATORS (SUPER_ADMIN CONTROL LAYER)
+// =========================================================================
 router.put("/user/:id/make-admin", isAdmin, isSuperAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.role === "super_admin") return res.status(400).json({ message: "Cannot modify super admin" });
+    if (!user) return res.status(404).json({ message: "User workspace identity profile not found" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Operation blocked: Immutable deployment target role signature" });
 
     user.role = "admin";
     await user.save();
-    res.json({ message: "User promoted to admin", user });
+    res.json({ message: "Account mapping level successfully elevated to system administrator role configuration.", user });
   } catch (err) {
     console.error("MAKE ADMIN ERROR:", err);
-    res.status(500).json({ message: "Failed to promote user" });
+    res.status(500).json({ message: "Failed to elevate target workspace scope privileges" });
   }
 });
 
 router.put("/user/:id/remove-admin", isAdmin, isSuperAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.role === "super_admin") return res.status(400).json({ message: "Cannot modify super admin" });
+    if (!user) return res.status(404).json({ message: "User account node entity trace broken" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Operation rejected: Target security token instance immutable" });
 
     user.role = "user";
     await user.save();
-    res.json({ message: "Admin removed", user });
+    res.json({ message: "Administrative privilege matrix flags de-allocated successfully.", user });
   } catch (err) {
     console.error("REMOVE ADMIN ERROR:", err);
-    res.status(500).json({ message: "Failed to remove admin" });
+    res.status(500).json({ message: "Failed to downgrade targeted context node permissions" });
   }
 });
 
 router.put("/user/:id/suspend", isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.role === "super_admin") return res.status(400).json({ message: "Cannot suspend super admin" });
+    if (!user) return res.status(404).json({ message: "User matching identifier signature not located" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Security rule exception: Base root admin node suspension blocked" });
 
     user.status = "suspended";
     await user.save();
-    res.json({ message: "User suspended" });
+    res.json({ message: "Target account execution capability frozen successfully" });
   } catch (err) {
     console.error("SUSPEND ERROR:", err);
-    res.status(500).json({ message: "Failed to suspend user" });
+    res.status(500).json({ message: "System failure during active worker thread isolation setup execution" });
   }
 });
 
 router.put("/user/:id/activate", isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) return res.status(404).json({ message: "Requested operational user workspace matrix lost" });
     
     user.status = "active";
     await user.save();
-    res.json({ message: "User activated" });
+    res.json({ message: "User communication channel metrics authorized and restored to active state successfully." });
   } catch (err) {
     console.error("ACTIVATE ERROR:", err);
-    res.status(500).json({ message: "Failed to activate user" });
+    res.status(500).json({ message: "Failed to dispatch restoration trigger state context updates" });
   }
 });
 
 router.delete("/user/:id", isAdmin, isSuperAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.role === "super_admin") return res.status(400).json({ message: "Cannot delete super admin" });
+    if (!user) return res.status(404).json({ message: "User structural directory reference null" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "System security protection: Core identity instance extraction forbidden" });
 
     await User.findByIdAndDelete(req.params.id);
     await Transaction.deleteMany({ userId: req.params.id });
-    res.json({ message: "User deleted" });
+    res.json({ message: "Identity credentials mapping records permanently expunged from system nodes successfully." });
   } catch (err) {
     console.error("DELETE ERROR:", err);
-    res.status(500).json({ message: "Failed to delete user" });
+    res.status(500).json({ message: "Failed to complete account lifecycle destruction script routines" });
   }
 });
 
 router.post("/user/:id/units", isAdmin, async (req, res) => {
   try {
     const { units, action } = req.body;
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const targetUnits = parseInt(units);
+    if (isNaN(targetUnits) || targetUnits <= 0) {
+      return res.status(400).json({ message: "Allocation value metrics must represent clean positive integers" });
+    }
 
-    if (action === "add") user.units += units;
-    if (action === "deduct") {
-      if (user.units < units) return res.status(400).json({ message: "Insufficient units" });
-      user.units -= units;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "Target token node container context not identified" });
+
+    if (action === "add") {
+      user.units = (user.units || 0) + targetUnits;
+    } else if (action === "deduct") {
+      if ((user.units || 0) < targetUnits) return res.status(400).json({ message: "Account balance lacks sufficient capital depth to process deduction" });
+      user.units = (user.units || 0) - targetUnits;
+    } else {
+      return res.status(400).json({ message: "Invalid transaction state instruction argument value." });
     }
 
     await user.save();
-    res.json({ message: "Units updated", units: user.units });
+    res.json({ message: "Account system token properties re-indexed cleanly.", units: user.units });
   } catch (err) {
     console.error("UNITS ERROR:", err);
-    res.status(500).json({ message: "Error updating units" });
+    res.status(500).json({ message: "Error mutating targeted allocation balance value arrays" });
   }
 });
 
-// ==============================
-// 💰 UPDATE PRICING (Fully Unified for NIN, Self-Service & CAC Engines)
-// ==============================
+// =========================================================================
+// 💰 UNIFIED CORE PRICING MATRIX CONFIGURATION MANAGEMENT
+// =========================================================================
 router.put("/pricing", isAdmin, async (req, res) => {
   try {
     let pricing = await Pricing.findOne();
@@ -535,7 +584,7 @@ router.put("/pricing", isAdmin, async (req, res) => {
     res.json({ message: "Pricing engine models updated successfully across all matrix tiers.", pricing });
   } catch (err) {
     console.error("PRICING ERROR:", err);
-    res.status(500).json({ message: "Failed to update pricing" });
+    res.status(500).json({ message: "Failed to update pricing engine registry thresholds" });
   }
 });
 

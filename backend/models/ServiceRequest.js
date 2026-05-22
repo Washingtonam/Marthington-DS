@@ -4,7 +4,7 @@ const ServiceRequestSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User", 
-    required: false // Changed to false or fallback friendly to avoid validation rejection
+    required: false // Fallback friendly to avoid workspace token rejection loops
   },
   service: {
     type: String,
@@ -34,20 +34,21 @@ const ServiceRequestSchema = new mongoose.Schema({
     type: String,
     default: "N/A"
   },
-  // 💡 CRITICAL: Ensure formData is typed to handle flexible mixed objects safely
+  // Handles structural variations inside modern identity service requests cleanly
   formData: {
     type: mongoose.Schema.Types.Mixed, 
     default: {}
   },
+  // 🔄 ALIGNED ENUM STRINGS TO REJECT MATCH CODES
   status: {
     type: String,
-    enum: ["pending", "processing", "completed", "failed"],
+    enum: ["pending", "processing", "completed", "rejected", "failed"],
     default: "pending"
   },
   statusHistory: [
     {
-      status: String,
-      note: String,
+      status: { type: String },
+      note: { type: String },
       createdAt: { type: Date, default: Date.now }
     }
   ]

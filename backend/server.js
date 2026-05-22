@@ -20,7 +20,7 @@ const Pricing = require("./models/Pricing");
 const app = express();
 
 // ==============================
-// ✅ CORS (FIXED PROPERLY)
+// ✅ CORS SETUP (GLOBAL & PREFLIGHT)
 // ==============================
 const allowedOrigins = [
   "http://localhost:5173",
@@ -28,34 +28,26 @@ const allowedOrigins = [
   "https://xcombinator.com.ng"
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
-
     if (!origin) return callback(null, true);
-
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-
     return callback(new Error("Not allowed by CORS"));
   },
-
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "email"],
+  credentials: true,
+  optionsSuccessStatus: 200 // Fixes potential preflight issues on older browsers/gateways
+};
 
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "email"
-  ],
-
-  credentials: true
-}));
-
-// 🔥 VERY IMPORTANT (THIS FIXES YOUR ISSUE)
-app.options("*", cors());
+// Apply CORS globally across all routes immediately
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // ==============================
-// 🔥 BODY PARSER
+// 🔥 BODY PARSERS
 // ==============================
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
@@ -68,23 +60,20 @@ app.get("/api/health", (req, res) => {
 });
 
 // ==============================
-// 🚀 ROUTES
+// 🚀 ROUTE CONFIGURATIONS
 // ==============================
 app.use("/api", authRoutes);
 app.use("/api", userRoutes);
 app.use("/api", verificationRoutes);
 app.use("/api", paymentRoutes);
 app.use("/api", transactionsRoutes);
-
-// 🔗 MOUNT THIS EXPLICITLY TO MATCH YOUR FRONTEND DISPATCH URL PATHS
 app.use("/api/nin-services", ninServicesRoutes); 
-
-app.use("/api/admin", adminRoutes);
+app.use("/api/admin", adminRoutes); // 👈 This maps explicitly to /api/admin/*
 app.use("/api", slipRoutes);
 app.use("/api/cac", cacRoutes);
 
 // ==============================
-// 💰 PRICING DEFAULT SEED PROTECTION
+// 💰 PRICING SEED PROTECTION
 // ==============================
 app.get("/api/pricing", async (req, res) => {
   try {
@@ -114,16 +103,28 @@ app.get("/api/pricing", async (req, res) => {
 });
 
 // ==============================
-// 🚀 START SERVER AFTER DB
+// 🛑 404 FALLBACK HANDLER
+// ==============================
+// This ensures that any incorrect endpoint returns a clean JSON error message 
+// instead of breaking the frontend fetch pipeline with raw HTML.
+app.use((req, res, next) => {
+  res.status(404).json({ 
+    success: false, 
+    message: `Endpoint Not Found: ${req.method} ${req.originalUrl}` 
+  });
+});
+
+// ==============================
+// 🚀 SERVER INITIALIZATION
 // ==============================
 const PORT = process.env.PORT || 5000;
 
 connectDB()
   .then(() => {
-    console.log("✅ MongoDB Connected");
+    console.log("✅ MongoDB Connected Successfully");
 
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🚀 Server running smoothly on port ${PORT}`);
     });
   })
   .catch((err) => {
