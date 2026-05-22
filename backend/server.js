@@ -14,7 +14,7 @@ const slipRoutes = require("./api/slipRoutes");
 const transactionsRoutes = require("./api/transactionsRoutes");
 
 const cacRoutes = require("./api/cacRoutes");
-const ninServicesRoute = require("./api/ninServices");
+const ninServicesRoutes = require("./api/ninServicesRoutes");
 const Pricing = require("./models/Pricing");
 
 const app = express();
@@ -77,7 +77,7 @@ app.use("/api", paymentRoutes);
 app.use("/api", transactionsRoutes);
 
 // 🔗 MOUNT THIS EXPLICITLY TO MATCH YOUR FRONTEND DISPATCH URL PATHS
-app.use("/api/nin-services", ninServicesRoute); 
+app.use("/api/nin-services", ninServicesRoutes); 
 
 app.use("/api/admin", adminRoutes);
 app.use("/api", slipRoutes);
@@ -104,7 +104,7 @@ app.get("/api/pricing", async (req, res) => {
           }
         }
       });
-    }
+    } 
 
     res.json(pricing);
   } catch (err) {
