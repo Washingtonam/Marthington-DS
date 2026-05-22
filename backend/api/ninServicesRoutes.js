@@ -55,15 +55,21 @@ router.post("/nin-services/request", async (req, res) => {
     } = req.body;
 
     // ⚡ CRITICAL UPGRADE 1: Insulate email capture from either headers or body to prevent Google Sheets crashes
-    const userEmail = req.headers["email"] || req.body.email || "N/A";
+    const userEmail = req.headers["email"] || req.body.email || formData?.email || "N/A";
 
-    // 🛡️ REFIXED VERIFICATION BLOCK: Core parameter validation
-    if (!userId || !service || !type) {
-      return res.status(400).json({ message: "Missing required core parameters: userId, service, or type" });
+    // 🛡️ REFIXED VERIFICATION BLOCK: Handle dynamic fallback for matching traditional request layers
+    if (!service || !type) {
+      return res.status(400).json({ message: "Missing required core parameters: service or type" });
+    }
+
+    // Smart-fallback for userId in case some old legacy forms send it nested or contextually delayed
+    const resolvedUserId = userId || formData?.userId || req.body.email; 
+    if (!resolvedUserId) {
+      return res.status(400).json({ message: "Missing client reference context identity parameter (userId)" });
     }
 
     // If it's a standard business tier service (not self-service), proof must remain strict
-    if (service !== "self-service" && !proof) {
+    if (service !== "self-service" && service !== "selfService" && !proof) {
       return res.status(400).json({ message: "Missing required payment proof parameter for this service context" });
     }
 
@@ -92,9 +98,25 @@ router.post("/nin-services/request", async (req, res) => {
       }
     }
 
-    // 🛡️ TYPE SAFE GUARD: Verify config existence explicitly, allowing 0 to clear smoothly
+    // 🛡️ TYPE SAFE GUARD: Fallback protection mapping array to prevent dynamic profile crashes (0 drops fine)
     if (basePrice === undefined || basePrice === null) {
-      return res.status(400).json({ message: "Invalid dynamic engine profile matrix or type tier selection configuration match" });
+      const fallbackPrices = {
+        name: 12000,
+        phone: 12000,
+        address: 12000,
+        dob: 50000,
+        emailRetrieval: 1500,
+        deviceUnlink: 2000,
+        noRecord: 1000,
+        updateRecord: 1150,
+        validateModification: 1150
+      };
+      basePrice = fallbackPrices[type];
+      
+      // If still not matching anything, stop execution safely
+      if (basePrice === undefined || basePrice === null) {
+        return res.status(400).json({ message: "Invalid dynamic engine profile matrix or type tier selection configuration match" });
+      }
     }
 
     let slipCost = 0;
@@ -116,15 +138,18 @@ router.post("/nin-services/request", async (req, res) => {
         console.log("☁️ Uploading proof file...");
         proofUrl = await uploadToCloudinary(proof, "xcombinator/proofs");
         console.log("✅ Proof uploaded successfully");
+      } else if (proof && typeof proof === "string") {
+        proofUrl = proof; // Maintain reference if already hosted path
       }
 
       if (passport && typeof passport === "string" && passport.startsWith("data:")) {
         console.log("☁️ Uploading passport photo...");
         passportUrl = await uploadToCloudinary(passport, "xcombinator/passports");
         console.log("✅ Passport uploaded successfully");
+      } else if (passport && typeof passport === "string") {
+        passportUrl = passport; // Maintain reference if already hosted path
       }
     } catch (uploadErr) {
-      // Captures network drops, malformed data uris, or socket interruptions cleanly
       console.error("❌ CLOUDINARY PIPELINE EXCEPTION INTERCEPTED:", uploadErr.message);
       return res.status(500).json({ message: "Resource upload handshake failed. Please check network and try again." });
     }
@@ -133,7 +158,7 @@ router.post("/nin-services/request", async (req, res) => {
     // 🧾 CREATE COMPREHENSIVE REQUEST
     // ==============================
     const request = await ServiceRequest.create({
-      userId,
+      userId: mongoose.Types.ObjectId.isValid(resolvedUserId) ? resolvedUserId : new mongoose.Types.ObjectId(),
       service,
       type,
       nin: nin || "N/A",
@@ -158,7 +183,7 @@ router.post("/nin-services/request", async (req, res) => {
       type: "SERVICE",
       amount: total,
       status: "pending",
-      userId,
+      userId: mongoose.Types.ObjectId.isValid(resolvedUserId) ? resolvedUserId : null,
       nin: nin || "N/A",
       proof: proofUrl || "N/A",
       requestId: request._id,
@@ -190,7 +215,6 @@ router.post("/nin-services/request", async (req, res) => {
       });
       console.log("✅ Google Sheets ingestion layer fully synchronized");
     } catch (sheetErr) {
-      // Caught cleanly to prevent a spreadsheet error from rolling back an entire database write execution
       console.error("❌ GOOGLE SHEETS INTEGRATION FAILED:", sheetErr);
     }
 
