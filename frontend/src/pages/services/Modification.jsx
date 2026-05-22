@@ -93,7 +93,7 @@ export default function Modification() {
         },
 
         body: JSON.stringify({
-          userId: user?.id,
+          userId: user?.id || user?._id || "", // 👈 Handles both id formats securely
           email: user?.email,
           service: "modification",
           type: selectedType,

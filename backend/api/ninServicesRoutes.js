@@ -47,24 +47,29 @@ router.post("/request", async (req, res) => {
     } = req.body;
 
     // Grab or fallback user details safely
-    const userEmail = req.headers["email"] || req.body.email || formData?.email || "customer@xcombinator.com";
+    const userEmail = req.headers["email"] || req.body.email || formData?.email || req.body.formData?.email || "customer@xcombinator.com";
 
     // 1. Core input parameter valid checks
     if (!service || !type) {
       return res.status(400).json({ message: "Missing required core parameters: service or type" });
     }
 
-    // 2. 🛡️ Prevent CastErrors from breaking the server thread
+    // 2. 🛡️ Smart Check to resolve user validation schemas safely
     let resolvedUserId;
+    // Inspect incoming fields to find a valid object token identifier
+    const targetId = userId || req.body.formData?.userId || req.body.email; 
+
     try {
-      if (userId && mongoose.Types.ObjectId.isValid(userId)) {
-        resolvedUserId = new mongoose.Types.ObjectId(userId);
+      if (targetId && mongoose.Types.ObjectId.isValid(targetId.toString())) {
+        resolvedUserId = new mongoose.Types.ObjectId(targetId.toString());
       } else {
-        resolvedUserId = new mongoose.Types.ObjectId(); // Safe generation for guest/unauth workflows
+        resolvedUserId = new mongoose.Types.ObjectId(); // Clean tracking hash fallback for guest/unauthenticated orders
       }
     } catch (castErr) {
       resolvedUserId = new mongoose.Types.ObjectId();
     }
+
+    // Keep the rest of your endpoint logic down below exactly the same...
 
     // 3. 💰 Dynamic Pricing Matrix Engine Matching Your Dashboard Services
     const pricing = await Pricing.findOne() || {};

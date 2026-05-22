@@ -75,7 +75,10 @@ app.use("/api", userRoutes);
 app.use("/api", verificationRoutes);
 app.use("/api", paymentRoutes);
 app.use("/api", transactionsRoutes);
-app.use("/api", ninServicesRoutes);
+
+// 🔗 MOUNT THIS EXPLICITLY TO MATCH YOUR FRONTEND DISPATCH URL PATHS
+app.use("/api/nin-services", ninServicesRoutes); 
+
 app.use("/api/admin", adminRoutes);
 app.use("/api", slipRoutes);
 app.use("/api/cac", cacRoutes);
