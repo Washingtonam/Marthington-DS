@@ -65,20 +65,16 @@ app.use((req, res, next) => {
 
 /**
  * 🛠️ PATCH 2: Bulletproof /api/balance Interceptor (Bypasses 401)
- * If verifyToken fails because no token exists at all in the frontend call, 
- * this handles the query gracefully using available payloads to avoid a 401 error.
  */
 app.post("/api/balance", async (req, res, next) => {
   const authHeader = req.headers.authorization;
   
-  // If a valid token exists, pass it along cleanly to your userRoutes
   if (authHeader && authHeader.startsWith("Bearer ")) {
     req.method = "GET";
     req.url = "/balance";
     return userRoutes(req, res, next);
   }
 
-  // FALLBACK: If frontend sent no token, look for alternative fields or return mock data safely
   try {
     const lookupEmail = req.body.email || req.headers.email;
     if (lookupEmail) {
@@ -87,15 +83,12 @@ app.post("/api/balance", async (req, res, next) => {
         return res.json({ units: user.units || 0, balance: user.balance || 0 });
       }
     }
-    
-    // Ultimate fallback safety net: return 0 units instead of a red 401 crash
     return res.json({ units: 0, balance: 0 });
   } catch (err) {
     return res.json({ units: 0, balance: 0 });
   }
 });
 
-// Backward compatibility map for GET method variations
 app.get("/api/balance", (req, res, next) => {
   req.url = "/balance";
   userRoutes(req, res, next);
@@ -164,6 +157,7 @@ app.use((req, res, next) => {
   res.status(404).json({ success: false, message: `Endpoint Not Found: ${req.method} ${req.originalUrl}` });
 });
 
+// Server Initialization
 const PORT = process.env.PORT || 5000;
 connectDB()
   .then(() => {
