@@ -68,20 +68,38 @@ export default function Sidebar() {
     window.location.href = "/login";
   };
 
-  useEffect(() => {
+ useEffect(() => {
     if (!isAdmin) return;
 
     const fetchData = async () => {
       try {
+        // 1. Core Payments Sync
         const payRes = await axios.get(`${API_BASE}/api/admin/payments`, { headers });
         const paymentsData = payRes.data?.data || payRes.data || [];
-        setPendingPayments(paymentsData.filter((p) => p.status === "pending").length);
+        if (Array.isArray(paymentsData)) {
+          setPendingPayments(paymentsData.filter((p) => p && p.status === "pending").length);
+        } else {
+          setPendingPayments(0);
+        }
 
+        // 2. Core Service Requests Sync (Safe parsing fallback setup)
         const reqRes = await axios.get(`${API_BASE}/api/admin/requests`, { headers });
-        const requestsData = reqRes.data?.data || reqRes.data || [];
-        setPendingRequests(requestsData.filter((r) => r.status === "pending").length);
+        
+        // Extract array safely depending on your backend wrapper syntax layout
+        const requestsData = reqRes.data?.data || reqRes.data?.requests || reqRes.data || [];
+        
+        if (Array.isArray(requestsData)) {
+          // Client-side counter check ensures 0 breakdown if endpoint sends everything back
+          setPendingRequests(requestsData.filter((r) => r && r.status === "pending").length);
+        } else {
+          setPendingRequests(0);
+        }
+
       } catch (err) {
-        console.error("Sidebar counts sync error:", err);
+        console.error("Sidebar counts sync structural or network layout error:", err.message);
+        // Soft fail updates ensure UI counters don't lock hard 
+        setPendingPayments(0);
+        setPendingRequests(0);
       }
     };
 
