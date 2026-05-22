@@ -12,9 +12,9 @@ const paymentRoutes = require("./api/paymentRoutes");
 const adminRoutes = require("./api/adminRoutes");
 const slipRoutes = require("./api/slipRoutes");
 const transactionsRoutes = require("./api/transactionsRoutes");
-const ninServicesRoutes = require("./api/ninServicesRoutes");
-const cacRoutes = require("./api/cacRoutes");
 
+const cacRoutes = require("./api/cacRoutes");
+const ninServicesRoute = require("./api/ninServices");
 const Pricing = require("./models/Pricing");
 
 const app = express();
@@ -77,7 +77,7 @@ app.use("/api", paymentRoutes);
 app.use("/api", transactionsRoutes);
 
 // 🔗 MOUNT THIS EXPLICITLY TO MATCH YOUR FRONTEND DISPATCH URL PATHS
-app.use("/api/nin-services", ninServicesRoutes); 
+app.use("/api/nin-services", ninServicesRoute); 
 
 app.use("/api/admin", adminRoutes);
 app.use("/api", slipRoutes);
