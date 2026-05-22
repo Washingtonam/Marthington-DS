@@ -54,4 +54,5 @@ const ServiceRequestSchema = new mongoose.Schema({
   ]
 }, { timestamps: true });
 
-module.exports = mongoose.model("ServiceRequest", ServiceRequestSchema);
+// Checks if the model already exists in Mongoose memory before creating a new one
+module.exports = mongoose.models.ServiceRequest || mongoose.model("ServiceRequest", ServiceRequestSchema);

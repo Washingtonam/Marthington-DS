@@ -76,4 +76,5 @@ const CacRequestSchema = new mongoose.Schema({
   ]
 }, { timestamps: true });
 
-module.exports = mongoose.model("CacRequest", CacRequestSchema);
+// Checks if the model already exists in Mongoose memory before creating a new one
+module.exports = mongoose.models.CacRequest || mongoose.model("CacRequest", CacRequestSchema);
