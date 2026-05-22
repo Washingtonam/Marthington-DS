@@ -63,12 +63,25 @@ app.get("/api/health", (req, res) => {
 // 🚀 CLEAN MODULAR PIPELINE ROUTE CONFIGURATIONS
 // ==============================================================
 app.use("/api/auth", authRoutes);       // Mounts /api/auth/register, /api/auth/login
-app.use("/api/users", userRoutes);     // Mounts /api/users/balance, etc.
-app.use("/api/finance", financeRoutes); // Mounts /api/finance/submit-payment, /api/finance/transactions
 
-// 👇 ALIAS ROUTE: Routes frontend dashboard panel stats/payments cleanly to the finance module
-app.use("/api/admin", financeRoutes);   
+// 👥 USER ROUTING MAP & ALIASES
+app.use("/api/users", userRoutes);     // Core Plural Route: Mounts /api/users/balance, etc.
+app.use("/api/user", userRoutes);      // 👈 ALIAS 1: Catching singular frontend calls like /api/user/requests/:id
 
+// 💰 FINANCE ROUTING MAP & ALIASES
+app.use("/api/finance", financeRoutes); // Core Finance Route: Mounts /api/finance/submit-payment
+app.use("/api/admin", financeRoutes);   // Admin Dashboard Route: Maps /api/admin/payments
+
+// ==============================================================
+// 🔄 ROOT PATH ALIASING MIDDLEWARE FOR EXACT FRONTEND MATCHES
+// ==============================================================
+// 👈 ALIAS 2: Explicitly intercept root-level /api/balance and map it cleanly to user sub-routes
+app.use("/api/balance", (req, res, next) => {
+  req.url = "/balance"; 
+  userRoutes(req, res, next);
+});
+
+// 🏢 ADDITIONAL DOCUMENT / IDENTITY SERVICES ROUTES
 app.use("/api/services", ninServicesRoutes); // Mounts /api/services/request, /api/services/verify
 app.use("/api/cac", cacRoutes);         // Mounts /api/cac/submit, /api/cac/history
 
