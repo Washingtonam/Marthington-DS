@@ -85,10 +85,10 @@ const userSchema = new mongoose.Schema({
 });
 
 
-// ==============================
-// 🔥 FORCE SUPER ADMIN (SAFE)
-// ==============================
-userSchema.pre("save", function (next) {
+// ==========================================
+// 🔥 FORCE SUPER ADMIN (SAFE MODERN SYNTAX)
+// ==========================================
+userSchema.pre("save", async function () {
   if (
     this.email &&
     this.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL
@@ -96,48 +96,38 @@ userSchema.pre("save", function (next) {
     this.role = "super_admin";
     this.status = "active";
   }
-  next();
+  // No next() needed! Returning or completing an async function advances safely.
 });
 
 
-// ==============================
-// 🚫 PROTECT SUPER ADMIN DELETE
-// ==============================
-userSchema.pre("findOneAndDelete", async function (next) {
-  try {
-    const doc = await this.model.findOne(this.getFilter());
+// ==========================================
+// 🚫 PROTECT SUPER ADMIN DELETE (MODERN SYNTAX)
+// ==========================================
+userSchema.pre("findOneAndDelete", async function () {
+  const doc = await this.model.findOne(this.getFilter());
 
-    if (doc && doc.email === SUPER_ADMIN_EMAIL) {
-      return next(new Error("Cannot delete super admin"));
-    }
-    next();
-  } catch (error) {
-    next(error);
+  if (doc && doc.email === SUPER_ADMIN_EMAIL) {
+    throw new Error("Cannot delete super admin");
   }
 });
 
 
-// ==============================
-// 🚫 PROTECT SUPER ADMIN UPDATE
-// ==============================
-userSchema.pre("findOneAndUpdate", async function (next) {
-  try {
-    const doc = await this.model.findOne(this.getFilter());
+// ==========================================
+// 🚫 PROTECT SUPER ADMIN UPDATE (MODERN SYNTAX)
+// ==========================================
+userSchema.pre("findOneAndUpdate", async function () {
+  const doc = await this.model.findOne(this.getFilter());
 
-    if (doc && doc.email === SUPER_ADMIN_EMAIL) {
-      // ❌ Block role downgrade
-      if (this._update?.role && this._update.role !== "super_admin") {
-        return next(new Error("Cannot change super admin role"));
-      }
-
-      // ❌ Block suspension
-      if (this._update?.status === "suspended") {
-        return next(new Error("Cannot suspend super admin"));
-      }
+  if (doc && doc.email === SUPER_ADMIN_EMAIL) {
+    // ❌ Block role downgrade
+    if (this._update?.role && this._update.role !== "super_admin") {
+      throw new Error("Cannot change super admin role");
     }
-    next();
-  } catch (error) {
-    next(error);
+
+    // ❌ Block suspension
+    if (this._update?.status === "suspended") {
+      throw new Error("Cannot suspend super admin");
+    }
   }
 });
 
@@ -145,7 +135,8 @@ userSchema.pre("findOneAndUpdate", async function (next) {
 // ==============================
 // 🚀 INDEX OPTIMIZATION
 // ==============================
-userSchema.index({ email: 1 });
+// Note: Email unique index is handled on the field property directly. 
+// If you see warnings in logs, drop the "email_1" duplicate from Atlas.
 userSchema.index({ role: 1 });
 userSchema.index({ status: 1 });
 userSchema.index({ createdAt: -1 });
