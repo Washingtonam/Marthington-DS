@@ -47,75 +47,67 @@ router.post("/request", async (req, res) => {
     } = req.body;
 
     // Grab or fallback user details safely
-    const userEmail = req.headers["email"] || req.body.email || formData?.email || req.body.formData?.email || "customer@xcombinator.com";
+    const userEmail = req.headers["email"] || req.body.email || formData?.email || "customer@xcombinator.com";
 
     // 1. Core input parameter valid checks
     if (!service || !type) {
       return res.status(400).json({ message: "Missing required core parameters: service or type" });
     }
 
-    // 2. 🛡️ Smart Check to resolve user validation schemas safely
-    let resolvedUserId;
-    // Inspect incoming fields to find a valid object token identifier
-    const targetId = userId || req.body.formData?.userId || req.body.email; 
+    // 🔄 STANDARDIZE FRONTEND KEYS TO MATCH BACKEND PRICING MATRIX EXPLICITLY
+    let mappedType = type;
+    if (service === "modification") {
+      if (type === "name") mappedType = "nameCorrection";
+      if (type === "phone") mappedType = "phoneSync";
+      if (type === "address") mappedType = "addressMapping";
+    }
 
+    // 2. 🛡️ Prevent CastErrors from breaking the server thread
+    let resolvedUserId;
     try {
-      if (targetId && mongoose.Types.ObjectId.isValid(targetId.toString())) {
-        resolvedUserId = new mongoose.Types.ObjectId(targetId.toString());
+      if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+        resolvedUserId = new mongoose.Types.ObjectId(userId);
       } else {
-        resolvedUserId = new mongoose.Types.ObjectId(); // Clean tracking hash fallback for guest/unauthenticated orders
+        resolvedUserId = new mongoose.Types.ObjectId(); 
       }
     } catch (castErr) {
       resolvedUserId = new mongoose.Types.ObjectId();
     }
 
-    // Keep the rest of your endpoint logic down below exactly the same...
-
     // 3. 💰 Dynamic Pricing Matrix Engine Matching Your Dashboard Services
     const pricing = await Pricing.findOne() || {};
     let basePrice = undefined;
 
-    // Direct string match normalizing for variations like dash or camelCase
     const normalizedService = service.toLowerCase().replace("-", "");
 
     if (normalizedService === "validation") {
-      basePrice = pricing.ninServices?.validation?.[type];
+      basePrice = pricing.ninServices?.validation?.[mappedType];
     } else if (normalizedService === "ipe" || normalizedService === "ipeclearance") {
-      basePrice = pricing.ninServices?.ipe?.[type];
+      basePrice = pricing.ninServices?.ipe?.[mappedType];
     } else if (normalizedService === "modification") {
-      basePrice = pricing.ninServices?.modification?.[type];
+      basePrice = pricing.ninServices?.modification?.[mappedType];
     } else if (normalizedService === "personalization" || normalizedService === "tracking") {
-      basePrice = pricing.ninServices?.personalization?.[type];
+      basePrice = pricing.ninServices?.personalization?.[mappedType];
     } else if (normalizedService === "selfservice") {
       const selfServiceConfig = pricing.ninServices?.selfService || pricing.ninServices?.["self-service"];
-      basePrice = selfServiceConfig?.[type];
+      basePrice = selfServiceConfig?.[mappedType];
     }
 
-    // 🛟 Hardcoded Dashboard Fallback Pricing Matrix matching your layout image perfectly
+    // 🛟 Hardcoded Dashboard Fallback Pricing Matrix
     if (basePrice === undefined || basePrice === null) {
       const globalDashboardPrices = {
         // Validation Module
-        noRecord: 5000,
-        updateRecord: 5000,
-        modificationVerify: 5000,
-        vnin: 5000,
+        noRecord: 5000, updateRecord: 5000, modificationVerify: 5000, vnin: 5000,
         // IPE Clearance Module
-        inProcessing: 1000,
-        stillProcessing: 1000,
-        newEnrollment: 1000,
-        invalidTracking: 1000,
+        inProcessing: 1000, stillProcessing: 1000, newEnrollment: 1000, invalidTracking: 1000,
         // Modification Module
-        nameCorrection: 7000,
-        dob: 50000,
-        addressMapping: 7000,
-        phoneSync: 7000,
+        nameCorrection: 7000, dob: 50000, addressMapping: 7000, phoneSync: 7000,
         // Personalization Module
         trackingLookup: 1000,
         // Selfservice Module
-        emailRetrieval: 4500,
-        deviceUnlink: 5500
+        emailRetrieval: 4500, deviceUnlink: 5500
       };
-      basePrice = globalDashboardPrices[type] ?? 1500; 
+      basePrice = globalDashboardPrices[mappedType] ?? 1500; 
     }
 
     // Slips processing pricing configuration calculations
@@ -148,10 +140,11 @@ router.post("/request", async (req, res) => {
     }
 
     // 5. 🧾 Create Core Service Request Document inside MongoDB Atlas
+    // Pass 'mappedType' if your database requires the longer format, or keep 'type' if your schema likes short names.
     const request = await ServiceRequest.create({
       userId: resolvedUserId,
-      service: service, // Preserves incoming type structures cleanly for your frontend tabs
-      type: type,
+      service: service, 
+      type: mappedType, // 👈 Ensures backend consistency 
       nin: nin || "N/A",
       slipType: slipType || "none",
       amount: totalCalculatedAmount,
@@ -162,7 +155,7 @@ router.post("/request", async (req, res) => {
       statusHistory: [
         {
           status: "pending",
-          note: `New pipeline item registered for ${service} (${type})`
+          note: `New pipeline item registered for ${service} (${mappedType})`
         }
       ]
     });
@@ -181,14 +174,13 @@ router.post("/request", async (req, res) => {
     // 7. 📊 Async Google Sheets Log Pipeline Trigger
     try {
       await addToSheets({
-        summary: [new Date().toLocaleString(), userEmail, service.toUpperCase(), type, nin || "N/A", totalCalculatedAmount, "pending"],
-        fullData: [new Date().toLocaleString(), userEmail, service.toUpperCase(), type, nin || "N/A", JSON.stringify(formData || {})]
+        summary: [new Date().toLocaleString(), userEmail, service.toUpperCase(), mappedType, nin || "N/A", totalCalculatedAmount, "pending"],
+        fullData: [new Date().toLocaleString(), userEmail, service.toUpperCase(), mappedType, nin || "N/A", JSON.stringify(formData || {})]
       });
     } catch (sheetErr) {
       console.error("Google Sheets synchronization safe bypass:", sheetErr.message);
     }
 
-    // Return exact status 200 payload success metrics back to user UI components
     return res.status(200).json({
       success: true,
       message: "Request compiled and submitted successfully to admin review panel.",
