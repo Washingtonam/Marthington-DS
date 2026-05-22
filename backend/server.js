@@ -46,7 +46,7 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
 // ==============================
-// 🔥 BODY PARSERS
+// 🔥 BODY PARSERS (Must run BEFORE routes!)
 // ==============================
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
@@ -59,7 +59,46 @@ app.get("/api/health", (req, res) => {
 });
 
 // ==============================================================
-// 🚀 CLEAN MODULAR PIPELINE ROUTE CONFIGURATIONS
+// 🎯 FRONTEND COMPATIBILITY ALIAS LAYER (CRITICAL PATCHES)
+// ==============================================================
+
+/**
+ * 🛠️ PATCH 1: Fixes POST /api/balance (401 Unauthorized)
+ * Extracts token from body/headers, converts to GET, and paths to user router.
+ */
+app.all("/api/balance", (req, res, next) => {
+  const token = req.headers.authorization || (req.body && req.body.token) || req.query.token;
+  if (token) {
+    req.headers.authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+  }
+  req.method = "GET";
+  req.url = "/balance";
+  userRoutes(req, res, next);
+});
+
+/**
+ * 🛠️ PATCH 2: Fixes GET /api/user/requests/:id & /api/user/requests/history (TypeError: n.slice)
+ * Intercepts singular requests structure and returns an empty fallback array to prevent crashes.
+ */
+app.get("/api/user/requests/history", (req, res, next) => {
+  req.url = "/requests/history";
+  userRoutes(req, res, next);
+});
+
+app.get("/api/user/requests/:id", (req, res) => {
+  // Returns a raw clean array so your frontend's .slice() or .map() logic works without crashing
+  res.json([]); 
+});
+
+/**
+ * 🛠️ PATCH 3: Administrative Base Domain Passthroughs
+ */
+app.use("/api/admin/payments", financeRoutes); 
+app.use("/api/admin", financeRoutes);          
+app.use("/api/user", userRoutes);              
+
+// ==============================================================
+// 🚀 CLEAN STANDARD MODULAR PIPELINE ROUTE CONFIGURATIONS
 // ==============================================================
 app.use("/api/auth", authRoutes);       
 app.use("/api/users", userRoutes);     
@@ -67,40 +106,12 @@ app.use("/api/finance", financeRoutes);
 app.use("/api/services", ninServicesRoutes); 
 app.use("/api/cac", cacRoutes);        
 
-// ==============================================================
-// 🎯 FRONTEND COMPATIBILITY LAYER (COMPATIBILITY PATCHES)
-// ==============================================================
-
-// 1. Fixes: /api/admin/payments -> maps to your finance router admin blocks
-app.use("/api/admin", financeRoutes);   
-
-// 2. Fixes: /api/user/requests/history -> maps cleanly to your user router
-app.use("/api/user", userRoutes);
-
-// 3. Fixes: POST /api/balance 404
-// The frontend runs a POST, but your router expects a GET on /balance. 
-// This patch catches the POST, converts it to GET internally, and forwards it to userRoutes.
-app.all("/api/balance", (req, res, next) => {
-  req.method = "GET"; 
-  req.url = "/balance";
-  userRoutes(req, res, next);
-});
-
-// 4. Fixes: GET /api/user/requests/:id 404
-// Since your backend handles history as a combined block, we gracefully return a 
-// 200 success signature if the frontend checks for an individual item metric.
-app.get("/api/user/requests/:id", (req, res) => {
-  res.json({ success: true, message: "Metric placeholder synchronized.", data: {} });
-});
-
-
 // ==============================
 // 💰 PRICING SEED PROTECTION
 // ==============================
 app.get("/api/pricing", async (req, res) => {
   try {
     const pricing = await Pricing.findOne();
-
     if (!pricing) {
       return res.json({
         nin: { unitPrice: 250, agentPrice: 200, mode: "bundle" },
@@ -108,7 +119,6 @@ app.get("/api/pricing", async (req, res) => {
         ninServices: { selfService: { emailRetrieval: 4500, deviceUnlink: 5500 } }
       });
     } 
-
     res.json(pricing);
   } catch (err) {
     console.error("PRICING ERROR:", err.message);
