@@ -82,22 +82,22 @@ useEffect(() => {
           setPendingPayments(0);
         }
 
-        // 2. Core Service Requests Sync (Safe parsing fallback setup)
+        // 2. Core Service Requests Sync 
+        // NOTE: Commented out because /api/admin/requests returns a 404 on the backend.
+        // Once your backend engineer deploys this route, uncomment these lines.
+        /*
         const reqRes = await axios.get(`${API_BASE}/api/admin/requests`, { headers });
-        
-        // Extract array safely depending on your backend wrapper syntax layout
         const requestsData = reqRes.data?.data || reqRes.data?.requests || reqRes.data || [];
-        
         if (Array.isArray(requestsData)) {
-          // Client-side counter check ensures 0 breakdown if endpoint sends everything back
           setPendingRequests(requestsData.filter((r) => r && r.status === "pending").length);
         } else {
           setPendingRequests(0);
         }
+        */
+        setPendingRequests(0); // Temporary placeholder to keep UI stable
 
       } catch (err) {
-        console.error("Sidebar counts sync structural or network layout error:", err.message);
-        // Soft fail updates ensure UI counters don't lock hard 
+        console.error("Sidebar counts sync error:", err.message);
         setPendingPayments(0);
         setPendingRequests(0);
       }

@@ -71,11 +71,6 @@ function isAdmin() {
   );
 }
 
-function isSuperAdmin() {
-  const user = getUser();
-  return user?.role === "super_admin";
-}
-
 // ==============================
 // PROTECTED ROUTES MIDDLEWARES
 // ==============================
@@ -104,6 +99,11 @@ function SuperAdminRoute({ children }) {
     return <Navigate to="/dashboard" />;
   }
   return children;
+}
+
+function isSuperAdmin() {
+  const user = getUser();
+  return user?.role === "super_admin";
 }
 
 // ==============================
@@ -199,7 +199,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
+      {/* Added the future configurations block to clear routing transition flags */}
+      <BrowserRouter 
+        future={{ 
+          v7_startTransition: true, 
+          v7_relativeSplatPath: true 
+        }}
+      >
         <AppRoutes />
       </BrowserRouter>
     </ThemeProvider>
