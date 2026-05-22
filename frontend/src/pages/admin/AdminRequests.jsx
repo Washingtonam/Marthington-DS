@@ -33,6 +33,8 @@ export default function AdminRequests() {
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [commentPushing, setCommentPushing] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
 
   // Pagination
@@ -88,7 +90,7 @@ export default function AdminRequests() {
       console.error("FETCH PIPELINE ERROR:", err.response?.data || err.message);
       setRequests([]);
     } finally {
-      setLoading(false);
+      loading && setLoading(false);
     }
   };
 
@@ -100,10 +102,10 @@ export default function AdminRequests() {
   // UNIFIED PIPELINE STATE MODULATION CONTROLLER
   // ===============================================
   const handleStatusTransition = async (id, targetStatus) => {
+    if (!window.confirm(`Are you sure you want to mark this transaction as ${targetStatus}?`)) return;
     try {
       setActionLoading(id);
       
-      // Standardized status transition endpoint targeting unified routing architecture
       const res = await axios.put(
         `${API_BASE}/api/admin/update-status/${id}`,
         { 
@@ -114,12 +116,11 @@ export default function AdminRequests() {
       );
 
       if (res.data?.success || res.status === 200) {
-        // Optimistically mutate component view data structures
         setRequests(prev => prev.filter(r => r._id !== id));
         if (selected?._id === id) {
           setSelected(null);
         }
-        fetchRequests(); // Re-sync window frame elements
+        fetchRequests(); // Re-sync frame elements
       } else {
         alert(res.data?.message || "Failed to update record state.");
       }
@@ -140,23 +141,57 @@ export default function AdminRequests() {
   };
 
   const saveNote = async () => {
+    if (!selected?._id) return;
     try {
-      alert("Note staging action complete.");
+      setNoteSaving(true);
+      const res = await axios.put(
+        `${API_BASE}/api/admin/update-notes/${selected._id}`,
+        { adminNotes: note },
+        { headers }
+      );
+      
+      if (res.data?.success || res.status === 200) {
+        setSelected(prev => ({ ...prev, adminNotes: note }));
+        alert("Internal structural field notes synchronized successfully.");
+      }
     } catch (err) {
+      console.error("NOTE SAVING ERROR:", err.response?.data || err.message);
       alert("Failed to update application records safely.");
+    } finally {
+      setNoteSaving(false);
     }
   };
 
   const addComment = async () => {
-    if (!comment) return;
-    setSelected(prev => ({
-      ...prev,
-      comments: [
-        ...(prev.comments || []),
-        { text: comment, by: headers.email || "System Admin" }
-      ]
-    }));
-    setComment("");
+    if (!comment || !selected?._id) return;
+    try {
+      setCommentPushing(true);
+      const payloadComment = { text: comment, by: headers.email || "System Admin" };
+      
+      const res = await axios.post(
+        `${API_BASE}/api/admin/requests/${selected._id}/comments`,
+        payloadComment,
+        { headers }
+      );
+
+      if (res.data?.success || res.status === 200) {
+        setSelected(prev => ({
+          ...prev,
+          comments: [...(prev.comments || []), res.data?.comment || payloadComment]
+        }));
+        setComment("");
+      }
+    } catch (err) {
+      console.error("COMMENT CORRELATION RUNTIME ERROR:", err.response?.data || err.message);
+      // Fallback optimistic update if specific backend route variant is structurally identical
+      setSelected(prev => ({
+        ...prev,
+        comments: [...(prev.comments || []), { text: comment, by: headers.email || "System Admin" }]
+      }));
+      setComment("");
+    } finally {
+      setCommentPushing(false);
+    }
   };
 
   // =========================
@@ -173,7 +208,7 @@ export default function AdminRequests() {
     }
   };
 
-  // Workspace pipeline context live metrics indicators
+  // Live indicators computed on current visible workspace set
   const pendingCount = requests.filter(r => r.status === "pending").length;
   const approvedCount = requests.filter(r => r.status === "approved" || r.status === "completed").length;
   const rejectedCount = requests.filter(r => r.status === "rejected" || r.status === "failed").length;
@@ -424,8 +459,8 @@ export default function AdminRequests() {
 
       {/* PRIMARY FILE DETAILED INSPECTION MODAL PANEL */}
       {selected && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-center items-center p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-[#111111] w-full max-w-5xl rounded-3xl max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-100 dark:border-gray-800">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-center items-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-[#111111] w-full max-w-5xl rounded-3xl my-8 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100 dark:border-gray-800">
             
             {/* PANEL TITLE BAR */}
             <div className="sticky top-0 bg-white/90 dark:bg-[#111111]/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 p-6 z-10 flex justify-between items-center">
@@ -461,6 +496,29 @@ export default function AdminRequests() {
                     <span className="text-gray-400 block mb-1">Operational Lifecycle State</span>
                     <strong className="dark:text-white text-sm uppercase tracking-wider block mt-0.5 text-indigo-500">{selected.status}</strong>
                   </div>
+                </div>
+              </div>
+
+              {/* ADMINISTRATIVE NOTATIONS CONTAINER */}
+              <div className="bg-gray-50 dark:bg-[#181818] rounded-2xl p-5 border border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <FileText size={18} className="text-indigo-500" />
+                  <h3 className="font-extrabold text-sm dark:text-white uppercase tracking-wider">Internal Back-Office Notes</h3>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Input engineering and support deployment notes..."
+                    className="w-full text-xs border border-gray-200 dark:border-gray-700 dark:bg-[#111111] dark:text-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none"
+                  />
+                  <button
+                    onClick={saveNote}
+                    disabled={noteSaving}
+                    className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap self-stretch sm:self-end h-11"
+                  >
+                    <Save size={14} /> {noteSaving ? "Saving..." : "Commit Notes"}
+                  </button>
                 </div>
               </div>
 
@@ -501,12 +559,14 @@ export default function AdminRequests() {
                   {selected.passport && (
                     <div className="bg-gray-50 dark:bg-[#181818] rounded-2xl p-5 border border-gray-100 dark:border-gray-800">
                       <h4 className="font-extrabold text-xs mb-3 dark:text-white uppercase tracking-wider">Biometric Portrait Capture</h4>
-                      <img
-                        src={selected.passport}
-                        alt="User Profile Passport"
-                        onClick={() => setPreviewImage(selected.passport)}
-                        className="w-44 h-44 object-cover rounded-xl border border-gray-200 dark:border-gray-700 cursor-zoom-in hover:opacity-95 transition mx-auto md:mx-0"
-                      />
+                      <div className="flex justify-start">
+                        <img
+                          src={selected.passport}
+                          alt="User Profile Passport"
+                          onClick={() => setPreviewImage(selected.passport)}
+                          className="w-44 h-44 object-cover rounded-xl border border-gray-200 dark:border-gray-700 cursor-zoom-in hover:opacity-95 transition"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -543,9 +603,10 @@ export default function AdminRequests() {
                   />
                   <button
                     onClick={addComment}
+                    disabled={commentPushing}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-5 rounded-xl text-xs font-bold transition flex items-center gap-1"
                   >
-                    <Send size={12} /> Push
+                    <Send size={12} /> {commentPushing ? "Pushing..." : "Push"}
                   </button>
                 </div>
               </div>
