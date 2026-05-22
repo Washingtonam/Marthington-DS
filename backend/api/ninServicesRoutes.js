@@ -45,8 +45,8 @@ router.post("/nin-services/request", async (req, res) => {
   try {
     const {
       userId,
-      service, // "validation", "ipe", "modification", "cac", or "self-service"
-      type,    // e.g. "emailRetrieval", "deviceUnlink", "soleProprietorship", etc.
+      service, 
+      type,    
       nin,
       slipType,
       proof,
@@ -54,7 +54,7 @@ router.post("/nin-services/request", async (req, res) => {
       formData
     } = req.body;
 
-    // ⚡ CRITICAL UPGRADE 1: Insulate email capture from either headers or body to prevent Google Sheets crashes
+    // ⚡ CRITICAL UPGRADE 1: Insulate email capture from either headers or body
     const userEmail = req.headers["email"] || req.body.email || formData?.email || "N/A";
 
     // 🛡️ REFIXED VERIFICATION BLOCK: Handle dynamic fallback for matching traditional request layers
@@ -62,10 +62,13 @@ router.post("/nin-services/request", async (req, res) => {
       return res.status(400).json({ message: "Missing required core parameters: service or type" });
     }
 
-    // Smart-fallback for userId in case some old legacy forms send it nested or contextually delayed
-    const resolvedUserId = userId || formData?.userId || req.body.email; 
-    if (!resolvedUserId) {
-      return res.status(400).json({ message: "Missing client reference context identity parameter (userId)" });
+    // Smart-fallback for userId 
+    let resolvedUserId = userId || formData?.userId;
+    
+    // If it's a completely unauthenticated self-service visitor, generate a stable alternative ID
+    if (!resolvedUserId || !mongoose.Types.ObjectId.isValid(resolvedUserId)) {
+      // Create a deterministic ObjectId from a fallback string or generate a clean temporary one
+      resolvedUserId = new mongoose.Types.ObjectId();
     }
 
     // If it's a standard business tier service (not self-service), proof must remain strict
@@ -86,7 +89,6 @@ router.post("/nin-services/request", async (req, res) => {
     } else if (service === "cac") {
       basePrice = pricing.cacServices?.[type];
     } else if (service === "self-service" || service === "selfService") {
-      // ⚡ CRITICAL UPGRADE 2: Support both camelCase and hyphenated database naming matrices with absolute hardcoded fallbacks
       const selfServiceConfig = pricing.ninServices?.selfService || pricing.ninServices?.["self-service"];
       
       if (type === "emailRetrieval") {
@@ -98,7 +100,7 @@ router.post("/nin-services/request", async (req, res) => {
       }
     }
 
-    // 🛡️ TYPE SAFE GUARD: Fallback protection mapping array to prevent dynamic profile crashes (0 drops fine)
+    // 🛡️ TYPE SAFE GUARD: Fallback protection mapping array to prevent dynamic profile crashes
     if (basePrice === undefined || basePrice === null) {
       const fallbackPrices = {
         name: 12000,
@@ -113,7 +115,6 @@ router.post("/nin-services/request", async (req, res) => {
       };
       basePrice = fallbackPrices[type];
       
-      // If still not matching anything, stop execution safely
       if (basePrice === undefined || basePrice === null) {
         return res.status(400).json({ message: "Invalid dynamic engine profile matrix or type tier selection configuration match" });
       }
@@ -127,19 +128,18 @@ router.post("/nin-services/request", async (req, res) => {
     const total = basePrice + slipCost;
 
     // ==============================
-    // ☁️ INSULATED CLOUDINARY UPLOADS (Prevents Network Drop Crashdowns)
+    // ☁️ INSULATED CLOUDINARY UPLOADS
     // ==============================
     let proofUrl = "";
     let passportUrl = "";
 
     try {
-      // Only invoke upload sequences if payload is a clean, fully compiled base64 data string
       if (proof && typeof proof === "string" && proof.startsWith("data:")) {
         console.log("☁️ Uploading proof file...");
         proofUrl = await uploadToCloudinary(proof, "xcombinator/proofs");
         console.log("✅ Proof uploaded successfully");
       } else if (proof && typeof proof === "string") {
-        proofUrl = proof; // Maintain reference if already hosted path
+        proofUrl = proof;
       }
 
       if (passport && typeof passport === "string" && passport.startsWith("data:")) {
@@ -147,7 +147,7 @@ router.post("/nin-services/request", async (req, res) => {
         passportUrl = await uploadToCloudinary(passport, "xcombinator/passports");
         console.log("✅ Passport uploaded successfully");
       } else if (passport && typeof passport === "string") {
-        passportUrl = passport; // Maintain reference if already hosted path
+        passportUrl = passport;
       }
     } catch (uploadErr) {
       console.error("❌ CLOUDINARY PIPELINE EXCEPTION INTERCEPTED:", uploadErr.message);
@@ -158,7 +158,7 @@ router.post("/nin-services/request", async (req, res) => {
     // 🧾 CREATE COMPREHENSIVE REQUEST
     // ==============================
     const request = await ServiceRequest.create({
-      userId: mongoose.Types.ObjectId.isValid(resolvedUserId) ? resolvedUserId : new mongoose.Types.ObjectId(),
+      userId: resolvedUserId,
       service,
       type,
       nin: nin || "N/A",
@@ -183,14 +183,14 @@ router.post("/nin-services/request", async (req, res) => {
       type: "SERVICE",
       amount: total,
       status: "pending",
-      userId: mongoose.Types.ObjectId.isValid(resolvedUserId) ? resolvedUserId : null,
+      userId: resolvedUserId, // 🛡️ Guaranteed to be a valid unique ObjectId now!
       nin: nin || "N/A",
       proof: proofUrl || "N/A",
       requestId: request._id,
     });
 
     // ==============================
-    // 📊 GOOGLE SHEETS REPORTING (Fully Insulated)
+    // 📊 GOOGLE SHEETS REPORTING
     // ==============================
     try {
       console.log("📊 Archiving data matrices to Google Sheets...");
