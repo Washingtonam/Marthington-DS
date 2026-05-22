@@ -54,24 +54,21 @@ router.post("/nin-services/request", async (req, res) => {
       formData
     } = req.body;
 
-    // ⚡ CRITICAL UPGRADE 1: Insulate email capture from either headers or body
-    const userEmail = req.headers["email"] || req.body.email || formData?.email || "N/A";
+    const userEmail = req.headers["email"] || req.body.email || formData?.email || "anonymous@xcombinator.com";
 
-    // 🛡️ REFIXED VERIFICATION BLOCK: Handle dynamic fallback for matching traditional request layers
     if (!service || !type) {
       return res.status(400).json({ message: "Missing required core parameters: service or type" });
     }
 
-    // Smart-fallback for userId 
-    let resolvedUserId = userId || formData?.userId;
+    // 🛡️ REFIXED VALIDATION LAYER: Safe verification check for ObjectIds
+    let resolvedUserId = userId;
     
-    // If it's a completely unauthenticated self-service visitor, generate a stable alternative ID
-    if (!resolvedUserId || !mongoose.Types.ObjectId.isValid(resolvedUserId)) {
-      // Create a deterministic ObjectId from a fallback string or generate a clean temporary one
-      resolvedUserId = new mongoose.Types.ObjectId();
+    // Check if the incoming ID is empty, undefined as a string, or structurally invalid
+    if (!resolvedUserId || resolvedUserId === "undefined" || !mongoose.Types.ObjectId.isValid(resolvedUserId)) {
+      // Create a dedicated system tracking ID for unauthenticated self-service actions
+      resolvedUserId = new mongoose.Types.ObjectId(); 
     }
 
-    // If it's a standard business tier service (not self-service), proof must remain strict
     if (service !== "self-service" && service !== "selfService" && !proof) {
       return res.status(400).json({ message: "Missing required payment proof parameter for this service context" });
     }
@@ -79,7 +76,6 @@ router.post("/nin-services/request", async (req, res) => {
     const pricing = await Pricing.findOne() || new Pricing({});
     let basePrice = undefined;
 
-    // DYNAMIC MATRIX EVALUATION FOR ALL ENGINES NATIVELY
     if (service === "validation") {
       basePrice = pricing.ninServices?.validation?.[type];
     } else if (service === "ipe") {
@@ -100,7 +96,6 @@ router.post("/nin-services/request", async (req, res) => {
       }
     }
 
-    // 🛡️ TYPE SAFE GUARD: Fallback protection mapping array to prevent dynamic profile crashes
     if (basePrice === undefined || basePrice === null) {
       const fallbackPrices = {
         name: 12000,
@@ -116,7 +111,7 @@ router.post("/nin-services/request", async (req, res) => {
       basePrice = fallbackPrices[type];
       
       if (basePrice === undefined || basePrice === null) {
-        return res.status(400).json({ message: "Invalid dynamic engine profile matrix or type tier selection configuration match" });
+        return res.status(400).json({ message: "Invalid dynamic engine profile matrix mismatch" });
       }
     }
 
@@ -127,38 +122,29 @@ router.post("/nin-services/request", async (req, res) => {
 
     const total = basePrice + slipCost;
 
-    // ==============================
-    // ☁️ INSULATED CLOUDINARY UPLOADS
-    // ==============================
     let proofUrl = "";
     let passportUrl = "";
 
     try {
       if (proof && typeof proof === "string" && proof.startsWith("data:")) {
-        console.log("☁️ Uploading proof file...");
         proofUrl = await uploadToCloudinary(proof, "xcombinator/proofs");
-        console.log("✅ Proof uploaded successfully");
       } else if (proof && typeof proof === "string") {
         proofUrl = proof;
       }
 
       if (passport && typeof passport === "string" && passport.startsWith("data:")) {
-        console.log("☁️ Uploading passport photo...");
         passportUrl = await uploadToCloudinary(passport, "xcombinator/passports");
-        console.log("✅ Passport uploaded successfully");
       } else if (passport && typeof passport === "string") {
         passportUrl = passport;
       }
     } catch (uploadErr) {
-      console.error("❌ CLOUDINARY PIPELINE EXCEPTION INTERCEPTED:", uploadErr.message);
-      return res.status(500).json({ message: "Resource upload handshake failed. Please check network and try again." });
+      console.error("❌ CLOUDINARY UPLOAD ERROR:", uploadErr.message);
+      return res.status(500).json({ message: "Resource upload failed. Please try again." });
     }
 
-    // ==============================
-    // 🧾 CREATE COMPREHENSIVE REQUEST
-    // ==============================
+    // 🧾 CREATE SERVICE REQUEST
     const request = await ServiceRequest.create({
-      userId: resolvedUserId,
+      userId: resolvedUserId, // Safe, valid mongoose ObjectId
       service,
       type,
       nin: nin || "N/A",
@@ -171,29 +157,24 @@ router.post("/nin-services/request", async (req, res) => {
       statusHistory: [
         {
           status: "pending",
-          note: "Request systematically submitted and structural payload verified"
+          note: "Self-service request entry registered cleanly"
         }
       ]
     });
 
-    // ==============================
-    // 💰 CREATE ACCOMPANYING TRANSACTION
-    // ==============================
+    // 💰 CREATE TRANSACTION RECORD
     await Transaction.create({
       type: "SERVICE",
       amount: total,
       status: "pending",
-      userId: resolvedUserId, // 🛡️ Guaranteed to be a valid unique ObjectId now!
+      userId: resolvedUserId, // Clean connection reference mapping
       nin: nin || "N/A",
       proof: proofUrl || "N/A",
       requestId: request._id,
     });
 
-    // ==============================
-    // 📊 GOOGLE SHEETS REPORTING
-    // ==============================
+    // 📊 GOOGLE SHEETS PIPELINE
     try {
-      console.log("📊 Archiving data matrices to Google Sheets...");
       await addToSheets({
         summary: [
           new Date().toLocaleString(),
@@ -213,9 +194,8 @@ router.post("/nin-services/request", async (req, res) => {
           JSON.stringify(formData || {}, null, 2)
         ]
       });
-      console.log("✅ Google Sheets ingestion layer fully synchronized");
     } catch (sheetErr) {
-      console.error("❌ GOOGLE SHEETS INTEGRATION FAILED:", sheetErr);
+      console.error("❌ SHEET SYNC ERRROR:", sheetErr);
     }
 
     res.json({

@@ -131,9 +131,9 @@ export default function SelfServiceForm() {
       // Convert incoming transfer receipt image into a valid base64 stream string
       const base64Receipt = await convertToBase64(receiptFile);
       
-      const token = localStorage.getItem("token"); 
-      const userEmail = localStorage.getItem("email"); 
-      const userId = localStorage.getItem("userId");   
+      const token = localStorage.getItem("token") || ""; 
+      const userEmail = localStorage.getItem("email") || "guest-user@xcombinator.com"; 
+      const userId = localStorage.getItem("userId") || ""; // Clean empty string instead of undefined 
 
       // Construct a clean unified payload matching your backend expectations perfectly
       const payload = {
