@@ -1,10 +1,29 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 
 const User = require("../models/User");
 const Transaction = require("../models/Transaction");
 const AuditLog = require("../models/AuditLog");
 const Pricing = require("../models/Pricing");
+
+// Safe Model Resolution for Service pipelines to protect against initialization crashes
+let ServiceRequest;
+try {
+  ServiceRequest = mongoose.model("ServiceRequest");
+} catch {
+  const dynamicSchema = new mongoose.Schema({}, { strict: false, timestamps: true });
+  ServiceRequest = mongoose.model("ServiceRequest", dynamicSchema);
+}
+
+// Dynamic resolution for CAC model tracking
+let CACRequest;
+try {
+  CACRequest = mongoose.model("CacRequest");
+} catch {
+  const dynamicCacSchema = new mongoose.Schema({}, { strict: false, timestamps: true });
+  CACRequest = mongoose.model("CacRequest", dynamicCacSchema);
+}
 
 // ==============================
 // 🔐 AUTH MIDDLEWARE (Unified & Secure)
@@ -78,6 +97,91 @@ router.get("/stats", isAdmin, async (req, res) => {
   } catch (err) {
     console.error("STATS ERROR:", err);
     res.status(500).json({ message: "Failed to load stats" });
+  }
+});
+
+// ==========================================
+// 📥 NIMC PIPELINE: FETCH ALL NIMC REQUESTS
+// ==========================================
+router.get("/nimc-requests", isAdmin, async (req, res) => {
+  try {
+    const requests = await ServiceRequest.find()
+      .populate("userId", "email firstName lastName phoneNumber")
+      .sort({ createdAt: -1 });
+    
+    res.json({ success: true, data: requests });
+  } catch (error) {
+    console.error("🔥 ADMIN NIMC REQUESTS FETCH ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch NIMC pipeline requests" });
+  }
+});
+
+// ==========================================
+// 🏢 CAC PIPELINE: FETCH ALL CAC REGISTRATIONS
+// ==========================================
+router.get("/cac-requests", isAdmin, async (req, res) => {
+  try {
+    const requests = await CACRequest.find()
+      .populate("userId", "email firstName lastName phoneNumber")
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, data: requests });
+  } catch (error) {
+    console.error("🔥 ADMIN CAC REQUESTS FETCH ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch CAC business registry requests" });
+  }
+});
+
+// ==========================================
+// 🔄 UNIFIED OPERATIONS STATUS UPDATE CONTROLLER
+// ==========================================
+router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
+  const { targetModule, id } = req.params;
+  const { status, note } = req.body; 
+  const adminEmail = req.user.email;
+
+  try {
+    // Select correct data repository module target
+    const TargetModel = targetModule === "cac" ? CACRequest : ServiceRequest;
+    
+    const normalizedStatus = String(status).toLowerCase();
+
+    // Check if item exists before altering attributes
+    const record = await TargetModel.findById(id);
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Requested application profile context not found." });
+    }
+
+    // Perform updates using atomic setters to keep schema history happy
+    record.status = normalizedStatus;
+    
+    if (record.statusHistory) {
+      record.statusHistory.push({
+        status: normalizedStatus,
+        note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`,
+        createdAt: new Date()
+      });
+    }
+
+    await record.save();
+
+    // Side-chain logging inside unified operational system audit trails
+    try {
+      await AuditLog.create({
+        action: `UPDATE_${targetModule.toUpperCase()}_STATUS`,
+        performedBy: adminEmail,
+        userId: record.userId || null,
+        amount: record.amount || 0,
+        note: `Record ${id} shifted to ${normalizedStatus}. Comment: ${note || 'None'}`
+      });
+    } catch (logErr) {
+      console.warn("Audit tracking step skipped cleanly:", logErr.message);
+    }
+
+    res.json({ success: true, message: `Pipeline document successfully marked as ${normalizedStatus}`, data: record });
+  } catch (err) {
+    console.error("🔥 UNIFIED STATUS TRANSITION ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to modulate application timeline lifecycle state." });
   }
 });
 
@@ -388,26 +492,22 @@ router.put("/pricing", isAdmin, async (req, res) => {
     let pricing = await Pricing.findOne();
     if (!pricing) pricing = new Pricing({});
 
-    // Ensure baseline structures exist safely before updates
     if (!pricing.nin) pricing.nin = {};
     if (!pricing.ninServices) pricing.ninServices = { validation: {}, selfService: {}, ipe: {}, modification: {} };
     if (!pricing.ninServices.selfService) pricing.ninServices.selfService = {};
     if (!pricing.cacServices) pricing.cacServices = {};
 
-    // 1. Sync Base NIN Configuration Margins
     Object.assign(pricing.nin, {
       unitPrice: req.body.unitPrice ?? pricing.nin.unitPrice,
       agentPrice: req.body.agentPrice ?? pricing.nin.agentPrice,
       mode: req.body.mode ?? pricing.nin.mode,
     });
 
-    // 2. Sync NIN Sub-Services Mappings Safely
     if (req.body.validation) Object.assign(pricing.ninServices.validation, req.body.validation);
     if (req.body.ipe) Object.assign(pricing.ninServices.ipe, req.body.ipe);
     if (req.body.modification) Object.assign(pricing.ninServices.modification, req.body.modification);
     if (req.body.slipPrice !== undefined) pricing.ninServices.slipPrice = req.body.slipPrice;
 
-    // 3. 🔥 Sync Self-Service Portal Management Safely
     if (req.body.selfService) {
       Object.assign(pricing.ninServices.selfService, {
         emailRetrieval: req.body.selfService.emailRetrieval ?? pricing.ninServices.selfService.emailRetrieval,
@@ -415,7 +515,6 @@ router.put("/pricing", isAdmin, async (req, res) => {
       });
     }
 
-    // 4. Sync Live CAC Services Configuration Values
     if (req.body.cacServices) {
       Object.assign(pricing.cacServices, {
         soleProprietorship: req.body.cacServices.soleProprietorship ?? pricing.cacServices.soleProprietorship,
@@ -424,7 +523,6 @@ router.put("/pricing", isAdmin, async (req, res) => {
       });
     }
 
-    // Explicitly flag schema paths as modified to ensure Mongoose updates inner objects completely
     pricing.markModified("nin");
     pricing.markModified("ninServices");
     pricing.markModified("ninServices.validation");
