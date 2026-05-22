@@ -2,6 +2,9 @@ const express = require("express");
 
 const User = require("../models/User");
 const Transaction = require("../models/Transaction");
+// 💡 Added model imports to pull unified individual histories safely
+const ServiceRequest = require("../models/ServiceRequest");
+const CacRequest = require("../models/CacRequest");
 
 const router = express.Router();
 
@@ -68,6 +71,54 @@ router.post("/transactions", async (req, res) => {
 
     return res.status(500).json({
       error: "Failed to fetch transactions",
+    });
+  }
+});
+
+// ==============================================================
+// 📥 GET COMBINED USER REQUESTS HISTORY (Resolves Frontend 404 loops)
+// ==============================================================
+router.get("/requests/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "User ID parameter required" });
+    }
+
+    // Execute database scans concurrently to save memory cycles
+    const [services, cacRequests] = await Promise.all([
+      ServiceRequest.find({ userId }).lean(),
+      CacRequest.find({ userId }).lean()
+    ]);
+
+    // Tag and normalize properties so your client UI identifies layout components clearly
+    const normalizedServices = services.map(s => ({ 
+      ...s, 
+      pipelineSource: "service" 
+    }));
+    
+    const normalizedCac = cacRequests.map(c => ({ 
+      ...c, 
+      pipelineSource: "cac" 
+    }));
+
+    // Merge the arrays and sort descending by newest creation dates
+    const combinedHistory = [...normalizedServices, ...normalizedCac].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: combinedHistory.length,
+      data: combinedHistory
+    });
+
+  } catch (error) {
+    console.error("🔥 INDIVIDUAL USER REQUESTS ERROR:", error.message);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Server error querying target user data logs." 
     });
   }
 });
