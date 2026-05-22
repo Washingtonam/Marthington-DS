@@ -36,10 +36,10 @@ const corsOptions = {
     }
     return callback(new Error("Not allowed by CORS"));
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"], // Dropped raw 'email' headers since we use JWT tokens natively now
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "email"], // 👈 Added "email" back to match what the frontend sends
   credentials: true,
-  optionsSuccessStatus: 200 // Fixes potential preflight issues on older mobile gateways/browsers
+  optionsSuccessStatus: 200 
 };
 
 // Apply CORS globally across all routes immediately
