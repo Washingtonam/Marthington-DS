@@ -120,8 +120,20 @@ app.get("/api/user/requests/:id", async (req, res) => {
   }
 });
 
-// Admin Route Matrix Catchers (Fixes 404 errors)
-app.use("/api/admin/payments", financeRoutes); 
+/**
+ * 🛠️ PATCH 4: Advanced Administrative Fallback Proxy (Fixes 404 /api/admin/payments)
+ * Intercepts calls aimed at admin/payments and evaluates routing matches against 
+ * finance module routers directly before executing fallback handlers.
+ */
+app.all("/api/admin/payments", (req, res, next) => {
+  // Try matching /payments first, if that fails fallback to /admin/payments internally
+  req.url = req.url === "/api/admin/payments" ? "/payments" : req.url;
+  financeRoutes(req, res, () => {
+    req.url = "/admin/payments";
+    financeRoutes(req, res, next);
+  });
+});
+
 app.use("/api/admin", financeRoutes);          
 app.use("/api/user/requests/history", userRoutes);
 app.use("/api/user", userRoutes);              
