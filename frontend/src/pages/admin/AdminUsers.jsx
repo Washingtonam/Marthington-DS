@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-// 🎯 CHANGED: Import your custom api instance instead of raw axios
-import api from "../api"; // Adjust this path if your api.js file is located elsewhere (e.g., "../../api")
+
+import api from "../../lib/axios"; // Adjust this path if your api.js file is located elsewhere (e.g., "../../api")
  
 import {
   Search,
