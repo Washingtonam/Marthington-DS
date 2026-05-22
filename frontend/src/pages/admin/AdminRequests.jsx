@@ -47,25 +47,40 @@ export default function AdminRequests() {
   // =========================
   // FETCH PIPELINE REQUESTS
   // =========================
-  const fetchRequests = async () => {
+const fetchRequests = async () => {
     try {
       setLoading(true);
-      // Calls the dedicated backend data streams based on the selected workspace tab
-      const endpoint = activeTab === "cac" ? "cac-requests" : "nimc-requests";
+      
+      // 1. Point this back to the single functional backend route
       const res = await axios.get(
-        `${API_BASE}/api/admin/${endpoint}?page=${page}&limit=${LIMIT}&status=${filter}`,
+        `${API_BASE}/api/admin/requests?page=${page}&limit=${LIMIT}&status=${filter}`,
         { headers }
       );
 
-      // Backend returns unified object arrays inside data wrapper
-      const fetchedData = res.data?.data || [];
+      // 2. Extract database payload array safely
+      const fetchedData = res.data?.data || res.data?.requests || [];
       
-      // Apply client-side status filter if specified (handles "all" filter neatly)
-      const filteredData = filter === "all" 
-        ? fetchedData 
-        : fetchedData.filter(item => String(item.status).toLowerCase() === filter.toLowerCase());
+      // 3. Client-side partitioning logic for tabs (CAC vs NIMC)
+      const filteredByModule = fetchedData.filter((item) => {
+        if (!item) return false;
+        
+        if (activeTab === "cac") {
+          return (
+            item.service?.toLowerCase() === "cac" || 
+            item.businessType || 
+            item.proposedName1
+          );
+        } else {
+          // Defaults cleanly to NIMC operations
+          return (
+            item.service?.toLowerCase() === "nimc" || 
+            item.nin || 
+            (!item.proposedName1 && item.service?.toLowerCase() !== "cac")
+          );
+        }
+      });
 
-      setRequests(filteredData);
+      setRequests(filteredByModule);
       setPages(res.data?.pagination?.pages || 1);
     } catch (err) {
       console.error("FETCH PIPELINE ERROR:", err.response?.data || err.message);
