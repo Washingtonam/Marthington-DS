@@ -20,10 +20,10 @@ export default function IPEClearance() {
   const [loading, setLoading] = useState(false);
 
   // =========================
-  // FETCH PRICING
+  //  api PRICING
   // =========================
   useEffect(() => {
-    fetch(`${API}/api/pricing`)
+     api(`${API}/api/pricing`)
       .then((res) => res.json())
       .then((data) => {
         setPricing(data?.ninServices?.ipe || {});
@@ -74,7 +74,7 @@ export default function IPEClearance() {
 
     try {
 
-      const res = await fetch(`${API}/api/nin-services/request`, {
+      const res = await  api(`${API}/api/nin-services/request`, {
         method: "POST",
 
         headers: {

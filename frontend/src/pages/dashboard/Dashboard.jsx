@@ -55,14 +55,14 @@ export default function Dashboard() {
 
     if (user?.id || user?._id) {
       syncData();
-      fetchRequests();
+       apiRequests();
     }
   }, [user]);
 
   // =========================
-  // FETCH REQUESTS
+  //  api REQUESTS
   // =========================
-  const fetchRequests = async () => {
+  const  apiRequests = async () => {
     try {
       const targetId = user.id || user._id;
       const res = await axios.get(`${API}/api/user/requests/${targetId}`);
@@ -75,7 +75,7 @@ export default function Dashboard() {
         pending: data.filter(r => r.status === "pending" || r.status === "processing").length,
       });
     } catch (err) {
-      console.error("Dashboard metric fetch error:", err);
+      console.error("Dashboard metric  api error:", err);
     }
   };
 

@@ -21,17 +21,17 @@ export default function Personalization() {
 
   const [trackingId, setTrackingId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [fetchingPrice, setFetchingPrice] = useState(true);
+  const [ apiingPrice, set apiingPrice] = useState(true);
   
   // Dynamic Pricing State (Will read from your database engine settings)
   const [trackingCost, setTrackingCost] = useState(1000);
   const [unitPrice, setUnitPrice] = useState(215);
 
   // ==========================================
-  // 📥 FETCH LIVE CONFIGURATION PRICING
+  // 📥  api LIVE CONFIGURATION PRICING
   // ==========================================
   useEffect(() => {
-    const fetchLiveRate = async () => {
+    const  apiLiveRate = async () => {
       try {
         const res = await axios.get(`${API_BASE}/api/pricing`);
         const data = res.data;
@@ -45,10 +45,10 @@ export default function Personalization() {
       } catch (err) {
         console.error("Failed to load live tracking rates:", err);
       } finally {
-        setFetchingPrice(false);
+        set apiingPrice(false);
       }
     };
-    fetchLiveRate();
+     apiLiveRate();
   }, []);
 
   // Calculate equivalent wallet units required to clear the cost
@@ -80,7 +80,7 @@ export default function Personalization() {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 20000);
 
-      const res = await fetch(`${API_BASE}/api/verify`, {
+      const res = await  api(`${API_BASE}/api/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -147,7 +147,7 @@ export default function Personalization() {
               <h2 className="text-2xl font-bold mt-0.5">{units} Units</h2>
             </div>
             <div className="md:mt-2 text-xs text-yellow-400 font-semibold bg-black/20 px-2.5 py-1 rounded-lg">
-              {fetchingPrice ? "Syncing Rate..." : `Cost: ${tokensRequired} Units`}
+              { apiingPrice ? "Syncing Rate..." : `Cost: ${tokensRequired} Units`}
             </div>
           </div>
         </div>
@@ -186,12 +186,12 @@ export default function Personalization() {
 
           <button
             type="submit"
-            disabled={loading || fetchingPrice}
+            disabled={loading ||  apiingPrice}
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-4 rounded-2xl font-bold transition flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
           >
             {loading ? (
               <>
-                <Loader2 size={18} className="animate-spin" /> Fetching Registry Records...
+                <Loader2 size={18} className="animate-spin" />  apiing Registry Records...
               </>
             ) : (
               <>

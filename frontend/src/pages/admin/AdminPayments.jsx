@@ -35,9 +35,9 @@ export default function AdminPayments() {
   };
 
   // =========================
-  // FETCH PAYMENTS
+  //  api PAYMENTS
   // =========================
-  const fetchPayments = async () => {
+  const  apiPayments = async () => {
     try {
       setLoading(true);
       // Pointed explicitly to the updated /api/admin/payments route
@@ -60,7 +60,7 @@ export default function AdminPayments() {
       setPages(res.data?.pagination?.pages || Math.ceil(filteredData.length / LIMIT) || 1);
     } catch (err) {
       console.error(
-        "FETCH ERROR:",
+        " api ERROR:",
         err.response?.data || err.message
       );
     } finally {
@@ -69,9 +69,9 @@ export default function AdminPayments() {
   };
 
   // =========================
-  // FETCH PRICING
+  //  api PRICING
   // =========================
-  const fetchPricing = async () => {
+  const  apiPricing = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/pricing`);
       setUnitPrice(res.data?.nin?.unitPrice || 215);
@@ -93,7 +93,7 @@ export default function AdminPayments() {
         { headers }
       );
       alert(res.data.message || "Approved successfully");
-      fetchPayments();
+       apiPayments();
     } catch (err) {
       console.error(
         "APPROVE ERROR:",
@@ -118,7 +118,7 @@ export default function AdminPayments() {
         { headers }
       );
       alert(res.data.message || "Rejected successfully");
-      fetchPayments();
+       apiPayments();
     } catch (err) {
       console.error(
         "REJECT ERROR:",
@@ -131,11 +131,11 @@ export default function AdminPayments() {
   };
 
   useEffect(() => {
-    fetchPayments();
+     apiPayments();
   }, [page, filter]);
 
   useEffect(() => {
-    fetchPricing();
+     apiPricing();
   }, []);
 
   // =========================

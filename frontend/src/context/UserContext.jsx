@@ -28,9 +28,9 @@ export function UserProvider({ children }) {
   };
 
   // =========================
-  // FETCH UNITS FROM BACKEND 🔥
+  //  api UNITS FROM BACKEND 🔥
   // =========================
-  const fetchUnits = async () => {
+  const  apiUnits = async () => {
     // We don't need to pass userId manually if the token is in the header
     try {
       const res = await api.get("/balance"); // Uses Axios interceptor to send JWT automatically
@@ -52,7 +52,7 @@ export function UserProvider({ children }) {
       const normalized = normalizeUser(storedUser);
       setUser(normalized);
       setUnits(normalized.units);
-      fetchUnits(); // Call sync
+       apiUnits(); // Call sync
     }
   }, []);
 
@@ -61,7 +61,7 @@ export function UserProvider({ children }) {
   // =========================
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval(fetchUnits, 30000);
+    const interval = setInterval( apiUnits, 30000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -107,7 +107,7 @@ export function UserProvider({ children }) {
         setUser: updateUser,
         clearUser,
         isAdmin: user?.isAdmin || false,
-        refreshUnits: fetchUnits,
+        refreshUnits:  apiUnits,
       }}
     >
       {children}

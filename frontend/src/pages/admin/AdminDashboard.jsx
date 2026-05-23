@@ -8,9 +8,9 @@ export default function AdminDashboard() {
   const [pipelineRequests, setPipelineRequests] = useState([]); // State for /api/admin/requests data
 
   // ============================
-  // FETCH UNIFIED REQUESTS (Fixes the 401/404 pipeline block)
+  //  api UNIFIED REQUESTS (Fixes the 401/404 pipeline block)
   // ============================
-  const fetchPipelineRequests = async () => {
+  const  apiPipelineRequests = async () => {
     try {
       const response = await api.get("/api/admin/requests", {
         params: { page: 1, limit: 20, status: "pending" }
@@ -24,22 +24,22 @@ export default function AdminDashboard() {
   };
 
   // ============================
-  // FETCH USERS
+  //  api USERS
   // ============================
-  const fetchUsers = async () => {
+  const  apiUsers = async () => {
     try {
       const response = await api.get("/api/admin/users");
       // Fallback array formatting handling data pagination wrappers
       setUsers(response.data?.data || response.data || []);
     } catch (error) {
-      console.error("🔥 Error fetching users registry directory:", error);
+      console.error("🔥 Error  apiing users registry directory:", error);
     }
   };
 
   // ============================
-  // FETCH STATS
+  //  api STATS
   // ============================
-  const fetchStats = async () => {
+  const  apiStats = async () => {
     try {
       const response = await api.get("/api/admin/stats");
       setStats(response.data);
@@ -52,7 +52,7 @@ export default function AdminDashboard() {
   // SEARCH USERS
   // ============================
   const handleSearch = async () => {
-    if (!search) return fetchUsers();
+    if (!search) return  apiUsers();
     try {
       const response = await api.get(`/api/admin/users`, {
         params: { search: search } // Matches your backend pagination regex search query
@@ -69,8 +69,8 @@ export default function AdminDashboard() {
   const suspendUser = async (id) => {
     try {
       await api.put(`/api/admin/user/${id}/suspend`);
-      fetchUsers();
-      fetchStats();
+       apiUsers();
+       apiStats();
     } catch (error) {
       console.error("🔥 Suspend routine failure:", error);
     }
@@ -79,8 +79,8 @@ export default function AdminDashboard() {
   const activateUser = async (id) => {
     try {
       await api.put(`/api/admin/user/${id}/activate`);
-      fetchUsers();
-      fetchStats();
+       apiUsers();
+       apiStats();
     } catch (error) {
       console.error("🔥 Activation routine failure:", error);
     }
@@ -90,17 +90,17 @@ export default function AdminDashboard() {
     if (!confirm("Are you sure you want to permanently delete this user account context profile?")) return;
     try {
       await api.delete(`/api/admin/user/${id}`);
-      fetchUsers();
-      fetchStats();
+       apiUsers();
+       apiStats();
     } catch (error) {
       console.error("🔥 Identity destruction failure execution loop:", error);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
-    fetchStats();
-    fetchPipelineRequests();
+     apiUsers();
+     apiStats();
+     apiPipelineRequests();
   }, []);
 
   return (

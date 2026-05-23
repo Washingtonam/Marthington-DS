@@ -34,15 +34,15 @@ export default function Wallet() {
   const [copied, setCopied] = useState(false);
 
   // =========================
-  // FETCH PRICING
+  //  api PRICING
   // =========================
   useEffect(() => {
 
-    const fetchPricing = async () => {
+    const  apiPricing = async () => {
 
       try {
 
-        const res = await fetch(
+        const res = await  api(
           `${API_BASE}/api/pricing`
         );
 
@@ -55,13 +55,13 @@ export default function Wallet() {
       } catch (err) {
 
         console.error(
-          "Pricing fetch error:",
+          "Pricing  api error:",
           err
         );
       }
     };
 
-    fetchPricing();
+     apiPricing();
 
   }, []);
 
@@ -150,7 +150,7 @@ export default function Wallet() {
 
     try {
 
-      const res = await fetch(
+      const res = await  api(
         `${API_BASE}/api/submit-payment`,
         {
           method: "POST",

@@ -13,7 +13,7 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API}/api/forgot-password`, {
+      const res = await  api(`${API}/api/forgot-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

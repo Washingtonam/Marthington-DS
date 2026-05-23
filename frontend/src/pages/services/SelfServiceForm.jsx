@@ -56,20 +56,20 @@ export default function SelfServiceForm() {
   };
 
   // =========================
-  // FETCH PRICING DATA
+  //  api PRICING DATA
   // =========================
   useEffect(() => {
-    const fetchPricing = async () => {
+    const  apiPricing = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/pricing`);
+        const res = await  api(`${API_BASE}/api/pricing`);
         const data = await res.json();
         setPricing(data);
       } catch (err) {
-        console.error("Error fetching pricing:", err);
+        console.error("Error  apiing pricing:", err);
       }
       setLoadingPricing(false);
     };
-    fetchPricing();
+     apiPricing();
   }, []);
 
   // Get current active cost based on tab selection
@@ -153,7 +153,7 @@ export default function SelfServiceForm() {
       };
 
       // Correct URL route path pairing with your unified server engine routes
-      const res = await fetch(`${API_BASE}/api/nin-services/request`, {
+      const res = await  api(`${API_BASE}/api/nin-services/request`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

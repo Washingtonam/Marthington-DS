@@ -45,9 +45,9 @@ export default function UserRequests() {
   }
 
   // =========================
-  // FETCH
+  //  api
   // =========================
-  const fetchRequests = async (
+  const  apiRequests = async (
     pageNum = 1,
     append = false
   ) => {
@@ -110,7 +110,7 @@ export default function UserRequests() {
     } catch (err) {
 
       console.error(
-        "REQUEST FETCH ERROR:",
+        "REQUEST  api ERROR:",
         err.response?.data ||
         err.message
       );
@@ -127,7 +127,7 @@ export default function UserRequests() {
   // INITIAL LOAD
   // =========================
   useEffect(() => {
-    fetchRequests(1);
+     apiRequests(1);
   }, []);
 
   // =========================
@@ -142,7 +142,7 @@ export default function UserRequests() {
 
     setPage(nextPage);
 
-    await fetchRequests(
+    await  apiRequests(
       nextPage,
       true
     );

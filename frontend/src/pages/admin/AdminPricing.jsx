@@ -23,7 +23,7 @@ export default function AdminPricing() {
   };
 
   const [loadingSection, setLoadingSection] = useState("");
-  const [fetching, setFetching] = useState(true);
+  const [apiing, setApiing] = useState(true);
 
   // =========================
   // UNIT STATE
@@ -84,11 +84,11 @@ export default function AdminPricing() {
   });
 
   // =========================
-  // 📥 FETCH ENGINE DATA
+  // 📥  api ENGINE DATA
   // =========================
-  const fetchPricing = async () => {
+  const  apiPricing = async () => {
     try {
-      setFetching(true);
+      set apiing(true);
       const res = await axios.get(`${API_BASE}/api/pricing`);
       const data = res.data;
 
@@ -137,14 +137,14 @@ export default function AdminPricing() {
         });
       }
     } catch (err) {
-      console.error("Fetch Pricing Error:", err);
+      console.error(" api Pricing Error:", err);
     } finally {
-      setFetching(false);
+      set apiing(false);
     }
   };
 
   useEffect(() => {
-    fetchPricing();
+     apiPricing();
   }, []);
 
   // =========================
@@ -159,7 +159,7 @@ export default function AdminPricing() {
         { headers }
       );
       alert(`${formatLabel(section)} Pricing updated successfully!`);
-      fetchPricing();
+       apiPricing();
     } catch (err) {
       console.error(`Update Error (${section}):`, err.response?.data || err.message);
       alert(err.response?.data?.message || "Update failed. Verify login authority.");
@@ -168,7 +168,7 @@ export default function AdminPricing() {
     }
   };
 
-  if (fetching) {
+  if ( apiing) {
     return (
       <div className="min-h-[60vh] flex justify-center items-center">
         <div className="text-center">

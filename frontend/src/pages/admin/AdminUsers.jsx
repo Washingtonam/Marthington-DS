@@ -31,9 +31,9 @@ export default function AdminUsers() {
   };
 
   // =========================
-  // FETCH USERS
+  //  api USERS
   // =========================
-  const fetchUsers = async () => {
+  const  apiUsers = async () => {
     setLoading(true);
     try {
       // ✅ Now routing safely through your middleware instance
@@ -41,7 +41,7 @@ export default function AdminUsers() {
       const data = res.data?.data || res.data || [];
       setUsers(data);
     } catch (err) {
-      console.error("🔥 FETCH USERS ERROR:", err.response?.data || err.message);
+      console.error("🔥  api USERS ERROR:", err.response?.data || err.message);
     }
     setLoading(false);
   };
@@ -50,7 +50,7 @@ export default function AdminUsers() {
   // SEARCH
   // =========================
   const handleSearch = async () => {
-    if (!search) return fetchUsers();
+    if (!search) return  apiUsers();
 
     try {
       const res = await api.get(`/api/admin/users?search=${search}`, { headers });
@@ -63,13 +63,13 @@ export default function AdminUsers() {
   // =========================
   // USER ACTIVITY
   // =========================
-  const fetchUserActivity = async (id) => {
+  const  apiUserActivity = async (id) => {
     try {
       const res = await api.get(`/api/admin/user/${id}`, { headers });
       setSelectedUser(res.data.user);
       setUserActivity(res.data.transactions);
     } catch (err) {
-      console.error("🔥 ACTIVITY FETCH ERROR:", err.response?.data || err.message);
+      console.error("🔥 ACTIVITY  api ERROR:", err.response?.data || err.message);
     }
   };
 
@@ -79,7 +79,7 @@ export default function AdminUsers() {
   const makeAdmin = async (id) => {
     try {
       await api.put(`/api/admin/user/${id}/make-admin`, {}, { headers });
-      fetchUsers();
+       apiUsers();
     } catch (err) {
       console.error(err);
     }
@@ -88,7 +88,7 @@ export default function AdminUsers() {
   const removeAdmin = async (id) => {
     try {
       await api.put(`/api/admin/user/${id}/remove-admin`, {}, { headers });
-      fetchUsers();
+       apiUsers();
     } catch (err) {
       console.error(err);
     }
@@ -100,7 +100,7 @@ export default function AdminUsers() {
   const suspendUser = async (id) => {
     try {
       await api.put(`/api/admin/user/${id}/suspend`, {}, { headers });
-      fetchUsers();
+       apiUsers();
     } catch (err) {
       console.error(err);
     }
@@ -109,7 +109,7 @@ export default function AdminUsers() {
   const activateUser = async (id) => {
     try {
       await api.put(`/api/admin/user/${id}/activate`, {}, { headers });
-      fetchUsers();
+       apiUsers();
     } catch (err) {
       console.error(err);
     }
@@ -122,7 +122,7 @@ export default function AdminUsers() {
     if (!window.confirm("Delete this user?")) return;
     try {
       await api.delete(`/api/admin/user/${id}`, { headers });
-      fetchUsers();
+       apiUsers();
     } catch (err) {
       console.error(err);
     }
@@ -140,7 +140,7 @@ export default function AdminUsers() {
         units: Number(units),
         action: "add",
       }, { headers });
-      fetchUsers();
+       apiUsers();
     } catch (err) {
       console.error(err);
     }
@@ -155,14 +155,14 @@ export default function AdminUsers() {
         units: Number(units),
         action: "deduct",
       }, { headers });
-      fetchUsers();
+       apiUsers();
     } catch (err) {
       console.error(err);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
+     apiUsers();
   }, []);
 
   const isSuperAdmin = currentUserEmail === "washingtonamedu@gmail.com";
@@ -249,14 +249,14 @@ export default function AdminUsers() {
                       </span>
                     </div>
                     <h2
-                      onClick={() => fetchUserActivity(u._id)}
+                      onClick={() =>  apiUserActivity(u._id)}
                       className="font-semibold text-sm break-all cursor-pointer hover:underline"
                     >
                       {u.email}
                     </h2>
                   </div>
                   <button
-                    onClick={() => fetchUserActivity(u._id)}
+                    onClick={() =>  apiUserActivity(u._id)}
                     className="bg-white/20 hover:bg-white/30 p-2 rounded-xl transition"
                   >
                     <Eye size={18} />

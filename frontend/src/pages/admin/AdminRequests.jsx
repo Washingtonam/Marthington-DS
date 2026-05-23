@@ -47,9 +47,9 @@ export default function AdminRequests() {
   };
 
   // =========================
-  // FETCH PIPELINE REQUESTS
+  //  api PIPELINE REQUESTS
   // =========================
-  const fetchRequests = async () => {
+  const  apiRequests = async () => {
     try {
       setLoading(true);
       
@@ -60,10 +60,10 @@ export default function AdminRequests() {
       );
 
       // 2. Extract database payload array safely
-      const fetchedData = res.data?.data || res.data?.requests || [];
+      const  apiedData = res.data?.data || res.data?.requests || [];
       
       // 3. Client-side partitioning logic for tabs (CAC vs NIMC)
-      const filteredByModule = fetchedData.filter((item) => {
+      const filteredByModule =  apiedData.filter((item) => {
         if (!item) return false;
         
         if (activeTab === "cac") {
@@ -87,7 +87,7 @@ export default function AdminRequests() {
       setRequests(filteredByModule);
       setPages(res.data?.pagination?.pages || 1);
     } catch (err) {
-      console.error("FETCH PIPELINE ERROR:", err.response?.data || err.message);
+      console.error(" api PIPELINE ERROR:", err.response?.data || err.message);
       setRequests([]);
     } finally {
       loading && setLoading(false);
@@ -95,7 +95,7 @@ export default function AdminRequests() {
   };
 
   useEffect(() => {
-    fetchRequests();
+     apiRequests();
   }, [activeTab, filter, page]);
 
   // ===============================================
@@ -120,7 +120,7 @@ export default function AdminRequests() {
         if (selected?._id === id) {
           setSelected(null);
         }
-        fetchRequests(); // Re-sync frame elements
+         apiRequests(); // Re-sync frame elements
       } else {
         alert(res.data?.message || "Failed to update record state.");
       }

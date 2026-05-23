@@ -62,7 +62,7 @@ export default function VerifyNIN() {
     setLoading(true);
 
     try {
-      await fetch("https://xcombinator.onrender.com/api/pricing");
+      await  api("https://xcombinator.onrender.com/api/pricing");
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
 
@@ -80,7 +80,7 @@ export default function VerifyNIN() {
         payload.birthdate = form.birthdate;
       }
 
-      const res = await fetch("https://xcombinator.onrender.com/api/verify", {
+      const res = await  api("https://xcombinator.onrender.com/api/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -58,7 +58,7 @@ export default function VerifyResult() {
 
     try {
 
-      const res = await fetch(
+      const res = await  api(
         "https://xcombinator.onrender.com/api/generate-nin-slip",
         {
           method: "POST",

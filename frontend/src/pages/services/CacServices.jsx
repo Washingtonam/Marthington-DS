@@ -58,9 +58,9 @@ export default function CacServices() {
   const currentPrice = prices[service] || 0;
 
   // ==========================================
-  // 📥 LIVE PRICING ENGINE FETCH
+  // 📥 LIVE PRICING ENGINE  api
   // ==========================================
-  const fetchLivePricing = async () => {
+  const  apiLivePricing = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/pricing`);
       const data = res.data;
@@ -83,24 +83,24 @@ export default function CacServices() {
   };
 
   // ==========================================
-  // 🔄 FETCH USER CAC HISTORY LOGS
+  // 🔄  api USER CAC HISTORY LOGS
   // ==========================================
-  const fetchHistory = async () => {
+  const  apiHistory = async () => {
     if (!userId) return;
     try {
       setLoadingHistory(true);
       const res = await axios.get(`${API_BASE}/api/cac/user-history/${userId}`);
       setHistory(res.data || []);
     } catch (err) {
-      console.error("Error fetching history:", err);
+      console.error("Error  apiing history:", err);
     } finally {
       setLoadingHistory(false);
     }
   };
 
   useEffect(() => {
-    fetchHistory();
-    fetchLivePricing(); 
+     apiHistory();
+     apiLivePricing(); 
   }, [userId]);
 
   useEffect(() => {
@@ -175,7 +175,7 @@ export default function CacServices() {
       setProprietors([{ fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "", signature: "", passport: "" }]);
       setService("");
       setAgree(false);
-      fetchHistory();
+       apiHistory();
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.message || "An error occurred while submitting.");

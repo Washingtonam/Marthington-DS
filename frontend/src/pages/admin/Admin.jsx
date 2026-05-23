@@ -36,9 +36,9 @@ export default function Admin() {
   };
 
   // =========================
-  // FETCH
+  //  api
   // =========================
-  const fetchStats = async () => {
+  const  apiStats = async () => {
 
     try {
 
@@ -61,7 +61,7 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    fetchStats();
+     apiStats();
   }, []);
 
   // =========================

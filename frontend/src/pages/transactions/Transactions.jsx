@@ -31,15 +31,15 @@ export default function Transactions() {
   );
 
   // =========================
-  // FETCH
+  //  api
   // =========================
   useEffect(() => {
 
-    const fetchTransactions = async () => {
+    const  apiTransactions = async () => {
 
       try {
 
-        const res = await fetch(
+        const res = await  api(
           `${API_BASE}/api/transactions?userId=${user?.id}`
         );
 
@@ -62,7 +62,7 @@ export default function Transactions() {
 
     if (user?.id) {
 
-      fetchTransactions();
+       apiTransactions();
     }
 
   }, []);

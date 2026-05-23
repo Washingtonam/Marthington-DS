@@ -12,9 +12,9 @@ export default function Maintenance() {
   };
 
   // =========================
-  // FETCH STATUS
+  //  api STATUS
   // =========================
-  const fetchStatus = async () => {
+  const  apiStatus = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/admin/maintenance`, { headers });
       setStatus(res.data.active);
@@ -45,7 +45,7 @@ export default function Maintenance() {
   };
 
   useEffect(() => {
-    fetchStatus();
+     apiStatus();
   }, []);
 
   return (
