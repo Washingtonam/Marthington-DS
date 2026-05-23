@@ -145,6 +145,4 @@ userSchema.index({ createdAt: -1 });
 // ==============================
 // ✅ SAFE EXPORT
 // ==============================
-module.exports =
-  mongoose.models.User ||
-  mongoose.model("User", userSchema);
+module.exports = mongoose.models.User || mongoose.model("User", userSchema);

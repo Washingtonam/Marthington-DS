@@ -112,4 +112,4 @@ pricingSchema.statics.getPricing = async function () {
   return pricing;
 };
 
-module.exports = mongoose.model("Pricing", pricingSchema);
+module.exports = mongoose.models.Pricing || mongoose.model("Pricing", pricingSchema);

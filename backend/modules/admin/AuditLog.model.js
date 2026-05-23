@@ -21,4 +21,8 @@ const auditLogSchema = new mongoose.Schema({
   timestamps: true
 });
 
-module.exports = mongoose.model("AuditLog", auditLogSchema);
+// ... your schema definition code remains the same ...
+
+const AuditLog = mongoose.models.AuditLog || mongoose.model("AuditLog", AuditLogSchema);
+
+module.exports = AuditLog;
