@@ -54,10 +54,9 @@ router.get("/transactions", verifyToken, async (req, res) => {
 });
 
 // ==============================================================
-// 📥 ADMIN ROUTES (Accessible via /api/admin/payments, etc.)
+// 📥 ADMIN ROUTES
 // ==============================================================
 
-// Removed /admin prefix from path because it is mounted at /api/admin
 router.get("/payments", verifyToken, isAdmin, async (req, res) => {
   try {
     const payments = await Transaction.find({ type: "UNIT_ADD" })
@@ -65,31 +64,54 @@ router.get("/payments", verifyToken, isAdmin, async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(payments);
   } catch (error) {
-    res.status(500).json({ message: "Failed to api payments." });
+    res.status(500).json({ message: "Failed to fetch payments." });
   }
 });
 
 router.post("/payments/:id/approve", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const payment = await Transaction.findById(req.params.id);
-    if (!payment || payment.status !== "pending") return res.status(400).json({ message: "Invalid transaction." });
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-    const user = await User.findById(payment.userId);
-    const pricing = await Pricing.findOne();
+  try {
+    const payment = await Transaction.findById(req.params.id).session(session);
+    if (!payment || payment.status !== "pending") {
+      throw new Error("Invalid transaction or already processed.");
+    }
+
+    const user = await User.findById(payment.userId).session(session);
+    if (!user) throw new Error("User not found.");
+
+    const pricing = await Pricing.findOne().session(session);
     const unitsToAdd = payment.units || Math.floor(payment.amount / (pricing?.nin?.unitPrice || 250));
 
-    user.units += unitsToAdd;
-    await user.save();
+    // Update user balance
+    const unitsBefore = user.units || 0;
+    user.units = unitsBefore + unitsToAdd;
+    await user.save({ session });
 
+    // Update payment status
     payment.status = "approved";
     payment.units = unitsToAdd;
-    await payment.save();
+    await payment.save({ session });
 
-    await AuditLog.create({ action: "APPROVE_PAYMENT", performedBy: req.user.email, userId: user._id, amount: payment.amount, unitsAdded: unitsToAdd, unitsBefore: user.units - unitsToAdd, unitsAfter: user.units });
+    // Create Audit Log
+    await AuditLog.create([{ 
+      action: "APPROVE_PAYMENT", 
+      performedBy: req.user.email, 
+      userId: user._id, 
+      amount: payment.amount, 
+      unitsAdded: unitsToAdd, 
+      unitsBefore: unitsBefore, 
+      unitsAfter: user.units 
+    }], { session });
 
+    await session.commitTransaction();
     res.json({ message: "Approved successfully.", units: user.units });
   } catch (error) {
+    await session.abortTransaction();
     res.status(500).json({ message: "Approval failed.", error: error.message });
+  } finally {
+    session.endSession();
   }
 });
 

@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 
 const User = require("../users/User.model");
@@ -6,136 +7,73 @@ const Transaction = require("../finance/Transaction.model");
 const CacRequest = require("./CacRequest.model");
 const Pricing = require("./Pricing.model");
 const { verifyToken, isAdmin } = require("../../shared/authGuard");
+const { validateCacRegistration } = require("../../shared/validators");
 
-// ==============================================================
-// 📥 SUBMIT NEW CAC REGISTRATION (SECURED VIA JWT)
-// ==============================================================
 router.post("/submit", verifyToken, async (req, res) => {
+  // 1. Validate incoming data
+  const { error } = validateCacRegistration.validate(req.body);
+  if (error) return res.status(400).json({ message: error.details[0].message });
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const userId = req.user.id; // Secure identity reference from validation payload
-    const { 
-      serviceType, 
-      businessName1, 
-      businessName2, 
-      companyEmail,
-      companyPhone,
-      category,
-      state,
-      lga,
-      shopNo,
-      streetAddress,
-      proprietors,
-      witness,
-      secretary 
-    } = req.body;
+    const userId = req.user.id;
+    const { serviceType, businessName1, businessName2, companyEmail, companyPhone, category, state, lga, shopNo, streetAddress, proprietors, witness, secretary } = req.body;
 
-    if (!serviceType || !businessName1 || !businessName2) {
-      return res.status(400).json({ message: "Missing required core business identification fields." });
-    }
-
-    // api matrix conversion configurations
-    const platformPricing = await Pricing.findOne();
+    const platformPricing = await Pricing.findOne().session(session);
+    const rates = { sole_proprietorship: platformPricing?.cacServices?.soleProprietorship ?? 28000, partnership: platformPricing?.cacServices?.partnership ?? 32000, limited_1m: platformPricing?.cacServices?.limited1M ?? 40000, custom_ngo: 0 };
     
-    const soleCost = platformPricing?.cacServices?.soleProprietorship ?? 28000;
-    const partnerCost = platformPricing?.cacServices?.partnership ?? 32000;
-    const limitedCost = platformPricing?.cacServices?.limited1M ?? 40000;
+    const cost = rates[serviceType];
     const userUnitPrice = platformPricing?.nin?.unitPrice || 215;
+    const unitsRequired = Math.ceil(cost / userUnitPrice);
 
-    // Isolate targeting operational costs
-    let cost = 0;
-    if (serviceType === "sole_proprietorship") cost = soleCost;
-    else if (serviceType === "partnership") cost = partnerCost;
-    else if (serviceType === "limited_1m") cost = limitedCost;
-    else if (serviceType === "custom_ngo") cost = 0;
-    else {
-      return res.status(400).json({ message: "Invalid corporate structural classification target." });
-    }
+    const user = await User.findById(userId).session(session);
+    if (user.units < unitsRequired && cost > 0) throw new Error(`Insufficient units. Required: ${unitsRequired}`);
 
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User account context not found." });
-
-    // Deduct total structural credit score allocation 
-    const unitsRequired = Math.ceil(cost / userUnitPrice); 
-    
-    if (user.units < unitsRequired && cost > 0) {
-      return res.status(400).json({ 
-        message: `Insufficient profile balance units. You require ${unitsRequired} units (₦${cost.toLocaleString()}) to initialize this registration transaction pipeline.` 
-      });
-    }
-
+    // Deduct units
     if (cost > 0) {
       user.units -= unitsRequired;
-      await user.save();
+      await user.save({ session });
     }
 
-    // Persist registry workspace data
-    const newCacJob = await CacRequest.create({
-      userId,
-      serviceType,
-      amountCharged: cost,
-      businessName1,
-      businessName2,
-      companyEmail,
-      companyPhone,
-      category,
-      state,
-      lga,
-      shopNo,
-      streetAddress,
-      proprietors,
-      witness,
-      secretary,
-      statusHistory: [{ status: "pending", note: "Corporate corporate pipeline structure initialized successfully." }]
-    });
+    // Persist Registry
+    const [newCacJob] = await CacRequest.create([{
+      userId, serviceType, amountCharged: cost, businessName1, businessName2, companyEmail, companyPhone, category, state, lga, shopNo, streetAddress, proprietors, witness, secretary,
+      statusHistory: [{ status: "pending", note: "Corporate pipeline structure initialized." }]
+    }], { session });
 
-    // Write cross-cutting financial tracking ledger
-    await Transaction.create({
-      userId,
-      type: "SERVICE", // Keep tracking aligned with global dashboard filter schemas cleanly
-      amount: cost,
-      unitsUsed: unitsRequired,
-      status: "success", 
-      proof: `CAC Submission ID Tracking Register reference: ${newCacJob._id}`
-    });
+    // Track Transaction
+    await Transaction.create([{
+      userId, type: "SERVICE", amount: cost, unitsUsed: unitsRequired, status: "success", 
+      proof: `CAC ID: ${newCacJob._id}`
+    }], { session });
 
-    res.json({ 
-      success: true,
-      message: "Corporate registry filing compiled and queued successfully!", 
-      jobId: newCacJob._id,
-      remainingUnits: user.units 
-    });
+    await session.commitTransaction();
+    res.json({ success: true, message: "Filing queued successfully!", jobId: newCacJob._id, remainingUnits: user.units });
 
   } catch (error) {
-    console.error("🔥 CAC PIPELINE REGISTER SUBMISSION CRASH ERROR:", error);
-    res.status(500).json({ message: "Server registry compiler operational failure.", error: error.message });
+    await session.abortTransaction();
+    res.status(500).json({ message: error.message });
+  } finally {
+    session.endSession();
   }
 });
 
-// ==============================================================
-// 📜 USER ROUTE: SECURE PERSONAL RUNNING HISTORY INDEX LOGS
-// ==============================================================
+// ... (History and Admin routes remain similar but keep them secure)
+
 router.get("/history", verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id; // Secure extraction layer prevents context hijacking
-    const history = await CacRequest.find({ userId }).sort({ createdAt: -1 });
+    const history = await CacRequest.find({ userId: req.user.id }).sort({ createdAt: -1 });
     res.json(history);
-  } catch (error) {
-    res.status(500).json({ message: "Failed to load individual tracking index logs." });
-  }
+  } catch (error) { res.status(500).json({ message: "Failed to load logs." }); }
 });
 
-// ==============================================================
-// 🛠️ ADMIN ROUTE: RETRIEVE ALL SYSTEM PENDING REGISTRATION JOBS
-// ==============================================================
 router.get("/admin/requests", verifyToken, isAdmin, async (req, res) => {
   try {
-    const records = await CacRequest.find()
-      .populate("userId", "firstName lastName email")
-      .sort({ createdAt: -1 });
+    const records = await CacRequest.find().populate("userId", "firstName lastName email").sort({ createdAt: -1 });
     res.json({ success: true, data: records });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 });
 
 module.exports = router;

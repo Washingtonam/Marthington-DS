@@ -16,6 +16,7 @@ const userRoutes = require("./modules/users/users.routes");
 const financeRoutes = require("./modules/finance/finance.routes");
 const ninServicesRoutes = require("./modules/services/nin.routes");
 const cacRoutes = require("./modules/services/cac.routes");
+const auditRoutes = require("./modules/admin/auditRoutes"); // NEW: Import Audit Routes
 
 const app = express();
 
@@ -41,12 +42,20 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 // ==============================
-// 🛠️ AUTH INTERCEPTOR
+// 🛠️ AUTH INTERCEPTOR & USER POPULATION
 // ==============================
-app.use((req, res, next) => {
-  const token = req.headers.authorization || (req.body && req.body.token) || req.query.token;
+app.use(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : (req.body?.token || req.query?.token);
+  
   if (token) {
     req.headers.authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.id); // Populates req.user for audit logs
+    } catch (e) {
+      console.error("Auth Token Invalid");
+    }
   }
   next();
 });
@@ -57,20 +66,8 @@ app.use((req, res, next) => {
 
 // Balance Endpoints
 const getBalanceResponse = async (req) => {
-  const authHeader = req.headers.authorization;
-  let userId = null;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    try {
-      const token = authHeader.split(" ")[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      userId = decoded.id;
-    } catch (e) {}
-  }
-  
-  let user = null;
-  if (userId) {
-    user = await User.findById(userId);
-  } else {
+  let user = req.user; // Use populated user if available
+  if (!user) {
     const email = req.body.email || req.query.email || req.headers.email;
     if (email) user = await User.findOne({ email: email.toLowerCase().trim() });
   }
@@ -106,6 +103,7 @@ app.use("/api/finance", financeRoutes);
 app.use("/api/services", ninServicesRoutes);
 app.use("/api/cac", cacRoutes);
 app.use("/api/admin", financeRoutes);
+app.use("/api/admin/audit-logs", auditRoutes); // NEW: Mount Audit Route
 
 app.get("/api/pricing", async (req, res) => {
   try {

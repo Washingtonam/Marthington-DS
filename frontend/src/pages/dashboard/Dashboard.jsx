@@ -23,10 +23,10 @@ export default function Dashboard() {
     try {
       const targetId = user.id || user._id;
       
-      // Execute requests in parallel for better performance
+      // Removed "/api" prefix from these calls because baseURL in axios.js already includes it
       const [balanceRes, requestsRes] = await Promise.all([
-        api.post("/api/balance", { email: user.email }),
-        api.get(`/api/user/requests/${targetId}`)
+        api.post("/balance", { email: user.email }),
+        api.get(`/user/requests/${targetId}`)
       ]);
 
       // Update Balance

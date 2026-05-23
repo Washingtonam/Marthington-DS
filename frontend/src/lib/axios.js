@@ -7,11 +7,10 @@ const api = axios.create({
   },
 });
 
-// Automatically inject JWT Token on every outgoing network call
+// 1. Request Interceptor: Automatically injects JWT Token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
-    // Only set header if token exists
     if (token) {
       // Remove potential quotes if saved as a string in localStorage
       config.headers.Authorization = `Bearer ${token.replace(/['"]+/g, '')}`;
@@ -19,6 +18,24 @@ api.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+// 2. Response Interceptor: Globally handle session expiration
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // If the server responds with 401 (Unauthorized) or 403 (Forbidden), 
+    // it likely means the token has expired or is invalid.
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      // Clear local storage and redirect to login
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      
+      // Redirect to login page
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
 );
 
 export default api;
