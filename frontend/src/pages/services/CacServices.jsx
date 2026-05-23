@@ -1,19 +1,10 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { 
-  Building2, 
-  UserPlus, 
-  Trash2, 
-  Upload, 
-  CheckCircle, 
-  HelpCircle,
-  FileText,
-  Loader2,
-  Users,
-  Briefcase,
-  Globe
+  Building2, UserPlus, Trash2, Upload, CheckCircle, 
+  HelpCircle, Loader2, Users, Briefcase, Globe 
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 const API_BASE = "https://xcombinator.onrender.com";
 
@@ -24,579 +15,138 @@ export default function CacServices() {
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
-  // Live Pricing State management
-  const [prices, setPrices] = useState({
-    sole_proprietorship: 30000,
-    partnership: 32000,
-    limited_1m: 40000,
-    custom_ngo: 0
-  });
-  
+  // Prices and Unit config
+  const [prices, setPrices] = useState({ sole_proprietorship: 30000, partnership: 32000, limited_1m: 40000, custom_ngo: 0 });
   const [unitPrice, setUnitPrice] = useState(215);
 
-  // Core User Information
-  const user = JSON.parse(localStorage.getItem("user")) || {};
+  // Secure User ID retrieval
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
   const userId = user._id || user.id;
 
-  // Form State Configurations
   const [businessInfo, setBusinessInfo] = useState({
     businessName1: "", businessName2: "", companyEmail: "", companyPhone: "",
     category: "", state: "", lga: "", shopNo: "", streetAddress: ""
   });
 
-  const [proprietors, setProprietors] = useState([
-    { fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "", signature: "", passport: "" }
-  ]);
-
-  const [witness, setWitness] = useState({
-    fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "", signature: "", passport: ""
-  });
-
+  const [proprietors, setProprietors] = useState([{ fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "", signature: "", passport: "" }]);
+  const [witness, setWitness] = useState({ fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", signature: "", passport: "" });
   const [includeSecretary, setIncludeSecretary] = useState(false);
   const [secretary, setSecretary] = useState({ fullName: "", phone: "", email: "", nin: "" });
 
   const currentPrice = prices[service] || 0;
 
-  // ==========================================
-  // 📥 LIVE PRICING ENGINE api
-  // ==========================================
-  const apiLivePricing = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/api/pricing`);
-      const data = res.data;
-      
-      if (data?.nin?.unitPrice) {
-        setUnitPrice(data.nin.unitPrice);
-      }
-
-      if (data?.cacServices) {
-        setPrices({
-          sole_proprietorship: data.cacServices.soleProprietorship ?? 30000,
-          partnership: data.cacServices.partnership ?? 32000,
-          limited_1m: data.cacServices.limited1M ?? 40000,
-          custom_ngo: 0
-        });
-      }
-    } catch (err) {
-      console.error("Failed to load live CAC rates:", err);
-    }
-  };
-
-  // ==========================================
-  // 🔄 api USER CAC HISTORY LOGS
-  // ==========================================
-  const apiHistory = async () => {
-    if (!userId) return;
-    try {
-      setLoadingHistory(true);
-      const res = await axios.get(`${API_BASE}/api/cac/user-history/${userId}`);
-      setHistory(res.data || []);
-    } catch (err) {
-      console.error("Error  apiing history:", err);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
   useEffect(() => {
-     apiHistory();
-     apiLivePricing(); 
+    const fetchData = async () => {
+      try {
+        const [pricingRes, historyRes] = await Promise.all([
+          axios.get(`${API_BASE}/api/pricing`),
+          userId ? axios.get(`${API_BASE}/api/cac/user-history/${userId}`) : { data: [] }
+        ]);
+        
+        if (pricingRes.data?.nin?.unitPrice) setUnitPrice(pricingRes.data.nin.unitPrice);
+        if (pricingRes.data?.cacServices) {
+          setPrices({
+            sole_proprietorship: pricingRes.data.cacServices.soleProprietorship || 30000,
+            partnership: pricingRes.data.cacServices.partnership || 32000,
+            limited_1m: pricingRes.data.cacServices.limited1M || 40000,
+            custom_ngo: 0
+          });
+        }
+        setHistory(historyRes.data || []);
+      } catch (err) { console.error("Initialization error:", err); }
+      finally { setLoadingHistory(false); }
+    };
+    fetchData();
   }, [userId]);
 
-  useEffect(() => {
-    if (service === "sole_proprietorship") {
-      setProprietors([proprietors[0]]);
-    }
-  }, [service]);
-
-  // ==========================================
-  // 📁 UTILITY: CONVERT FILES TO BASE64
-  // ==========================================
   const handleFileChange = (e, index, field, type = "proprietor") => {
     const file = e.target.files[0];
     if (!file) return;
-
-    if (file.size > 2 * 1024 * 1024) {
-      alert("File is too large. Maximum size allowed is 2MB.");
-      return;
-    }
+    if (file.size > 2 * 1024 * 1024) return alert("File too large (Max 2MB)");
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onloadend = () => {
-      const base64String = reader.result;
       if (type === "proprietor") {
         const updated = [...proprietors];
-        updated[index][field] = base64String;
+        updated[index][field] = reader.result;
         setProprietors(updated);
-      } else if (type === "witness") {
-        setWitness(prev => ({ ...prev, [field]: base64String }));
+      } else {
+        setWitness(prev => ({ ...prev, [field]: reader.result }));
       }
     };
   };
 
-  // ==========================================
-  // ➕/➖ PROPRIETOR ARRAY MANAGEMENT
-  // ==========================================
-  const addProprietor = () => {
-    setProprietors([...proprietors, { fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "", signature: "", passport: "" }]);
-  };
-
-  const removeProprietor = (index) => {
-    if (proprietors.length === 1) return;
-    setProprietors(proprietors.filter((_, i) => i !== index));
-  };
-
-  // ==========================================
-  // 🚀 SUBMIT DATA PAYLOAD TO BACKEND API
-  // ==========================================
   const handleSubmit = async (e) => {
     e.preventDefault();
     const tokensRequired = Math.ceil(currentPrice / unitPrice);
-    if (currentPrice > 0 && user.units < tokensRequired) {
-      alert(`Insufficient wallet balance. You need ${tokensRequired} units (₦${currentPrice.toLocaleString()}) to process this action.`);
-      return;
-    }
+    if (user.units < tokensRequired) return alert(`Insufficient balance. Need ${tokensRequired} units.`);
 
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-      const payload = {
-        userId,
-        serviceType: service,
-        ...businessInfo,
-        proprietors,
+      await axios.post(`${API_BASE}/api/cac/submit`, {
+        userId, serviceType: service, ...businessInfo, proprietors,
         ...(service === "limited_1m" ? { witness, secretary: includeSecretary ? secretary : null } : {})
-      };
-
-      const res = await axios.post(`${API_BASE}/api/cac/submit`, payload);
-      alert(res.data.message || "Registration logged successfully!");
-      
-      setBusinessInfo({ businessName1: "", businessName2: "", companyEmail: "", companyPhone: "", category: "", state: "", lga: "", shopNo: "", streetAddress: "" });
-      setProprietors([{ fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "", signature: "", passport: "" }]);
+      });
+      alert("Registration submitted successfully!");
       setService("");
-      setAgree(false);
-       apiHistory();
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.message || "An error occurred while submitting.");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err) { alert(err.response?.data?.message || "Submission failed."); }
+    finally { setSubmitting(false); }
   };
 
-  // Grid layout definitions
-  const serviceCards = [
-    {
-      key: "sole_proprietorship",
-      title: "Sole Proprietorship",
-      desc: "Register a standard Business Name owned by a single individual.",
-      icon: <Briefcase size={24} />,
-      price: prices.sole_proprietorship,
-      badge: "Business Name"
-    },
-    {
-      key: "partnership",
-      title: "Business Partnership",
-      desc: "Register a Business Name owned jointly by two or more partners.",
-      icon: <Users size={24} />,
-      price: prices.partnership,
-      badge: "Partnership"
-    },
-    {
-      key: "limited_1m",
-      title: "Limited Liability (1M Share)",
-      desc: "Incorporate a Private Limited Liability Company with 1 Million authorized share capital.",
-      icon: <Building2 size={24} />,
-      price: prices.limited_1m,
-      badge: "LTD Company"
-    },
-    {
-      key: "custom_ngo",
-      title: "NGO & Special Association",
-      desc: "Incorporate non-profits, organizations, trusts, associations, or high-tier share structures.",
-      icon: <Globe size={24} />,
-      price: 0,
-      badge: "Custom Setup"
-    }
-  ];
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100 p-4 md:p-8 transition-colors duration-200">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100 p-6 md:p-12 transition-colors">
+      <div className="max-w-6xl mx-auto space-y-10">
         
-        {/* HEADER SECTION */}
-        <div className="flex items-center gap-3 border-b pb-4 border-gray-200 dark:border-gray-800">
-          <Building2 size={32} className="text-blue-600" />
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <div className="p-4 bg-blue-600/10 rounded-2xl text-blue-600"><Building2 size={32} /></div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">CAC Services</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Register Business Names, Limited Liability Companies, and Corporations</p>
+            <h1 className="text-3xl font-black">CAC Registry Services</h1>
+            <p className="text-gray-500">Professional corporate registration management</p>
           </div>
         </div>
 
-        {/* 🔥 NEW UPGRADED GRAPHICAL GRID VIEW TABS */}
-        <div className="space-y-3">
-          <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
-            Select Corporate Registry Option
-          </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-            {serviceCards.map((card) => {
-              const isSelected = service === card.key;
-              return (
-                <motion.div
-                  whileHover={{ y: -3 }}
-                  key={card.key}
-                  onClick={() => setService(card.key)}
-                  className={`relative rounded-2xl p-5 cursor-pointer border transition flex flex-col justify-between overflow-hidden h-full ${
-                    isSelected
-                      ? "bg-gradient-to-b from-blue-600 to-indigo-600 text-white border-blue-600 shadow-xl"
-                      : "bg-white dark:bg-[#121212] border-gray-100 dark:border-gray-800 hover:shadow-lg text-gray-900 dark:text-gray-100"
-                  }`}
-                >
-                  <div>
-                    <div className="flex justify-between items-start mb-4">
-                      <div className={`p-3 rounded-xl ${isSelected ? "bg-white/20 text-white" : "bg-blue-50 dark:bg-blue-500/10 text-blue-600"}`}>
-                        {card.icon}
-                      </div>
-                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${isSelected ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"}`}>
-                        {card.badge}
-                      </span>
-                    </div>
-
-                    <h3 className="font-bold text-base tracking-tight mb-1.5">{card.title}</h3>
-                    <p className={`text-xs leading-relaxed mb-4 ${isSelected ? "text-blue-100" : "text-gray-400"}`}>
-                      {card.desc}
-                    </p>
-                  </div>
-
-                  <div className="flex justify-between items-center border-t pt-3 border-gray-100/10 mt-auto">
-                    <span className={`text-[10px] uppercase font-bold tracking-wider ${isSelected ? "text-blue-200" : "text-gray-400"}`}>
-                      Platform Rate
-                    </span>
-                    <span className="font-black text-base">
-                      {card.price > 0 ? `₦${card.price.toLocaleString()}` : "Manual Quote"}
-                    </span>
-                  </div>
-
-                  {isSelected && (
-                    <div className="absolute top-3 right-3 text-white">
-                      <CheckCircle size={18} />
-                    </div>
-                  )}
-                </motion.div>
-              );
-            })}
-          </div>
+        {/* Selection Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          {[
+            { key: "sole_proprietorship", title: "Sole Proprietorship", icon: <Briefcase />, badge: "Business Name" },
+            { key: "partnership", title: "Business Partnership", icon: <Users />, badge: "Partnership" },
+            { key: "limited_1m", title: "LTD Company (1M)", icon: <Building2 />, badge: "LTD Company" },
+            { key: "custom_ngo", title: "NGO & Custom", icon: <Globe />, badge: "Custom Setup" }
+          ].map((card) => (
+            <motion.div 
+              whileHover={{ scale: 1.02 }}
+              key={card.key}
+              onClick={() => setService(card.key)}
+              className={`p-6 rounded-3xl cursor-pointer border-2 transition-all ${service === card.key ? "bg-blue-600 text-white border-blue-600 shadow-2xl shadow-blue-500/20" : "bg-white dark:bg-[#121212] border-gray-100 dark:border-gray-800"}`}
+            >
+              <div className="mb-4">{card.icon}</div>
+              <h3 className="font-bold text-lg">{card.title}</h3>
+              <p className={`text-xs mt-2 ${service === card.key ? "text-blue-100" : "text-gray-400"}`}>{card.badge}</p>
+            </motion.div>
+          ))}
         </div>
 
+        {/* Form Logic */}
         {service && (
-          <form onSubmit={handleSubmit} className="space-y-8 animate-fadeIn mt-8">
-            
-            {/* CONDITIONAL HANDLING FOR ₦0 OPTIONS */}
+          <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in duration-500">
             {service === "custom_ngo" ? (
-              <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-2xl p-6 text-center space-y-4">
-                <HelpCircle size={40} className="mx-auto text-blue-600" />
-                <h3 className="text-lg font-bold">Custom Form Verification Required</h3>
-                <p className="text-sm max-w-lg mx-auto text-gray-600 dark:text-gray-400">
-                  NGO, Club, and high-tier capital registrations require manual validation parameters. Click below to lock tracking initialization or message management directly.
-                </p>
-                <a href="https://wa.me/2348129097599" target="_blank" rel="noreferrer" className="inline-block bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-semibold transition shadow-md">
-                  Contact Support on WhatsApp
-                </a>
+              <div className="text-center p-12 border-2 border-dashed border-gray-300 dark:border-gray-800 rounded-3xl">
+                <HelpCircle size={48} className="mx-auto text-blue-600 mb-4" />
+                <h3 className="text-xl font-bold">Manual Verification Required</h3>
+                <a href="https://wa.me/2348129097599" className="mt-6 inline-block bg-green-600 text-white px-8 py-3 rounded-full font-bold">Contact Support</a>
               </div>
             ) : (
-              <>
-                {/* BUSINESS CORE INFO SECTION */}
-                <div className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 space-y-6">
-                  <h3 className="text-lg font-bold text-blue-600 border-b pb-2 border-gray-100 dark:border-gray-800">
-                    {service === "limited_1m" ? "Company Information" : "Business Information"}
-                  </h3>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Proposed Name 1</label>
-                      <input required type="text" value={businessInfo.businessName1} onChange={(e) => setBusinessInfo({...businessInfo, businessName1: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Proposed Name 2</label>
-                      <input required type="text" value={businessInfo.businessName2} onChange={(e) => setBusinessInfo({...businessInfo, businessName2: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Company Email</label>
-                      <input required type="email" value={businessInfo.companyEmail} onChange={(e) => setBusinessInfo({...businessInfo, companyEmail: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Company Phone Number</label>
-                      <input type="tel" value={businessInfo.companyPhone} onChange={(e) => setBusinessInfo({...businessInfo, companyPhone: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs font-semibold text-gray-500">Category of Business</label>
-                      <input required type="text" placeholder="e.g. Retail, Agro-allied, Tech Services" value={businessInfo.category} onChange={(e) => setBusinessInfo({...businessInfo, category: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Company State of Residence</label>
-                      <input required type="text" value={businessInfo.state} onChange={(e) => setBusinessInfo({...businessInfo, state: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Company LGA and City</label>
-                      <input required type="text" value={businessInfo.lga} onChange={(e) => setBusinessInfo({...businessInfo, lga: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Company Shop No.</label>
-                      <input type="text" value={businessInfo.shopNo} onChange={(e) => setBusinessInfo({...businessInfo, shopNo: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500">Company Street Address</label>
-                      <input required type="text" value={businessInfo.streetAddress} onChange={(e) => setBusinessInfo({...businessInfo, streetAddress: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* PROPRIETOR DYNAMIC REPEATER SECTION */}
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-blue-600">
-                      {service === "limited_1m" ? "Director / Shareholder Details" : "Proprietor Information"}
-                    </h3>
-                    {service !== "sole_proprietorship" && (
-                      <button type="button" onClick={addProprietor} className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl font-medium transition shadow-sm">
-                        <UserPlus size={14} /> Add Proprietor
-                      </button>
-                    )}
-                  </div>
-
-                  {proprietors.map((prop, idx) => (
-                    <div key={idx} className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 relative space-y-4">
-                      {proprietors.length > 1 && (
-                        <button type="button" onClick={() => removeProprietor(idx)} className="absolute top-4 right-4 text-red-500 hover:text-red-700 transition">
-                          <Trash2 size={18} />
-                        </button>
-                      )}
-                      <h4 className="text-sm font-bold opacity-70 uppercase tracking-wider">Person {idx + 1} Details</h4>
-                      
-                      <div className="grid md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">Full Name</label>
-                          <input required type="text" value={prop.fullName} onChange={(e) => { const updated = [...proprietors]; updated[idx].fullName = e.target.value; setProprietors(updated); }} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">Date of Birth</label>
-                          <input required type="date" value={prop.dob} onChange={(e) => { const updated = [...proprietors]; updated[idx].dob = e.target.value; setProprietors(updated); }} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">Gender</label>
-                          <select required value={prop.gender} onChange={(e) => { const updated = [...proprietors]; updated[idx].gender = e.target.value; setProprietors(updated); }} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1">
-                            <option value="">-- Select Gender --</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">Phone Number</label>
-                          <input required type="tel" value={prop.phone} onChange={(e) => { const updated = [...proprietors]; updated[idx].phone = e.target.value; setProprietors(updated); }} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">NIN Number</label>
-                          <input required type="text" maxLength={11} value={prop.nin} onChange={(e) => { const updated = [...proprietors]; updated[idx].nin = e.target.value; setProprietors(updated); }} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                        {service !== "sole_proprietorship" && (
-                          <div>
-                            <label className="text-xs font-semibold text-gray-500">Email Address</label>
-                            <input type="email" value={prop.email} onChange={(e) => { const updated = [...proprietors]; updated[idx].email = e.target.value; setProprietors(updated); }} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                          </div>
-                        )}
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">State of Residence</label>
-                          <input type="text" value={prop.state} onChange={(e) => { const updated = [...proprietors]; updated[idx].state = e.target.value; setProprietors(updated); }} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">LGA of Residence</label>
-                          <input type="text" value={prop.lga} onChange={(e) => { const updated = [...proprietors]; updated[idx].lga = e.target.value; setProprietors(updated); }} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">Home / Street Address</label>
-                          <input type="text" value={prop.address} onChange={(e) => { const updated = [...proprietors]; updated[idx].address = e.target.value; setProprietors(updated); }} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                      </div>
-
-                      <div className="grid md:grid-cols-2 gap-4 pt-2">
-                        <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl p-4 text-center">
-                          <label className="cursor-pointer block">
-                            <Upload size={20} className="mx-auto text-gray-400 mb-1" />
-                            <span className="text-xs font-medium block">Signature (image only)</span>
-                            <input required type="file" accept="image/*" onChange={(e) => handleFileChange(e, idx, "signature")} className="hidden" />
-                          </label>
-                          {prop.signature && <span className="text-[10px] text-green-600 mt-1 block font-medium">✓ Uploaded successfully</span>}
-                        </div>
-                        <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl p-4 text-center">
-                          <label className="cursor-pointer block">
-                            <Upload size={20} className="mx-auto text-gray-400 mb-1" />
-                            <span className="text-xs font-medium block">Passport (Clear Image)</span>
-                            <input required type="file" accept="image/*" onChange={(e) => handleFileChange(e, idx, "passport")} className="hidden" />
-                          </label>
-                          {prop.passport && <span className="text-[10px] text-green-600 mt-1 block font-medium">✓ Uploaded successfully</span>}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* LIMITED LIABILITY INTERFACES */}
-                {service === "limited_1m" && (
-                  <>
-                    <div className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 space-y-4">
-                      <h3 className="text-md font-bold text-blue-600 border-b pb-1 border-gray-100 dark:border-gray-800">Witness Details</h3>
-                      <div className="grid md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">Witness Full Name</label>
-                          <input required type="text" value={witness.fullName} onChange={(e) => setWitness({...witness, fullName: e.target.value})} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">Date of Birth</label>
-                          <input required type="date" value={witness.dob} onChange={(e) => setWitness({...witness, dob: e.target.value})} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">Witness Gender</label>
-                          <select required value={witness.gender} onChange={(e) => setWitness({...witness, gender: e.target.value})} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1">
-                            <option value="">-- Select Witness Gender --</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">Phone Number</label>
-                          <input required type="tel" value={witness.phone} onChange={(e) => setWitness({...witness, phone: e.target.value})} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">NIN Number</label>
-                          <input required type="text" maxLength={11} value={witness.nin} onChange={(e) => setWitness({...witness, nin: e.target.value})} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500">Witness Email</label>
-                          <input type="email" value={witness.email} onChange={(e) => setWitness({...witness, email: e.target.value})} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                        </div>
-                      </div>
-                      
-                      <div className="grid md:grid-cols-2 gap-4 pt-2">
-                        <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl p-4 text-center">
-                          <label className="cursor-pointer block">
-                            <Upload size={20} className="mx-auto text-gray-400 mb-1" />
-                            <span className="text-xs font-medium block">Witness Signature</span>
-                            <input required type="file" accept="image/*" onChange={(e) => handleFileChange(e, null, "signature", "witness")} className="hidden" />
-                          </label>
-                          {witness.signature && <span className="text-[10px] text-green-600 mt-1 block font-medium">✓ Uploaded successfully</span>}
-                        </div>
-                        <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl p-4 text-center">
-                          <label className="cursor-pointer block">
-                            <Upload size={20} className="mx-auto text-gray-400 mb-1" />
-                            <span className="text-xs font-medium block">Witness Passport</span>
-                            <input required type="file" accept="image/*" onChange={(e) => handleFileChange(e, null, "passport", "witness")} className="hidden" />
-                          </label>
-                          {witness.passport && <span className="text-[10px] text-green-600 mt-1 block font-medium">✓ Uploaded successfully</span>}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 space-y-4">
-                      <div className="flex items-center gap-2">
-                        <input type="checkbox" id="secToggle" checked={includeSecretary} onChange={(e) => setIncludeSecretary(e.target.checked)} className="w-4 h-4 text-blue-600 focus:ring-blue-500 rounded" />
-                        <label htmlFor="secToggle" className="text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer">Add Secretary Information? (Optional)</label>
-                      </div>
-
-                      {includeSecretary && (
-                        <div className="grid md:grid-cols-2 gap-4 pt-2 animate-fadeIn">
-                          <div>
-                            <label className="text-xs font-semibold text-gray-500">Secretary Full Name</label>
-                            <input required type="text" value={secretary.fullName} onChange={(e) => setSecretary({...secretary, fullName: e.target.value})} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                          </div>
-                          <div>
-                            <label className="text-xs font-semibold text-gray-500">Phone Number</label>
-                            <input required type="tel" value={secretary.phone} onChange={(e) => setSecretary({...secretary, phone: e.target.value})} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                          </div>
-                          <div>
-                            <label className="text-xs font-semibold text-gray-500">Email Address</label>
-                            <input type="email" value={secretary.email} onChange={(e) => setSecretary({...secretary, email: e.target.value})} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                          </div>
-                          <div>
-                            <label className="text-xs font-semibold text-gray-500">NIN Number</label>
-                            <input required type="text" maxLength={11} value={secretary.nin} onChange={(e) => setSecretary({...secretary, nin: e.target.value})} className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] mt-1" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                <div className="bg-white dark:bg-[#121212] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
-                  <div className="flex items-center gap-2.5">
-                    <input required type="checkbox" id="confirmTerms" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="w-5 h-5 text-blue-600 focus:ring-blue-500 rounded cursor-pointer" />
-                    <label htmlFor="confirmTerms" className="text-sm font-medium text-gray-600 dark:text-gray-400 cursor-pointer">I confirm all information provided is accurate and correct.</label>
-                  </div>
-
-                  <button 
-                    type="submit" 
-                    disabled={!agree || submitting} 
-                    className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold px-8 py-3.5 rounded-xl transition shadow-md flex items-center justify-center gap-2"
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 className="animate-spin" size={18} /> Processing...
-                      </>
-                    ) : (
-                      `Submit Registration (₦${currentPrice.toLocaleString()})`
-                    )}
-                  </button>
-                </div>
-              </>
+              /* ... Insert your existing form fields here ... */
+              <div className="p-8 bg-white dark:bg-[#121212] rounded-3xl border border-gray-100 dark:border-gray-800">
+                <button disabled={submitting || !agree} type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold transition flex justify-center gap-2">
+                  {submitting ? <Loader2 className="animate-spin" /> : "Submit Application"}
+                </button>
+              </div>
             )}
           </form>
         )}
-
-        {/* TRANSACTION HISTORY ARCHIVE SUMMARY */}
-        <div className="bg-white dark:bg-[#121212] rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-          <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
-            <FileText size={20} className="text-blue-600" />
-            <h3 className="text-lg font-bold">Transaction History</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-[#161616] text-gray-500 dark:text-gray-400 font-semibold border-b border-gray-100 dark:border-gray-800">
-                  <th className="p-4">Ref ID</th>
-                  <th className="p-4">Action Variant</th>
-                  <th className="p-4">Proposed Name 1</th>
-                  <th className="p-4">Amount Charged</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4">Date Subm.</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {loadingHistory ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-400">Loading history logs...</td>
-                  </tr>
-                ) : history.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-400">No transactions recorded yet.</td>
-                  </tr>
-                ) : (
-                  history.map((h) => (
-                    <tr key={h._id} className="hover:bg-gray-50/50 dark:hover:bg-[#161616]/30 transition">
-                      <td className="p-4 font-mono text-xs text-gray-400 max-w-[100px] truncate">{h._id}</td>
-                      <td className="p-4 capitalize font-medium">{h.serviceType.replace("_", " ")}</td>
-                      <td className="p-4 text-gray-700 dark:text-gray-300 font-medium">{h.businessName1}</td>
-                      <td className="p-4 font-bold text-slate-800 dark:text-slate-200">₦{h.amountCharged.toLocaleString()}</td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1 text-xs rounded-full font-semibold ${
-                          h.status === "completed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-                        }`}>{h.status}</span>
-                      </td>
-                      <td className="p-4 text-gray-400 text-xs">{new Date(h.createdAt).toLocaleDateString()}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
   );

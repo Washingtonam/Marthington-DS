@@ -47,23 +47,20 @@ export default function AdminRequests() {
   };
 
   // =========================
-  // api PIPELINE REQUESTS
+  // API PIPELINE REQUESTS
   // =========================
-  const apiRequests = async () => {
+  const fetchRequests = async () => {
     try {
       setLoading(true);
       
-      // 1. Point to the single functional backend route using the current filter status
       const res = await axios.get(
         `${API_BASE}/api/admin/requests?page=${page}&limit=${LIMIT}&status=${filter}`,
         { headers }
       );
 
-      // 2. Extract database payload array safely
       const apiedData = res.data?.data || res.data?.requests || [];
       
-      // 3. Client-side partitioning logic for tabs (CAC vs NIMC)
-      const filteredByModule =  apiedData.filter((item) => {
+      const filteredByModule = apiedData.filter((item) => {
         if (!item) return false;
         
         if (activeTab === "cac") {
@@ -73,7 +70,6 @@ export default function AdminRequests() {
             item.proposedName1
           );
         } else {
-          // Captures validation, modification, or standard NIMC tracking structures safely
           return (
             item.service?.toLowerCase() === "nimc" || 
             item.service?.toLowerCase() === "validation" || 
@@ -90,12 +86,12 @@ export default function AdminRequests() {
       console.error("FETCH PIPELINE ERROR:", err.response?.data || err.message);
       setRequests([]);
     } finally {
-      loading && setLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-     apiRequests();
+    fetchRequests();
   }, [activeTab, filter, page]);
 
   // ===============================================
@@ -120,7 +116,7 @@ export default function AdminRequests() {
         if (selected?._id === id) {
           setSelected(null);
         }
-         apiRequests(); // Re-sync frame elements
+        fetchRequests();
       } else {
         alert(res.data?.message || "Failed to update record state.");
       }
@@ -183,7 +179,6 @@ export default function AdminRequests() {
       }
     } catch (err) {
       console.error("COMMENT CORRELATION RUNTIME ERROR:", err.response?.data || err.message);
-      // Fallback optimistic update if specific backend route variant is structurally identical
       setSelected(prev => ({
         ...prev,
         comments: [...(prev.comments || []), { text: comment, by: headers.email || "System Admin" }]
@@ -208,7 +203,6 @@ export default function AdminRequests() {
     }
   };
 
-  // Live indicators computed on current visible workspace set
   const pendingCount = requests.filter(r => r.status === "pending").length;
   const approvedCount = requests.filter(r => r.status === "approved" || r.status === "completed").length;
   const rejectedCount = requests.filter(r => r.status === "rejected" || r.status === "failed").length;

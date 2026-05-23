@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-
-importapi from "../../lib/axios"; // Adjust this path if yourapi.js file is located elsewhere (e.g., "../../api")
- 
+import api from "../../lib/axios"; // Ensure this path points correctly to your axios instance
 import {
   Search,
   Users,
@@ -31,17 +29,16 @@ export default function AdminUsers() {
   };
 
   // =========================
-  // api USERS
+  // API USERS
   // =========================
-  const apiUsers = async () => {
+  const fetchUsers = async () => {
     setLoading(true);
     try {
-      // ✅ Now routing safely through your middleware instance
-      const res = awaitapi.get("/api/admin/users", { headers });
+      const res = await api.get("/api/admin/users", { headers });
       const data = res.data?.data || res.data || [];
       setUsers(data);
     } catch (err) {
-      console.error("🔥 api USERS ERROR:", err.response?.data || err.message);
+      console.error("🔥 FETCH USERS ERROR:", err.response?.data || err.message);
     }
     setLoading(false);
   };
@@ -50,10 +47,10 @@ export default function AdminUsers() {
   // SEARCH
   // =========================
   const handleSearch = async () => {
-    if (!search) return  apiUsers();
+    if (!search) return fetchUsers();
 
     try {
-      const res = awaitapi.get(`/api/admin/users?search=${search}`, { headers });
+      const res = await api.get(`/api/admin/users?search=${search}`, { headers });
       setUsers(res.data?.data || []);
     } catch (err) {
       console.error("🔥 SEARCH ERROR:", err.response?.data || err.message);
@@ -63,13 +60,13 @@ export default function AdminUsers() {
   // =========================
   // USER ACTIVITY
   // =========================
-  const apiUserActivity = async (id) => {
+  const fetchUserActivity = async (id) => {
     try {
-      const res = awaitapi.get(`/api/admin/user/${id}`, { headers });
+      const res = await api.get(`/api/admin/user/${id}`, { headers });
       setSelectedUser(res.data.user);
       setUserActivity(res.data.transactions);
     } catch (err) {
-      console.error("🔥 ACTIVITY api ERROR:", err.response?.data || err.message);
+      console.error("🔥 ACTIVITY FETCH ERROR:", err.response?.data || err.message);
     }
   };
 
@@ -78,8 +75,8 @@ export default function AdminUsers() {
   // =========================
   const makeAdmin = async (id) => {
     try {
-      awaitapi.put(`/api/admin/user/${id}/make-admin`, {}, { headers });
-       apiUsers();
+      await api.put(`/api/admin/user/${id}/make-admin`, {}, { headers });
+      fetchUsers();
     } catch (err) {
       console.error(err);
     }
@@ -87,8 +84,8 @@ export default function AdminUsers() {
 
   const removeAdmin = async (id) => {
     try {
-      awaitapi.put(`/api/admin/user/${id}/remove-admin`, {}, { headers });
-       apiUsers();
+      await api.put(`/api/admin/user/${id}/remove-admin`, {}, { headers });
+      fetchUsers();
     } catch (err) {
       console.error(err);
     }
@@ -99,8 +96,8 @@ export default function AdminUsers() {
   // =========================
   const suspendUser = async (id) => {
     try {
-      awaitapi.put(`/api/admin/user/${id}/suspend`, {}, { headers });
-       apiUsers();
+      await api.put(`/api/admin/user/${id}/suspend`, {}, { headers });
+      fetchUsers();
     } catch (err) {
       console.error(err);
     }
@@ -108,8 +105,8 @@ export default function AdminUsers() {
 
   const activateUser = async (id) => {
     try {
-      awaitapi.put(`/api/admin/user/${id}/activate`, {}, { headers });
-       apiUsers();
+      await api.put(`/api/admin/user/${id}/activate`, {}, { headers });
+      fetchUsers();
     } catch (err) {
       console.error(err);
     }
@@ -121,8 +118,8 @@ export default function AdminUsers() {
   const deleteUser = async (id) => {
     if (!window.confirm("Delete this user?")) return;
     try {
-      awaitapi.delete(`/api/admin/user/${id}`, { headers });
-       apiUsers();
+      await api.delete(`/api/admin/user/${id}`, { headers });
+      fetchUsers();
     } catch (err) {
       console.error(err);
     }
@@ -136,11 +133,11 @@ export default function AdminUsers() {
     if (!units) return;
 
     try {
-      awaitapi.post(`/api/admin/user/${id}/units`, {
+      await api.post(`/api/admin/user/${id}/units`, {
         units: Number(units),
         action: "add",
       }, { headers });
-       apiUsers();
+      fetchUsers();
     } catch (err) {
       console.error(err);
     }
@@ -151,18 +148,18 @@ export default function AdminUsers() {
     if (!units) return;
 
     try {
-      awaitapi.post(`/api/admin/user/${id}/units`, {
+      await api.post(`/api/admin/user/${id}/units`, {
         units: Number(units),
         action: "deduct",
       }, { headers });
-       apiUsers();
+      fetchUsers();
     } catch (err) {
       console.error(err);
     }
   };
 
   useEffect(() => {
-     apiUsers();
+    fetchUsers();
   }, []);
 
   const isSuperAdmin = currentUserEmail === "washingtonamedu@gmail.com";
@@ -249,14 +246,14 @@ export default function AdminUsers() {
                       </span>
                     </div>
                     <h2
-                      onClick={() =>  apiUserActivity(u._id)}
+                      onClick={() => fetchUserActivity(u._id)}
                       className="font-semibold text-sm break-all cursor-pointer hover:underline"
                     >
                       {u.email}
                     </h2>
                   </div>
                   <button
-                    onClick={() =>  apiUserActivity(u._id)}
+                    onClick={() => fetchUserActivity(u._id)}
                     className="bg-white/20 hover:bg-white/30 p-2 rounded-xl transition"
                   >
                     <Eye size={18} />

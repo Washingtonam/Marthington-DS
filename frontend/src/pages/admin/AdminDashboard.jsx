@@ -1,19 +1,19 @@
 import { useEffect, useState } from "react";
-importapi from "../api"; // 👈 Imports your customized Axios configuration instance
+import api from "../api"; // Imports your customized Axios configuration instance
 
 export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState({});
   const [search, setSearch] = useState("");
-  const [pipelineRequests, setPipelineRequests] = useState([]); // State for /api/admin/requests data
+  const [pipelineRequests, setPipelineRequests] = useState([]);
 
   // ============================
-  // api UNIFIED REQUESTS (Fixes the 401/404 pipeline block)
+  // FETCH PIPELINE REQUESTS
   // ============================
-  const apiPipelineRequests = async () => {
+  const fetchPipelineRequests = async () => {
     try {
-      const response = awaitapi.get("/api/admin/requests", {
-        params: { page: 1, limit: 20, status: "pending" }
+      const response = await api.get("/api/admin/requests", {
+        params: { page: 1, limit: 20, status: "pending" },
       });
       if (response.data?.success) {
         setPipelineRequests(response.data.data);
@@ -24,24 +24,23 @@ export default function AdminDashboard() {
   };
 
   // ============================
-  // api USERS
+  // FETCH USERS
   // ============================
-  const apiUsers = async () => {
+  const fetchUsers = async () => {
     try {
-      const response = awaitapi.get("/api/admin/users");
-      // Fallback array formatting handling data pagination wrappers
+      const response = await api.get("/api/admin/users");
       setUsers(response.data?.data || response.data || []);
     } catch (error) {
-      console.error("🔥 Error  apiing users registry directory:", error);
+      console.error("🔥 Error fetching users registry directory:", error);
     }
   };
 
   // ============================
-  // api STATS
+  // FETCH STATS
   // ============================
-  const apiStats = async () => {
+  const fetchStats = async () => {
     try {
-      const response = awaitapi.get("/api/admin/stats");
+      const response = await api.get("/api/admin/stats");
       setStats(response.data);
     } catch (error) {
       console.error("🔥 Error gathering metrics telemetry:", error);
@@ -52,10 +51,10 @@ export default function AdminDashboard() {
   // SEARCH USERS
   // ============================
   const handleSearch = async () => {
-    if (!search) return  apiUsers();
+    if (!search) return fetchUsers();
     try {
-      const response = awaitapi.get(`/api/admin/users`, {
-        params: { search: search } // Matches your backend pagination regex search query
+      const response = await api.get(`/api/admin/users`, {
+        params: { search: search },
       });
       setUsers(response.data?.data || response.data || []);
     } catch (error) {
@@ -68,9 +67,9 @@ export default function AdminDashboard() {
   // ============================
   const suspendUser = async (id) => {
     try {
-      awaitapi.put(`/api/admin/user/${id}/suspend`);
-       apiUsers();
-       apiStats();
+      await api.put(`/api/admin/user/${id}/suspend`);
+      fetchUsers();
+      fetchStats();
     } catch (error) {
       console.error("🔥 Suspend routine failure:", error);
     }
@@ -78,9 +77,9 @@ export default function AdminDashboard() {
 
   const activateUser = async (id) => {
     try {
-      awaitapi.put(`/api/admin/user/${id}/activate`);
-       apiUsers();
-       apiStats();
+      await api.put(`/api/admin/user/${id}/activate`);
+      fetchUsers();
+      fetchStats();
     } catch (error) {
       console.error("🔥 Activation routine failure:", error);
     }
@@ -89,26 +88,24 @@ export default function AdminDashboard() {
   const deleteUser = async (id) => {
     if (!confirm("Are you sure you want to permanently delete this user account context profile?")) return;
     try {
-      awaitapi.delete(`/api/admin/user/${id}`);
-       apiUsers();
-       apiStats();
+      await api.delete(`/api/admin/user/${id}`);
+      fetchUsers();
+      fetchStats();
     } catch (error) {
       console.error("🔥 Identity destruction failure execution loop:", error);
     }
   };
 
   useEffect(() => {
-     apiUsers();
-     apiStats();
-     apiPipelineRequests();
+    fetchUsers();
+    fetchStats();
+    fetchPipelineRequests();
   }, []);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      {/* HEADER */}
       <h1 className="text-3xl font-bold mb-6">Admin Dashboard Workspace</h1>
 
-      {/* STATS MATRIX SECTION */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Card title="Total Registered Users" value={stats.totalUsers} />
         <Card title="Pending Payments Verification" value={stats.pendingPayments} />
@@ -116,7 +113,6 @@ export default function AdminDashboard() {
         <Card title="Aggregated Liability Balance" value={`₦${stats.totalBalance || 0}`} />
       </div>
 
-      {/* SEARCH SYSTEM INDEX */}
       <div className="flex gap-2 mb-6">
         <input
           type="text"
@@ -134,7 +130,6 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* USER DATA SHEET ARCHIVE */}
       <div className="bg-white rounded shadow overflow-x-auto mb-8">
         <table className="w-full text-sm">
           <thead className="bg-gray-100 text-left text-gray-600 font-semibold border-b">
@@ -196,7 +191,6 @@ export default function AdminDashboard() {
         </table>
       </div>
 
-      {/* NEW SECTION: CENTRAL PIPELINE DOCUMENTS LOG TARGET */}
       <h2 className="text-2xl font-bold mb-4 text-gray-800">Pending Identity & Registry Application Tracks</h2>
       <div className="bg-white rounded shadow overflow-x-auto">
         <table className="w-full text-sm">

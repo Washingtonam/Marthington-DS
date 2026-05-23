@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
+import axios from "axios";
 import {
-  User,
-  Phone,
-  MapPin,
-  CalendarDays,
-  Upload,
-  ShieldCheck,
-  CreditCard,
+  User, Phone, MapPin, CalendarDays, Upload, ShieldCheck, 
+  CreditCard, Loader2, AlertCircle
 } from "lucide-react";
- 
 import ModificationNoticeModal from "../../components/ModificationNoticeModal";
 
 const API = "https://xcombinator.onrender.com";
@@ -16,27 +11,19 @@ const API = "https://xcombinator.onrender.com";
 export default function Modification() {
   const [pricing, setPricing] = useState({});
   const [selectedType, setSelectedType] = useState(null);
-  const [formData, setFormData] = useState({});
-  const [proof, setProof] = useState(null);
-  const [passport, setPassport] = useState(null);
+  const [formData, setFormData] = useState({ email: "" });
+  const [files, setFiles] = useState({ proof: null, passport: null });
   const [loading, setLoading] = useState(false);
 
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   useEffect(() => {
-    api(`${API}/api/pricing`)
-      .then((res) => res)
-      .then((data) => {
-        setPricing(data?.ninServices?.modification || {});
-      });
-  }, []);
+    axios.get(`${API}/api/pricing`)
+      .then((res) => setPricing(res.data?.ninServices?.modification || {}))
+      .catch((err) => console.error("Pricing fetch error:", err));
 
-  useEffect(() => {
     if (user?.email) {
-      setFormData((prev) => ({
-        ...prev,
-        email: user.email,
-      }));
+      setFormData(prev => ({ ...prev, email: user.email }));
     }
   }, []);
 
@@ -44,455 +31,103 @@ export default function Modification() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleFile = (e, type) => {
     const file = e.target.files[0];
-
     if (!file) return;
-
-    if (file.size > 2 * 1024 * 1024) {
-      return alert("File too large (max 2MB)");
-    }
+    if (file.size > 2 * 1024 * 1024) return alert("File too large (max 2MB)");
 
     const reader = new FileReader();
-
     reader.readAsDataURL(file);
-
-    reader.onloadend = () => {
-      if (type === "proof") setProof(reader.result);
-      if (type === "passport") setPassport(reader.result);
-    };
+    reader.onloadend = () => setFiles(prev => ({ ...prev, [type]: reader.result }));
   };
 
   const submit = async () => {
-    if (!selectedType || !formData.nin) {
-      return alert("Fill all required fields");
-    }
-
-    if (!proof) {
-      return alert("Upload payment receipt");
-    }
-
-    if (!passport) {
-      return alert("Upload passport photograph");
-    }
+    if (!selectedType || !formData.nin) return alert("Please fill all required fields.");
+    if (!files.proof || !files.passport) return alert("Please upload both Payment Receipt and Passport.");
 
     setLoading(true);
-
     try {
-      const res = await api(`${API}/api/nin-services/request`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-
-        body: JSON.stringify({
-          userId: user?.id || user?._id || "", // 👈 Handles both id formats securely
-          email: user?.email,
-          service: "modification",
-          type: selectedType,
-          nin: formData.nin,
-          slipType: "none",
-          proof,
-          passport,
-          formData,
-        }),
+      await axios.post(`${API}/api/nin-services/request`, {
+        userId: user?.id || user?._id,
+        email: formData.email,
+        service: "modification",
+        type: selectedType,
+        nin: formData.nin,
+        slipType: "none",
+        proof: files.proof,
+        passport: files.passport,
+        formData
       });
 
-      const data = await res;
-
-      if (!res.ok) {
-        throw new Error(data.message);
-      }
-
-      alert("✅ Request submitted successfully");
-
+      alert("✅ Request submitted successfully!");
       setSelectedType(null);
-
-      setFormData({
-        email: user?.email || "",
-      });
-
-      setProof(null);
-      setPassport(null);
-
+      setFiles({ proof: null, passport: null });
     } catch (err) {
-      alert(err.message);
+      alert(err.response?.data?.message || "Submission failed.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const services = [
-    {
-      key: "name",
-      label: "Name Modification",
-      desc: "Correct name mismatch & spelling errors",
-      icon: <User size={24} />,
-    },
-
-    {
-      key: "phone",
-      label: "Phone Number",
-      desc: "Update linked phone number",
-      icon: <Phone size={24} />,
-    },
-
-    {
-      key: "address",
-      label: "Address Correction",
-      desc: "Fix residential address records",
-      icon: <MapPin size={24} />,
-    },
-
-    {
-      key: "dob",
-      label: "Date Of Birth",
-      desc: "Correct date of birth information",
-      icon: <CalendarDays size={24} />,
-    },
+    { key: "name", label: "Name Modification", desc: "Correct name/spelling errors", icon: <User size={24} /> },
+    { key: "phone", label: "Phone Number", desc: "Update linked phone number", icon: <Phone size={24} /> },
+    { key: "address", label: "Address Correction", desc: "Fix residential address records", icon: <MapPin size={24} /> },
+    { key: "dob", label: "Date Of Birth", desc: "Correct DOB information", icon: <CalendarDays size={24} /> },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 pb-20">
-
+    <div className="max-w-7xl mx-auto px-4 pb-20 animate-in fade-in duration-500">
       <ModificationNoticeModal />
 
-      {/* HERO */}
-      <div className="bg-gradient-to-r from-blue-700 to-indigo-700 rounded-3xl p-8 md:p-10 text-white mb-8 shadow-xl">
-
-        <div className="max-w-3xl">
-
-          <div className="flex items-center gap-2 mb-4">
-            <ShieldCheck size={22} />
-            <span className="text-sm uppercase tracking-wider opacity-80">
-              Secure NIN Processing
-            </span>
-          </div>
-
-          <h1 className="text-3xl md:text-5xl font-bold leading-tight mb-4">
-            Modify Your NIN Details Professionally
-          </h1>
-
-          <p className="text-blue-100 text-sm md:text-base">
-            Submit corrections securely and avoid rejection, delays,
-            and repeated enrollment issues.
-          </p>
-
-        </div>
-
+      <div className="bg-gradient-to-r from-blue-700 to-indigo-700 rounded-3xl p-10 text-white mb-8 shadow-xl">
+        <h1 className="text-4xl font-black mb-2">Modify Your NIN Details</h1>
+        <p className="opacity-80">Submit corrections securely and avoid rejection.</p>
       </div>
 
-      {/* SERVICES */}
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
-
         {services.map((s) => (
-
-          <div
-            key={s.key}
-            onClick={() => setSelectedType(s.key)}
-            className={`cursor-pointer rounded-3xl border transition-all duration-300 p-6 ${
-              selectedType === s.key
-                ? "bg-blue-600 text-white shadow-2xl scale-[1.03]"
-                : "bg-white dark:bg-[#161616] hover:shadow-xl"
-            }`}
-          >
-
-            <div className="mb-4">
-              {s.icon}
-            </div>
-
-            <p className="text-xs opacity-70 mb-2">
-              STARTING FROM
-            </p>
-
-            <h2 className="text-2xl font-bold mb-2">
-              ₦{pricing?.[s.key] || 0}
-            </h2>
-
-            <p className="font-semibold mb-2">
-              {s.label}
-            </p>
-
-            <p className="text-sm opacity-70">
-              {s.desc}
-            </p>
-
+          <div key={s.key} onClick={() => setSelectedType(s.key)} 
+            className={`cursor-pointer rounded-3xl border-2 p-6 transition-all ${selectedType === s.key ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "bg-white dark:bg-[#161616] border-transparent"}`}>
+            <div className="text-blue-600 mb-4">{s.icon}</div>
+            <h2 className="font-bold text-lg">{s.label}</h2>
+            <p className="text-sm opacity-60 mb-4">{s.desc}</p>
+            <p className="font-black text-xl">₦{pricing?.[s.key] || 0}</p>
           </div>
-
         ))}
-
       </div>
 
-      {/* FORM */}
       {selectedType && (
-
-        <div className="grid lg:grid-cols-3 gap-6">
-
-          {/* LEFT */}
-          <div className="lg:col-span-2 bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-6 md:p-8">
-
-            <h2 className="text-2xl font-bold mb-6 dark:text-white">
-              Applicant Information
-            </h2>
-
+        <div className="grid lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 bg-white dark:bg-[#161616] rounded-3xl p-8 shadow-sm space-y-6">
+            <h2 className="text-2xl font-bold">Applicant Information</h2>
             <div className="grid md:grid-cols-2 gap-4">
-
-              <Input
-                name="nin"
-                placeholder="NIN"
-                onChange={handleChange}
-              />
-
-              <Input
-                name="surname"
-                placeholder="Surname"
-                onChange={handleChange}
-              />
-
-              <Input
-                name="firstname"
-                placeholder="First Name"
-                onChange={handleChange}
-              />
-
-              <Input
-                name="middlename"
-                placeholder="Middle Name"
-                onChange={handleChange}
-              />
-
+              <input className="w-full p-4 rounded-xl border bg-gray-50 dark:bg-[#202020]" placeholder="NIN" name="nin" onChange={(e) => handleChange({target: {name: 'nin', value: e.target.value.replace(/\D/g, '').slice(0, 11)}})} value={formData.nin || ""} />
+              <input className="w-full p-4 rounded-xl border bg-gray-50 dark:bg-[#202020]" placeholder="Surname" name="surname" onChange={handleChange} />
+              <input className="w-full p-4 rounded-xl border bg-gray-50 dark:bg-[#202020]" placeholder="First Name" name="firstname" onChange={handleChange} />
+              <input className="w-full p-4 rounded-xl border bg-gray-50 dark:bg-[#202020]" placeholder="Middle Name" name="middlename" onChange={handleChange} />
             </div>
-
-            <div className="mt-4">
-
-              <input
-                value={formData.email || ""}
-                disabled
-                className="w-full border p-4 rounded-2xl bg-gray-100 dark:bg-[#202020] dark:border-[#2d2d2d]"
-              />
-
-            </div>
-
-            {/* CONDITIONAL FORMS */}
-
-            {selectedType === "name" && (
-              <div className="grid md:grid-cols-2 gap-4 mt-6">
-                <Input
-                  name="gsm"
-                  placeholder="Phone Number"
-                  onChange={handleChange}
-                />
-
-                <Input
-                  name="previousModification"
-                  placeholder="Previous Modification (Yes/No)"
-                  onChange={handleChange}
-                />
-              </div>
-            )}
-
-            {selectedType === "phone" && (
-              <div className="grid md:grid-cols-2 gap-4 mt-6">
-                <Input
-                  name="oldGsm"
-                  placeholder="Old Phone Number"
-                  onChange={handleChange}
-                />
-
-                <Input
-                  name="newGsm"
-                  placeholder="New Phone Number"
-                  onChange={handleChange}
-                />
-              </div>
-            )}
-
-            {selectedType === "address" && (
-              <div className="grid md:grid-cols-2 gap-4 mt-6">
-                <Input
-                  name="address"
-                  placeholder="New Address"
-                  onChange={handleChange}
-                />
-
-                <Input
-                  name="gsm"
-                  placeholder="Phone Number"
-                  onChange={handleChange}
-                />
-              </div>
-            )}
-
-            {selectedType === "dob" && (
-              <div className="space-y-6 mt-6">
-
-                <Section title="Basic Information">
-                  <Input name="gsm" placeholder="Phone Number" onChange={handleChange} />
-                  <Input name="newDob" placeholder="New Date of Birth" onChange={handleChange} />
-                  <Input name="oldDob" placeholder="Old Date of Birth" onChange={handleChange} />
-                  <Input name="gender" placeholder="Gender" onChange={handleChange} />
-                  <Input name="maritalStatus" placeholder="Marital Status" onChange={handleChange} />
-                </Section>
-
-                <Section title="Origin Details">
-                  <Input name="stateOfOrigin" placeholder="State of Origin" onChange={handleChange} />
-                  <Input name="lgaOfOrigin" placeholder="LGA of Origin" onChange={handleChange} />
-                  <Input name="townOfOrigin" placeholder="Town/Village" onChange={handleChange} />
-                </Section>
-
-                <Section title="Birth Details">
-                  <Input name="placeOfBirth" placeholder="Place Of Birth" onChange={handleChange} />
-                  <Input name="stateOfBirth" placeholder="State Of Birth" onChange={handleChange} />
-                  <Input name="lgaOfBirth" placeholder="LGA Of Birth" onChange={handleChange} />
-                </Section>
-
-              </div>
-            )}
-
           </div>
 
-          {/* RIGHT */}
           <div className="space-y-6">
-
-            {/* PAYMENT */}
-            <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-6">
-
-              <div className="flex items-center gap-2 mb-4">
-                <CreditCard size={20} />
-                <h3 className="font-bold text-lg dark:text-white">
-                  Payment Details
-                </h3>
+            <div className="bg-white dark:bg-[#161616] rounded-3xl p-6 shadow-xl">
+              <h3 className="font-bold mb-4">Payment Summary</h3>
+              <h2 className="text-4xl font-black text-blue-600">₦{total.toLocaleString()}</h2>
+              <div className="mt-4 text-xs space-y-1 opacity-70">
+                <p>Bank: OPAY | Acct: 6104102697</p>
               </div>
-
-              <div className="bg-blue-50 dark:bg-[#1d2638] p-4 rounded-2xl text-sm space-y-2">
-
-                <p>
-                  <b>Bank:</b> OPAY
-                </p>
-
-                <p>
-                  <b>Account Number:</b> 6104102697
-                </p>
-
-                <p>
-                  <b>Account Name:</b> WASHINGTON AMEDU
-                </p>
-
-              </div>
-
-              <div className="mt-5 bg-gray-100 dark:bg-[#202020] p-4 rounded-2xl">
-
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Total Amount
-                </p>
-
-                <h2 className="text-3xl font-bold mt-1 dark:text-white">
-                  ₦{total}
-                </h2>
-
-              </div>
-
             </div>
-
-            {/* UPLOADS */}
-            <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-6">
-
-              <div className="flex items-center gap-2 mb-5">
-                <Upload size={20} />
-                <h3 className="font-bold text-lg dark:text-white">
-                  Upload Documents
-                </h3>
-              </div>
-
-              <div className="space-y-5">
-
-                <div>
-                  <p className="text-sm mb-2 dark:text-gray-300">
-                    Payment Receipt
-                  </p>
-
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) => handleFile(e, "proof")}
-                    className="w-full border p-3 rounded-2xl dark:border-[#2d2d2d]"
-                  />
-                </div>
-
-                <div>
-                  <p className="text-sm mb-2 dark:text-gray-300">
-                    Passport Photograph
-                  </p>
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFile(e, "passport")}
-                    className="w-full border p-3 rounded-2xl dark:border-[#2d2d2d]"
-                  />
-                </div>
-
-              </div>
-
-            </div>
-
-            {/* BUTTON */}
-            <button
-              onClick={submit}
-              disabled={loading}
-              className={`w-full py-4 rounded-2xl text-white font-semibold transition-all ${
-                loading
-                  ? "bg-gray-400"
-                  : "bg-blue-600 hover:bg-blue-700 hover:scale-[1.01]"
-              }`}
-            >
-              {loading
-                ? "Submitting Request..."
-                : "Submit & Start Processing"}
+            
+            <button onClick={submit} disabled={loading} className="w-full py-4 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700 flex items-center justify-center gap-2">
+              {loading && <Loader2 className="animate-spin" />}
+              {loading ? "Processing..." : "Submit Application"}
             </button>
-
           </div>
-
         </div>
-
       )}
-
-    </div>
-  );
-}
-
-/* INPUT */
-function Input({ name, placeholder, onChange }) {
-  return (
-    <input
-      name={name}
-      placeholder={placeholder}
-      onChange={onChange}
-      className="w-full border dark:border-[#2d2d2d] dark:bg-[#202020] dark:text-white p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition"
-    />
-  );
-}
-
-/* SECTION */
-function Section({ title, children }) {
-  return (
-    <div className="bg-gray-50 dark:bg-[#202020] p-5 rounded-3xl border dark:border-[#2d2d2d]">
-
-      <h3 className="font-semibold mb-4 dark:text-white">
-        {title}
-      </h3>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        {children}
-      </div>
-
     </div>
   );
 }
