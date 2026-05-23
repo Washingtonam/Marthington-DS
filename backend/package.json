@@ -21,7 +21,7 @@
     "multer": "^2.1.1",
     "nodemailer": "^8.0.7",
     "pdfkit": "^0.18.0",
-    "puppeteer": "^24.40.0",
+    "joi": "^17.13.3",
     "qrcode": "^1.5.4",
     "resend": "^6.12.2",
     "streamifier": "^0.1.1"
