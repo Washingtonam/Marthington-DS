@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-importapi from "../lib/axios"; // IMPORTANT: Import your configured axios instance
+import api from "../lib/axios"; // Fixed: Added space between import and api
 
 const ADMIN_EMAIL = "washingtonamedu@gmail.com";
 const UserContext = createContext();
@@ -20,7 +20,6 @@ export function UserProvider({ children }) {
       units: userData.units || 0,
     };
 
-    // Keep the isAdmin logic
     normalized.isAdmin =
       normalized.email?.toLowerCase().trim() === ADMIN_EMAIL;
 
@@ -28,12 +27,11 @@ export function UserProvider({ children }) {
   };
 
   // =========================
-  // api UNITS FROM BACKEND 🔥
+  // API UNITS FROM BACKEND 🔥
   // =========================
   const apiUnits = async () => {
-    // We don't need to pass userId manually if the token is in the header
     try {
-      const res = awaitapi.get("/balance"); // Uses Axios interceptor to send JWT automatically
+      const res = await api.get("/balance"); // Fixed: Added space between await and api
       
       if (res.data && res.data.units !== undefined) {
         updateUnits(res.data.units);
@@ -52,7 +50,7 @@ export function UserProvider({ children }) {
       const normalized = normalizeUser(storedUser);
       setUser(normalized);
       setUnits(normalized.units);
-       apiUnits(); // Call sync
+      apiUnits(); // Fixed: Added space
     }
   }, []);
 
@@ -61,7 +59,7 @@ export function UserProvider({ children }) {
   // =========================
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval( apiUnits, 30000);
+    const interval = setInterval(apiUnits, 30000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -95,7 +93,7 @@ export function UserProvider({ children }) {
     setUser(null);
     setUnits(0);
     localStorage.removeItem("user");
-    localStorage.removeItem("token"); // Ensure token is also cleared
+    localStorage.removeItem("token");
   };
 
   return (
@@ -107,7 +105,7 @@ export function UserProvider({ children }) {
         setUser: updateUser,
         clearUser,
         isAdmin: user?.isAdmin || false,
-        refreshUnits:  apiUnits,
+        refreshUnits: apiUnits,
       }}
     >
       {children}
