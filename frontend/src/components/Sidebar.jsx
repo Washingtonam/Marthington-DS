@@ -71,7 +71,7 @@ export default function Sidebar() {
 useEffect(() => {
     if (!isAdmin) return;
 
-    const  apiData = async () => {
+    const apiData = async () => {
       try {
         // 1. Core Payments Sync
         const payRes = await axios.get(`${API_BASE}/api/admin/payments`, { headers });

@@ -59,10 +59,10 @@ export default function SelfServiceForm() {
   //  api PRICING DATA
   // =========================
   useEffect(() => {
-    const  apiPricing = async () => {
+    const apiPricing = async () => {
       try {
         const res = await  api(`${API_BASE}/api/pricing`);
-        const data = await res.json();
+        const data = await res;
         setPricing(data);
       } catch (err) {
         console.error("Error  apiing pricing:", err);
@@ -163,7 +163,7 @@ export default function SelfServiceForm() {
         body: JSON.stringify(payload)
       });
 
-      const data = await res.json();
+      const data = await res;
 
       if (!res.ok) {
         throw new Error(data.message || "Failed to submit request parameters.");

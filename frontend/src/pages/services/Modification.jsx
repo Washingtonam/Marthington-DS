@@ -25,7 +25,7 @@ export default function Modification() {
 
   useEffect(() => {
      api(`${API}/api/pricing`)
-      .then((res) => res.json())
+      .then((res) => res)
       .then((data) => {
         setPricing(data?.ninServices?.modification || {});
       });
@@ -105,7 +105,7 @@ export default function Modification() {
         }),
       });
 
-      const data = await res.json();
+      const data = await res;
 
       if (!res.ok) {
         throw new Error(data.message);

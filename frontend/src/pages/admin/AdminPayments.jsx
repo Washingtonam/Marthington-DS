@@ -37,7 +37,7 @@ export default function AdminPayments() {
   // =========================
   //  api PAYMENTS
   // =========================
-  const  apiPayments = async () => {
+  const apiPayments = async () => {
     try {
       setLoading(true);
       // Pointed explicitly to the updated /api/admin/payments route
@@ -60,7 +60,7 @@ export default function AdminPayments() {
       setPages(res.data?.pagination?.pages || Math.ceil(filteredData.length / LIMIT) || 1);
     } catch (err) {
       console.error(
-        " api ERROR:",
+        "FETCH ERROR:",
         err.response?.data || err.message
       );
     } finally {
@@ -71,7 +71,7 @@ export default function AdminPayments() {
   // =========================
   //  api PRICING
   // =========================
-  const  apiPricing = async () => {
+  const apiPricing = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/pricing`);
       setUnitPrice(res.data?.nin?.unitPrice || 215);

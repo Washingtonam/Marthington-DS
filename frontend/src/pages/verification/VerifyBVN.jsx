@@ -12,10 +12,10 @@ export default function VerifyBVN() {
   // =========================
   //  api PRICING
   // =========================
-  const  apiPricing = async () => {
+  const apiPricing = async () => {
     try {
       const res = await  api("https://xcombinator.onrender.com/api/pricing");
-      const data = await res.json();
+      const data = await res;
       setPrice(data.bvn.price);
     } catch (err) {
       console.error(err);
@@ -52,7 +52,7 @@ export default function VerifyBVN() {
         }),
       });
 
-      const data = await res.json();
+      const data = await res;
 
       if (!res.ok) {
         alert(data.error || "Verification failed");

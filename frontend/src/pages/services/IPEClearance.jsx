@@ -24,7 +24,7 @@ export default function IPEClearance() {
   // =========================
   useEffect(() => {
      api(`${API}/api/pricing`)
-      .then((res) => res.json())
+      .then((res) => res)
       .then((data) => {
         setPricing(data?.ninServices?.ipe || {});
       });
@@ -91,7 +91,7 @@ export default function IPEClearance() {
         }),
       });
 
-      const data = await res.json();
+      const data = await res;
 
       if (!res.ok) {
         throw new Error(data.message);

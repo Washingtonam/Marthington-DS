@@ -47,7 +47,7 @@ export default function UserRequests() {
   // =========================
   //  api
   // =========================
-  const  apiRequests = async (
+  const apiRequests = async (
     pageNum = 1,
     append = false
   ) => {

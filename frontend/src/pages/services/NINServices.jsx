@@ -24,10 +24,10 @@ export default function NINServices() {
   //  api PRICING
   // =========================
   useEffect(() => {
-    const  apiPricing = async () => {
+    const apiPricing = async () => {
       try {
         const res = await  api(`${API_BASE}/api/pricing`);
-        const data = await res.json();
+        const data = await res;
         setPricing(data);
       } catch (err) {
         console.error("Pricing error:", err);

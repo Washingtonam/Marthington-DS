@@ -10,7 +10,7 @@ export default function AdminDashboard() {
   // ============================
   //  api UNIFIED REQUESTS (Fixes the 401/404 pipeline block)
   // ============================
-  const  apiPipelineRequests = async () => {
+  const apiPipelineRequests = async () => {
     try {
       const response = await api.get("/api/admin/requests", {
         params: { page: 1, limit: 20, status: "pending" }
@@ -26,7 +26,7 @@ export default function AdminDashboard() {
   // ============================
   //  api USERS
   // ============================
-  const  apiUsers = async () => {
+  const apiUsers = async () => {
     try {
       const response = await api.get("/api/admin/users");
       // Fallback array formatting handling data pagination wrappers
@@ -39,7 +39,7 @@ export default function AdminDashboard() {
   // ============================
   //  api STATS
   // ============================
-  const  apiStats = async () => {
+  const apiStats = async () => {
     try {
       const response = await api.get("/api/admin/stats");
       setStats(response.data);

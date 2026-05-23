@@ -37,7 +37,7 @@ export default function Validation() {
   useEffect(() => {
 
      api(`${API}/api/pricing`)
-      .then((res) => res.json())
+      .then((res) => res)
       .then((data) => {
 
         setPricing(
@@ -144,7 +144,7 @@ export default function Validation() {
       );
 
       const data =
-        await res.json();
+        await res;
 
       if (!res.ok)
         throw new Error(

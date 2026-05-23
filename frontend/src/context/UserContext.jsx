@@ -30,7 +30,7 @@ export function UserProvider({ children }) {
   // =========================
   //  api UNITS FROM BACKEND 🔥
   // =========================
-  const  apiUnits = async () => {
+  const apiUnits = async () => {
     // We don't need to pass userId manually if the token is in the header
     try {
       const res = await api.get("/balance"); // Uses Axios interceptor to send JWT automatically

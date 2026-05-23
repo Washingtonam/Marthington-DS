@@ -60,7 +60,7 @@ export default function CacServices() {
   // ==========================================
   // 📥 LIVE PRICING ENGINE  api
   // ==========================================
-  const  apiLivePricing = async () => {
+  const apiLivePricing = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/pricing`);
       const data = res.data;
@@ -85,7 +85,7 @@ export default function CacServices() {
   // ==========================================
   // 🔄  api USER CAC HISTORY LOGS
   // ==========================================
-  const  apiHistory = async () => {
+  const apiHistory = async () => {
     if (!userId) return;
     try {
       setLoadingHistory(true);

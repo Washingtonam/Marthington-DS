@@ -373,7 +373,7 @@ router.get("/users", isAdmin, async (req, res) => {
       pagination: { total, page, pages: Math.ceil(total / limit) },
     });
   } catch (err) {
-    console.error(" api USERS ERROR:", err);
+    console.error("FETCH USERS ERROR:", err);
     res.status(500).json({ message: "Error mapping client network infrastructure logs." });
   }
 });

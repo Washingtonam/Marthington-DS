@@ -97,7 +97,7 @@ export default function Profile() {
         }
       );
 
-      const data = await res.json();
+      const data = await res;
 
       if (!res.ok) {
         throw new Error(data.error);

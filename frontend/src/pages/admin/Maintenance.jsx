@@ -14,7 +14,7 @@ export default function Maintenance() {
   // =========================
   //  api STATUS
   // =========================
-  const  apiStatus = async () => {
+  const apiStatus = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/admin/maintenance`, { headers });
       setStatus(res.data.active);

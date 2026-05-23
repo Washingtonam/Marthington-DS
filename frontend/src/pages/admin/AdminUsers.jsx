@@ -33,7 +33,7 @@ export default function AdminUsers() {
   // =========================
   //  api USERS
   // =========================
-  const  apiUsers = async () => {
+  const apiUsers = async () => {
     setLoading(true);
     try {
       // ✅ Now routing safely through your middleware instance
@@ -63,7 +63,7 @@ export default function AdminUsers() {
   // =========================
   // USER ACTIVITY
   // =========================
-  const  apiUserActivity = async (id) => {
+  const apiUserActivity = async (id) => {
     try {
       const res = await api.get(`/api/admin/user/${id}`, { headers });
       setSelectedUser(res.data.user);

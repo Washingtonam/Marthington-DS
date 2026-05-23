@@ -49,7 +49,7 @@ export default function AdminRequests() {
   // =========================
   //  api PIPELINE REQUESTS
   // =========================
-  const  apiRequests = async () => {
+  const apiRequests = async () => {
     try {
       setLoading(true);
       
@@ -60,7 +60,7 @@ export default function AdminRequests() {
       );
 
       // 2. Extract database payload array safely
-      const  apiedData = res.data?.data || res.data?.requests || [];
+      const apiedData = res.data?.data || res.data?.requests || [];
       
       // 3. Client-side partitioning logic for tabs (CAC vs NIMC)
       const filteredByModule =  apiedData.filter((item) => {
@@ -87,7 +87,7 @@ export default function AdminRequests() {
       setRequests(filteredByModule);
       setPages(res.data?.pagination?.pages || 1);
     } catch (err) {
-      console.error(" api PIPELINE ERROR:", err.response?.data || err.message);
+      console.error("FETCH PIPELINE ERROR:", err.response?.data || err.message);
       setRequests([]);
     } finally {
       loading && setLoading(false);

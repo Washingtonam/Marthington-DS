@@ -21,7 +21,7 @@ export default function Personalization() {
 
   const [trackingId, setTrackingId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [ apiingPrice, set apiingPrice] = useState(true);
+  const [ apiingPrice, setApiingPrice] = useState(true);
   
   // Dynamic Pricing State (Will read from your database engine settings)
   const [trackingCost, setTrackingCost] = useState(1000);
@@ -31,7 +31,7 @@ export default function Personalization() {
   // 📥  api LIVE CONFIGURATION PRICING
   // ==========================================
   useEffect(() => {
-    const  apiLiveRate = async () => {
+    const apiLiveRate = async () => {
       try {
         const res = await axios.get(`${API_BASE}/api/pricing`);
         const data = res.data;
@@ -45,7 +45,7 @@ export default function Personalization() {
       } catch (err) {
         console.error("Failed to load live tracking rates:", err);
       } finally {
-        set apiingPrice(false);
+        setApiingPrice(false);
       }
     };
      apiLiveRate();
@@ -92,7 +92,7 @@ export default function Personalization() {
       });
 
       clearTimeout(timeout);
-      const data = await res.json();
+      const data = await res;
 
       if (!res.ok) {
         throw new Error(data.error || data.message || "Tracking lookup failed");

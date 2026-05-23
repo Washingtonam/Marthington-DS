@@ -38,7 +38,7 @@ export default function Wallet() {
   // =========================
   useEffect(() => {
 
-    const  apiPricing = async () => {
+    const apiPricing = async () => {
 
       try {
 
@@ -46,7 +46,7 @@ export default function Wallet() {
           `${API_BASE}/api/pricing`
         );
 
-        const data = await res.json();
+        const data = await res;
 
         setUnitPrice(
           data?.nin?.unitPrice || 250
@@ -168,7 +168,7 @@ export default function Wallet() {
         }
       );
 
-      const data = await res.json();
+      const data = await res;
 
       if (!res.ok) {
 

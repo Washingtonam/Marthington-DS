@@ -93,7 +93,7 @@ export default function Register() {
 
       clearTimeout(timeout);
 
-      const data = await res.json();
+      const data = await res;
 
       if (data.error) {
 

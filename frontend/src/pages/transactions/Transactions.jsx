@@ -35,7 +35,7 @@ export default function Transactions() {
   // =========================
   useEffect(() => {
 
-    const  apiTransactions = async () => {
+    const apiTransactions = async () => {
 
       try {
 
@@ -43,7 +43,7 @@ export default function Transactions() {
           `${API_BASE}/api/transactions?userId=${user?.id}`
         );
 
-        const data = await res.json();
+        const data = await res;
 
         if (res.ok) {
 

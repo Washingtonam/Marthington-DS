@@ -62,7 +62,7 @@ export default function Dashboard() {
   // =========================
   //  api REQUESTS
   // =========================
-  const  apiRequests = async () => {
+  const apiRequests = async () => {
     try {
       const targetId = user.id || user._id;
       const res = await axios.get(`${API}/api/user/requests/${targetId}`);

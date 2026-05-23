@@ -23,7 +23,7 @@ export default function AdminPricing() {
   };
 
   const [loadingSection, setLoadingSection] = useState("");
-  const [apiing, setApiing] = useState(true);
+  const [ apiing, setApiing] = useState(true);
 
   // =========================
   // UNIT STATE
@@ -86,9 +86,9 @@ export default function AdminPricing() {
   // =========================
   // 📥  api ENGINE DATA
   // =========================
-  const  apiPricing = async () => {
+  const apiPricing = async () => {
     try {
-      set apiing(true);
+      setApiing(true);
       const res = await axios.get(`${API_BASE}/api/pricing`);
       const data = res.data;
 
@@ -137,9 +137,9 @@ export default function AdminPricing() {
         });
       }
     } catch (err) {
-      console.error(" api Pricing Error:", err);
+      console.error("FETCH Pricing Error:", err);
     } finally {
-      set apiing(false);
+      setApiing(false);
     }
   };
 
