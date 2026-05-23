@@ -35,7 +35,7 @@ export default function AdminPayments() {
   };
 
   // =========================
-  //  api PAYMENTS
+  // api PAYMENTS
   // =========================
   const apiPayments = async () => {
     try {
@@ -69,7 +69,7 @@ export default function AdminPayments() {
   };
 
   // =========================
-  //  api PRICING
+  // api PRICING
   // =========================
   const apiPricing = async () => {
     try {

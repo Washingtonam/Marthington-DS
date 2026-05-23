@@ -31,7 +31,7 @@ export default function Transactions() {
   );
 
   // =========================
-  //  api
+  // api
   // =========================
   useEffect(() => {
 
@@ -39,7 +39,7 @@ export default function Transactions() {
 
       try {
 
-        const res = await  api(
+        const res = await api(
           `${API_BASE}/api/transactions?userId=${user?.id}`
         );
 

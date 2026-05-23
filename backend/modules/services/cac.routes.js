@@ -33,7 +33,7 @@ router.post("/submit", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Missing required core business identification fields." });
     }
 
-    //  api matrix conversion configurations
+    // api matrix conversion configurations
     const platformPricing = await Pricing.findOne();
     
     const soleCost = platformPricing?.cacServices?.soleProprietorship ?? 28000;

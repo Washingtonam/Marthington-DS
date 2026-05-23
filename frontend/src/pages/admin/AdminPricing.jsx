@@ -23,7 +23,7 @@ export default function AdminPricing() {
   };
 
   const [loadingSection, setLoadingSection] = useState("");
-  const [ apiing, setApiing] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   // =========================
   // UNIT STATE
@@ -42,7 +42,7 @@ export default function AdminPricing() {
     vnin: 1000,
     photoError: 1150,
     bypass: 1150,
-    tracking: 1000, 
+    tracking: 1000,
     slipPrice: 150,
   });
 
@@ -84,11 +84,11 @@ export default function AdminPricing() {
   });
 
   // =========================
-  // 📥  api ENGINE DATA
+  // 📥 FETCH ENGINE DATA
   // =========================
-  const apiPricing = async () => {
+  const fetchPricing = async () => {
     try {
-      setApiing(true);
+      setLoading(true);
       const res = await axios.get(`${API_BASE}/api/pricing`);
       const data = res.data;
 
@@ -103,7 +103,7 @@ export default function AdminPricing() {
         vnin: data?.ninServices?.validation?.vnin ?? 1000,
         photoError: data?.ninServices?.validation?.photoError ?? 1150,
         bypass: data?.ninServices?.validation?.bypass ?? 1150,
-        tracking: data?.ninServices?.validation?.tracking ?? 1000, 
+        tracking: data?.ninServices?.validation?.tracking ?? 1000,
         slipPrice: data?.ninServices?.slipPrice ?? 150,
       });
 
@@ -121,7 +121,6 @@ export default function AdminPricing() {
         dob: data?.ninServices?.modification?.dob ?? 50000,
       });
 
-      // Hydrate Self-Service values live from database records
       if (data?.ninServices?.selfService) {
         setSelfService({
           emailRetrieval: data.ninServices.selfService.emailRetrieval ?? 1500,
@@ -139,12 +138,12 @@ export default function AdminPricing() {
     } catch (err) {
       console.error("FETCH Pricing Error:", err);
     } finally {
-      setApiing(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-     apiPricing();
+    fetchPricing();
   }, []);
 
   // =========================
@@ -153,13 +152,9 @@ export default function AdminPricing() {
   const saveSection = async (section, payload) => {
     try {
       setLoadingSection(section);
-      await axios.put(
-        `${API_BASE}/api/admin/pricing`,
-        payload,
-        { headers }
-      );
+      await axios.put(`${API_BASE}/api/admin/pricing`, payload, { headers });
       alert(`${formatLabel(section)} Pricing updated successfully!`);
-       apiPricing();
+      fetchPricing();
     } catch (err) {
       console.error(`Update Error (${section}):`, err.response?.data || err.message);
       alert(err.response?.data?.message || "Update failed. Verify login authority.");
@@ -168,7 +163,7 @@ export default function AdminPricing() {
     }
   };
 
-  if ( apiing) {
+  if (loading) {
     return (
       <div className="min-h-[60vh] flex justify-center items-center">
         <div className="text-center">
@@ -181,23 +176,18 @@ export default function AdminPricing() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 pb-20 pt-6">
-      {/* CONTROL HERO BOARD BANNER */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-900 to-blue-900 rounded-3xl p-8 text-white shadow-2xl mb-8">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-8">
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Settings2 size={20} />
-              <span className="uppercase tracking-widest text-sm opacity-80">
-                REVENUE CONTROL CENTER
-              </span>
+              <span className="uppercase tracking-widest text-sm opacity-80">REVENUE CONTROL CENTER</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold mb-3">Pricing Engine</h1>
             <p className="text-blue-100 max-w-2xl">
-              Configure unit costs, service pricing, validation fees, modification rates,
-              and operational pricing strategy across the entire platform matrix.
+              Configure unit costs, service pricing, validation fees, modification rates, and operational pricing strategy across the entire platform matrix.
             </p>
           </div>
-
           <div className="bg-white/10 border border-white/10 backdrop-blur-xl rounded-3xl p-6 min-w-[280px]">
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-white/20 p-3 rounded-2xl">
@@ -216,9 +206,7 @@ export default function AdminPricing() {
         </div>
       </div>
 
-      {/* CORE INPUT GRID VIEW CONTROLS */}
       <div className="grid gap-8">
-        {/* UNIT WALLET PARAMS CARD CONTAINER */}
         <PricingCard
           title="Unit & Account Economics"
           subtitle="Configure base wallet purchase and transaction margins"
@@ -253,7 +241,6 @@ export default function AdminPricing() {
           />
         </PricingCard>
 
-        {/* VALIDATION PROFILE ENGINE METRICS CARD */}
         <PricingCard
           title="Validation & Personalization Services"
           subtitle="Manage transaction costs for system matching, validations, and tracking queries"
@@ -281,7 +268,6 @@ export default function AdminPricing() {
           />
         </PricingCard>
 
-        {/* IPE INTEGRATED EXCLUSIONS AND DISCREPANCIES ENGINE */}
         <PricingCard
           title="IPE Clearance Parameters"
           subtitle="Configure system error corrections and track assignment units"
@@ -297,13 +283,9 @@ export default function AdminPricing() {
               />
             ))}
           </div>
-          <SaveButton
-            loading={loadingSection === "ipe"}
-            onClick={() => saveSection("ipe", { ipe })}
-          />
+          <SaveButton loading={loadingSection === "ipe"} onClick={() => saveSection("ipe", { ipe })} />
         </PricingCard>
 
-        {/* MODIFICATIONS RATES CONFIGURATOR */}
         <PricingCard
           title="NIN Field Modifications"
           subtitle="Configure NIMC registry parameter adjustment cost mappings"
@@ -319,13 +301,9 @@ export default function AdminPricing() {
               />
             ))}
           </div>
-          <SaveButton
-            loading={loadingSection === "modification"}
-            onClick={() => saveSection("modification", { modification })}
-          />
+          <SaveButton loading={loadingSection === "modification"} onClick={() => saveSection("modification", { modification })} />
         </PricingCard>
 
-        {/* 🔥 NEW LAYER: SELF-SERVICE PRICING CARD CONFIGURATOR */}
         <PricingCard
           title="Self-Service Portal Management"
           subtitle="Configure pricing for automated account retrievals and unlinking logs"
@@ -343,16 +321,17 @@ export default function AdminPricing() {
           </div>
           <SaveButton
             loading={loadingSection === "selfService"}
-            onClick={() => saveSection("selfService", { 
-              selfService: {
-                emailRetrieval: Number(selfService.emailRetrieval),
-                deviceUnlink: Number(selfService.deviceUnlink)
-              }
-            })}
+            onClick={() =>
+              saveSection("selfService", {
+                selfService: {
+                  emailRetrieval: Number(selfService.emailRetrieval),
+                  deviceUnlink: Number(selfService.deviceUnlink),
+                },
+              })
+            }
           />
         </PricingCard>
 
-        {/* CORPORATE AFFAIRS COMMISSION (CAC) SERVICE CARD */}
         <PricingCard
           title="CAC Registration Services"
           subtitle="Configure rates for Business Names and Limited Liability setup forms"
@@ -368,10 +347,7 @@ export default function AdminPricing() {
               />
             ))}
           </div>
-          <SaveButton
-            loading={loadingSection === "cac"}
-            onClick={() => saveSection("cac", { cacServices: cac })}
-          />
+          <SaveButton loading={loadingSection === "cac"} onClick={() => saveSection("cac", { cacServices: cac })} />
         </PricingCard>
       </div>
     </div>
@@ -398,9 +374,7 @@ function PricingCard({ title, subtitle, icon, children }) {
 function Input({ label, value, set }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-        {label}
-      </label>
+      <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">{label}</label>
       <div className="relative">
         <BadgeDollarSign size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
         <input

@@ -60,7 +60,7 @@ export default function Dashboard() {
   }, [user]);
 
   // =========================
-  //  api REQUESTS
+  // api REQUESTS
   // =========================
   const apiRequests = async () => {
     try {
@@ -75,7 +75,7 @@ export default function Dashboard() {
         pending: data.filter(r => r.status === "pending" || r.status === "processing").length,
       });
     } catch (err) {
-      console.error("Dashboard metric  api error:", err);
+      console.error("Dashboard metric api error:", err);
     }
   };
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import api from "../../lib/axios"; // Adjust this path if your api.js file is located elsewhere (e.g., "../../api")
+importapi from "../../lib/axios"; // Adjust this path if yourapi.js file is located elsewhere (e.g., "../../api")
  
 import {
   Search,
@@ -31,17 +31,17 @@ export default function AdminUsers() {
   };
 
   // =========================
-  //  api USERS
+  // api USERS
   // =========================
   const apiUsers = async () => {
     setLoading(true);
     try {
       // ✅ Now routing safely through your middleware instance
-      const res = await api.get("/api/admin/users", { headers });
+      const res = awaitapi.get("/api/admin/users", { headers });
       const data = res.data?.data || res.data || [];
       setUsers(data);
     } catch (err) {
-      console.error("🔥  api USERS ERROR:", err.response?.data || err.message);
+      console.error("🔥 api USERS ERROR:", err.response?.data || err.message);
     }
     setLoading(false);
   };
@@ -53,7 +53,7 @@ export default function AdminUsers() {
     if (!search) return  apiUsers();
 
     try {
-      const res = await api.get(`/api/admin/users?search=${search}`, { headers });
+      const res = awaitapi.get(`/api/admin/users?search=${search}`, { headers });
       setUsers(res.data?.data || []);
     } catch (err) {
       console.error("🔥 SEARCH ERROR:", err.response?.data || err.message);
@@ -65,11 +65,11 @@ export default function AdminUsers() {
   // =========================
   const apiUserActivity = async (id) => {
     try {
-      const res = await api.get(`/api/admin/user/${id}`, { headers });
+      const res = awaitapi.get(`/api/admin/user/${id}`, { headers });
       setSelectedUser(res.data.user);
       setUserActivity(res.data.transactions);
     } catch (err) {
-      console.error("🔥 ACTIVITY  api ERROR:", err.response?.data || err.message);
+      console.error("🔥 ACTIVITY api ERROR:", err.response?.data || err.message);
     }
   };
 
@@ -78,7 +78,7 @@ export default function AdminUsers() {
   // =========================
   const makeAdmin = async (id) => {
     try {
-      await api.put(`/api/admin/user/${id}/make-admin`, {}, { headers });
+      awaitapi.put(`/api/admin/user/${id}/make-admin`, {}, { headers });
        apiUsers();
     } catch (err) {
       console.error(err);
@@ -87,7 +87,7 @@ export default function AdminUsers() {
 
   const removeAdmin = async (id) => {
     try {
-      await api.put(`/api/admin/user/${id}/remove-admin`, {}, { headers });
+      awaitapi.put(`/api/admin/user/${id}/remove-admin`, {}, { headers });
        apiUsers();
     } catch (err) {
       console.error(err);
@@ -99,7 +99,7 @@ export default function AdminUsers() {
   // =========================
   const suspendUser = async (id) => {
     try {
-      await api.put(`/api/admin/user/${id}/suspend`, {}, { headers });
+      awaitapi.put(`/api/admin/user/${id}/suspend`, {}, { headers });
        apiUsers();
     } catch (err) {
       console.error(err);
@@ -108,7 +108,7 @@ export default function AdminUsers() {
 
   const activateUser = async (id) => {
     try {
-      await api.put(`/api/admin/user/${id}/activate`, {}, { headers });
+      awaitapi.put(`/api/admin/user/${id}/activate`, {}, { headers });
        apiUsers();
     } catch (err) {
       console.error(err);
@@ -121,7 +121,7 @@ export default function AdminUsers() {
   const deleteUser = async (id) => {
     if (!window.confirm("Delete this user?")) return;
     try {
-      await api.delete(`/api/admin/user/${id}`, { headers });
+      awaitapi.delete(`/api/admin/user/${id}`, { headers });
        apiUsers();
     } catch (err) {
       console.error(err);
@@ -136,7 +136,7 @@ export default function AdminUsers() {
     if (!units) return;
 
     try {
-      await api.post(`/api/admin/user/${id}/units`, {
+      awaitapi.post(`/api/admin/user/${id}/units`, {
         units: Number(units),
         action: "add",
       }, { headers });
@@ -151,7 +151,7 @@ export default function AdminUsers() {
     if (!units) return;
 
     try {
-      await api.post(`/api/admin/user/${id}/units`, {
+      awaitapi.post(`/api/admin/user/${id}/units`, {
         units: Number(units),
         action: "deduct",
       }, { headers });

@@ -21,12 +21,12 @@ export default function NINServices() {
   const [loading, setLoading] = useState(true);
 
   // =========================
-  //  api PRICING
+  // api PRICING
   // =========================
   useEffect(() => {
     const apiPricing = async () => {
       try {
-        const res = await  api(`${API_BASE}/api/pricing`);
+        const res = await api(`${API_BASE}/api/pricing`);
         const data = await res;
         setPricing(data);
       } catch (err) {

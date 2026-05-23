@@ -24,7 +24,7 @@ export default function Modification() {
   const user = JSON.parse(localStorage.getItem("user"));
 
   useEffect(() => {
-     api(`${API}/api/pricing`)
+    api(`${API}/api/pricing`)
       .then((res) => res)
       .then((data) => {
         setPricing(data?.ninServices?.modification || {});
@@ -86,7 +86,7 @@ export default function Modification() {
     setLoading(true);
 
     try {
-      const res = await  api(`${API}/api/nin-services/request`, {
+      const res = await api(`${API}/api/nin-services/request`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

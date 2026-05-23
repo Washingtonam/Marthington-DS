@@ -56,12 +56,12 @@ export default function SelfServiceForm() {
   };
 
   // =========================
-  //  api PRICING DATA
+  // api PRICING DATA
   // =========================
   useEffect(() => {
     const apiPricing = async () => {
       try {
-        const res = await  api(`${API_BASE}/api/pricing`);
+        const res = await api(`${API_BASE}/api/pricing`);
         const data = await res;
         setPricing(data);
       } catch (err) {
@@ -153,7 +153,7 @@ export default function SelfServiceForm() {
       };
 
       // Correct URL route path pairing with your unified server engine routes
-      const res = await  api(`${API_BASE}/api/nin-services/request`, {
+      const res = await api(`${API_BASE}/api/nin-services/request`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

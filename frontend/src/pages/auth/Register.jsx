@@ -76,7 +76,7 @@ export default function Register() {
         90000
       );
 
-      const res = await  api(
+      const res = await api(
         "https://xcombinator.onrender.com/api/register",
         {
           method: "POST",

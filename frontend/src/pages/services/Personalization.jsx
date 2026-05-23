@@ -28,7 +28,7 @@ export default function Personalization() {
   const [unitPrice, setUnitPrice] = useState(215);
 
   // ==========================================
-  // 📥  api LIVE CONFIGURATION PRICING
+  // 📥 api LIVE CONFIGURATION PRICING
   // ==========================================
   useEffect(() => {
     const apiLiveRate = async () => {
@@ -80,7 +80,7 @@ export default function Personalization() {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 20000);
 
-      const res = await  api(`${API_BASE}/api/verify`, {
+      const res = await api(`${API_BASE}/api/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

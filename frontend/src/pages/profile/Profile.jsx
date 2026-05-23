@@ -80,7 +80,7 @@ export default function Profile() {
 
     try {
 
-      const res = await  api(
+      const res = await api(
         `${API}/api/change-password`,
         {
           method: "POST",

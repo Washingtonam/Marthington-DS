@@ -32,11 +32,11 @@ export default function Validation() {
   const [loading, setLoading] = useState(false);
 
   // =========================
-  //  api PRICING
+  // api PRICING
   // =========================
   useEffect(() => {
 
-     api(`${API}/api/pricing`)
+    api(`${API}/api/pricing`)
       .then((res) => res)
       .then((data) => {
 
@@ -115,7 +115,7 @@ export default function Validation() {
 
     try {
 
-      const res = await  api(
+      const res = await api(
         `${API}/api/nin-services/request`,
         {
           method: "POST",

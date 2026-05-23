@@ -28,7 +28,7 @@ export default function ResetPassword() {
     setLoading(true);
 
     try {
-      const res = await  api(`${API}/api/reset-password/${token}`, {
+      const res = await api(`${API}/api/reset-password/${token}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

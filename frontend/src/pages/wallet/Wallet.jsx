@@ -34,7 +34,7 @@ export default function Wallet() {
   const [copied, setCopied] = useState(false);
 
   // =========================
-  //  api PRICING
+  // api PRICING
   // =========================
   useEffect(() => {
 
@@ -42,7 +42,7 @@ export default function Wallet() {
 
       try {
 
-        const res = await  api(
+        const res = await api(
           `${API_BASE}/api/pricing`
         );
 
@@ -55,7 +55,7 @@ export default function Wallet() {
       } catch (err) {
 
         console.error(
-          "Pricing  api error:",
+          "Pricing api error:",
           err
         );
       }
@@ -150,7 +150,7 @@ export default function Wallet() {
 
     try {
 
-      const res = await  api(
+      const res = await api(
         `${API_BASE}/api/submit-payment`,
         {
           method: "POST",

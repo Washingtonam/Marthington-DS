@@ -47,7 +47,7 @@ export default function AdminRequests() {
   };
 
   // =========================
-  //  api PIPELINE REQUESTS
+  // api PIPELINE REQUESTS
   // =========================
   const apiRequests = async () => {
     try {

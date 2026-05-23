@@ -45,7 +45,7 @@ export default function UserRequests() {
   }
 
   // =========================
-  //  api
+  // api
   // =========================
   const apiRequests = async (
     pageNum = 1,
@@ -110,7 +110,7 @@ export default function UserRequests() {
     } catch (err) {
 
       console.error(
-        "REQUEST  api ERROR:",
+        "REQUEST api ERROR:",
         err.response?.data ||
         err.message
       );

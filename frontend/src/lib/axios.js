@@ -1,15 +1,20 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "https://xcombinator.onrender.com/api", // Base points directly to /api
+  baseURL: "https://xcombinator.onrender.com/api",
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
-// Automatically inject JWT Token on every single outgoing network call
+// Automatically inject JWT Token on every outgoing network call
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
+    // Only set header if token exists
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      // Remove potential quotes if saved as a string in localStorage
+      config.headers.Authorization = `Bearer ${token.replace(/['"]+/g, '')}`;
     }
     return config;
   },

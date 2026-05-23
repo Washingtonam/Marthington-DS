@@ -58,7 +58,7 @@ export default function CacServices() {
   const currentPrice = prices[service] || 0;
 
   // ==========================================
-  // 📥 LIVE PRICING ENGINE  api
+  // 📥 LIVE PRICING ENGINE api
   // ==========================================
   const apiLivePricing = async () => {
     try {
@@ -83,7 +83,7 @@ export default function CacServices() {
   };
 
   // ==========================================
-  // 🔄  api USER CAC HISTORY LOGS
+  // 🔄 api USER CAC HISTORY LOGS
   // ==========================================
   const apiHistory = async () => {
     if (!userId) return;

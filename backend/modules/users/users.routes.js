@@ -32,7 +32,7 @@ router.get("/balance", verifyToken, async (req, res) => {
   } catch (error) {
     console.error("🔥 BALANCE ERROR:", error.message);
     return res.status(500).json({
-      error: "Failed to  api balance",
+      error: "Failed to api balance",
     });
   }
 });
@@ -63,7 +63,7 @@ router.get("/transactions", verifyToken, async (req, res) => {
   } catch (error) {
     console.error("🔥 TRANSACTION ERROR:", error.message);
     return res.status(500).json({
-      error: "Failed to  api transactions",
+      error: "Failed to api transactions",
     });
   }
 });
@@ -121,7 +121,7 @@ router.get("/admin/all-users", verifyToken, isAdmin, async (req, res) => {
     return res.json({ success: true, data: users });
   } catch (error) {
     console.error("🔥 ADMIN USERS LOG ERROR:", error.message);
-    return res.status(500).json({ success: false, message: "Failed to  api user index." });
+    return res.status(500).json({ success: false, message: "Failed to api user index." });
   }
 });
 

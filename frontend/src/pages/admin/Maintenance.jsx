@@ -12,7 +12,7 @@ export default function Maintenance() {
   };
 
   // =========================
-  //  api STATUS
+  // api STATUS
   // =========================
   const apiStatus = async () => {
     try {

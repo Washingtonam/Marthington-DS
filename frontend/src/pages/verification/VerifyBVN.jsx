@@ -10,11 +10,11 @@ export default function VerifyBVN() {
   const { user, balance, setBalance } = useUser();
 
   // =========================
-  //  api PRICING
+  // api PRICING
   // =========================
   const apiPricing = async () => {
     try {
-      const res = await  api("https://xcombinator.onrender.com/api/pricing");
+      const res = await api("https://xcombinator.onrender.com/api/pricing");
       const data = await res;
       setPrice(data.bvn.price);
     } catch (err) {
@@ -41,7 +41,7 @@ export default function VerifyBVN() {
     setLoading(true);
 
     try {
-      const res = await  api("https://xcombinator.onrender.com/api/verify-bvn", {
+      const res = await api("https://xcombinator.onrender.com/api/verify-bvn", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

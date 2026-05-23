@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import api from "../lib/axios"; // IMPORTANT: Import your configured axios instance
+importapi from "../lib/axios"; // IMPORTANT: Import your configured axios instance
 
 const ADMIN_EMAIL = "washingtonamedu@gmail.com";
 const UserContext = createContext();
@@ -28,12 +28,12 @@ export function UserProvider({ children }) {
   };
 
   // =========================
-  //  api UNITS FROM BACKEND 🔥
+  // api UNITS FROM BACKEND 🔥
   // =========================
   const apiUnits = async () => {
     // We don't need to pass userId manually if the token is in the header
     try {
-      const res = await api.get("/balance"); // Uses Axios interceptor to send JWT automatically
+      const res = awaitapi.get("/balance"); // Uses Axios interceptor to send JWT automatically
       
       if (res.data && res.data.units !== undefined) {
         updateUnits(res.data.units);

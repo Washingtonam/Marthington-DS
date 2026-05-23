@@ -65,7 +65,7 @@ router.get("/payments", verifyToken, isAdmin, async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(payments);
   } catch (error) {
-    res.status(500).json({ message: "Failed to  api payments." });
+    res.status(500).json({ message: "Failed to api payments." });
   }
 });
 

@@ -157,8 +157,8 @@ router.get("/nimc-requests", isAdmin, async (req, res) => {
     
     res.json({ success: true, data: requests });
   } catch (error) {
-    console.error("🔥 ADMIN NIMC REQUESTS  api ERROR:", error);
-    res.status(500).json({ success: false, message: "Failed to  api NIMC pipeline requests" });
+    console.error("🔥 ADMIN NIMC REQUESTS api ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to api NIMC pipeline requests" });
   }
 });
 
@@ -172,8 +172,8 @@ router.get("/cac-requests", isAdmin, async (req, res) => {
 
     res.json({ success: true, data: requests });
   } catch (error) {
-    console.error("🔥 ADMIN CAC REQUESTS  api ERROR:", error);
-    res.status(500).json({ success: false, message: "Failed to  api CAC business registry requests" });
+    console.error("🔥 ADMIN CAC REQUESTS api ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to api CAC business registry requests" });
   }
 });
 
@@ -250,8 +250,8 @@ router.get("/payments", isAdmin, async (req, res) => {
 
     res.json(payments);
   } catch (error) {
-    console.error("🔥  api PAYMENTS ERROR:", error);
-    res.status(500).json({ success: false, message: "Failed to  api ledger credit payment entries" });
+    console.error("🔥 api PAYMENTS ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to api ledger credit payment entries" });
   }
 });
 

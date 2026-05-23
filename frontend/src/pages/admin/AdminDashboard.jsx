@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../api"; // 👈 Imports your customized Axios configuration instance
+importapi from "../api"; // 👈 Imports your customized Axios configuration instance
 
 export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
@@ -8,11 +8,11 @@ export default function AdminDashboard() {
   const [pipelineRequests, setPipelineRequests] = useState([]); // State for /api/admin/requests data
 
   // ============================
-  //  api UNIFIED REQUESTS (Fixes the 401/404 pipeline block)
+  // api UNIFIED REQUESTS (Fixes the 401/404 pipeline block)
   // ============================
   const apiPipelineRequests = async () => {
     try {
-      const response = await api.get("/api/admin/requests", {
+      const response = awaitapi.get("/api/admin/requests", {
         params: { page: 1, limit: 20, status: "pending" }
       });
       if (response.data?.success) {
@@ -24,11 +24,11 @@ export default function AdminDashboard() {
   };
 
   // ============================
-  //  api USERS
+  // api USERS
   // ============================
   const apiUsers = async () => {
     try {
-      const response = await api.get("/api/admin/users");
+      const response = awaitapi.get("/api/admin/users");
       // Fallback array formatting handling data pagination wrappers
       setUsers(response.data?.data || response.data || []);
     } catch (error) {
@@ -37,11 +37,11 @@ export default function AdminDashboard() {
   };
 
   // ============================
-  //  api STATS
+  // api STATS
   // ============================
   const apiStats = async () => {
     try {
-      const response = await api.get("/api/admin/stats");
+      const response = awaitapi.get("/api/admin/stats");
       setStats(response.data);
     } catch (error) {
       console.error("🔥 Error gathering metrics telemetry:", error);
@@ -54,7 +54,7 @@ export default function AdminDashboard() {
   const handleSearch = async () => {
     if (!search) return  apiUsers();
     try {
-      const response = await api.get(`/api/admin/users`, {
+      const response = awaitapi.get(`/api/admin/users`, {
         params: { search: search } // Matches your backend pagination regex search query
       });
       setUsers(response.data?.data || response.data || []);
@@ -68,7 +68,7 @@ export default function AdminDashboard() {
   // ============================
   const suspendUser = async (id) => {
     try {
-      await api.put(`/api/admin/user/${id}/suspend`);
+      awaitapi.put(`/api/admin/user/${id}/suspend`);
        apiUsers();
        apiStats();
     } catch (error) {
@@ -78,7 +78,7 @@ export default function AdminDashboard() {
 
   const activateUser = async (id) => {
     try {
-      await api.put(`/api/admin/user/${id}/activate`);
+      awaitapi.put(`/api/admin/user/${id}/activate`);
        apiUsers();
        apiStats();
     } catch (error) {
@@ -89,7 +89,7 @@ export default function AdminDashboard() {
   const deleteUser = async (id) => {
     if (!confirm("Are you sure you want to permanently delete this user account context profile?")) return;
     try {
-      await api.delete(`/api/admin/user/${id}`);
+      awaitapi.delete(`/api/admin/user/${id}`);
        apiUsers();
        apiStats();
     } catch (error) {
