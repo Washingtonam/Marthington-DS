@@ -1,8 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
- 
-const API_BASE = "https://xcombinator.onrender.com";
-const ADMIN_EMAIL = "washingtonamedu@gmail.com";
+import api from "../lib/axios"; // IMPORTANT: Import your configured axios instance
 
+const ADMIN_EMAIL = "washingtonamedu@gmail.com";
 const UserContext = createContext();
 
 export function UserProvider({ children }) {
@@ -21,6 +20,7 @@ export function UserProvider({ children }) {
       units: userData.units || 0,
     };
 
+    // Keep the isAdmin logic
     normalized.isAdmin =
       normalized.email?.toLowerCase().trim() === ADMIN_EMAIL;
 
@@ -30,26 +30,16 @@ export function UserProvider({ children }) {
   // =========================
   // FETCH UNITS FROM BACKEND 🔥
   // =========================
-  const fetchUnits = async (userId) => {
-    if (!userId) return;
-
+  const fetchUnits = async () => {
+    // We don't need to pass userId manually if the token is in the header
     try {
-      const res = await fetch(`${API_BASE}/api/balance`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.units !== undefined) {
-        updateUnits(data.units);
+      const res = await api.get("/balance"); // Uses Axios interceptor to send JWT automatically
+      
+      if (res.data && res.data.units !== undefined) {
+        updateUnits(res.data.units);
       }
-
     } catch (error) {
-      console.error("❌ UNIT SYNC ERROR:", error);
+      console.error("❌ UNIT SYNC ERROR:", error.response?.data || error.message);
     }
   };
 
@@ -58,28 +48,20 @@ export function UserProvider({ children }) {
   // =========================
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
-
     if (storedUser) {
       const normalized = normalizeUser(storedUser);
-
       setUser(normalized);
       setUnits(normalized.units);
-
-      // 🔥 INITIAL SYNC
-      fetchUnits(normalized.id);
+      fetchUnits(); // Call sync
     }
   }, []);
 
   // =========================
-  // AUTO SYNC EVERY 5s 🔥
+  // AUTO SYNC EVERY 30s 🔥
   // =========================
   useEffect(() => {
-    if (!user?.id) return;
-
-    const interval = setInterval(() => {
-      fetchUnits(user.id);
-    }, 30000);
-
+    if (!user) return;
+    const interval = setInterval(fetchUnits, 30000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -88,10 +70,8 @@ export function UserProvider({ children }) {
   // =========================
   const updateUser = (userData) => {
     const normalized = normalizeUser(userData);
-
     setUser(normalized);
     setUnits(normalized.units);
-
     localStorage.setItem("user", JSON.stringify(normalized));
   };
 
@@ -100,17 +80,10 @@ export function UserProvider({ children }) {
   // =========================
   const updateUnits = (newUnits) => {
     setUnits(newUnits);
-
     setUser((prev) => {
       if (!prev) return prev;
-
-      const updated = {
-        ...prev,
-        units: newUnits,
-      };
-
+      const updated = { ...prev, units: newUnits };
       localStorage.setItem("user", JSON.stringify(updated));
-
       return updated;
     });
   };
@@ -122,6 +95,7 @@ export function UserProvider({ children }) {
     setUser(null);
     setUnits(0);
     localStorage.removeItem("user");
+    localStorage.removeItem("token"); // Ensure token is also cleared
   };
 
   return (
@@ -132,12 +106,8 @@ export function UserProvider({ children }) {
         setUnits: updateUnits,
         setUser: updateUser,
         clearUser,
-
-        // 🔥 ADMIN FLAG
         isAdmin: user?.isAdmin || false,
-
-        // 🔥 MANUAL REFRESH
-        refreshUnits: () => fetchUnits(user?.id),
+        refreshUnits: fetchUnits,
       }}
     >
       {children}
