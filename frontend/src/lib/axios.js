@@ -1,11 +1,13 @@
 import axios from "axios";
 
 const api = axios.create({
-  // Use VITE_ prefix for Vite projects
-  baseURL: import.meta.env.VITE_API_URL || "https://xcombinator.onrender.com/api",
+  // Ensure this points to the root URL (without /api) 
+  // because your server.js routes all start with /api
+  baseURL: import.meta.env.VITE_API_URL,
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true,
 });
 
 // 1. Request Interceptor: Automatically injects JWT Token

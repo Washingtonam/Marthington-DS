@@ -46,7 +46,7 @@ export default function VerifyNIN() {
     try {
       const payload = { userId: user.id, method, ...(method === "nin" ? { nin } : method === "phone" ? { phone } : form) };
 
-      const res = await api.post("/services/verify", payload, {
+      const res = await api.post("/api/services/verify", payload, {
         signal: controller.signal,
       });
 

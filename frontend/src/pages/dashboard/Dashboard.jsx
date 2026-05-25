@@ -25,7 +25,7 @@ export default function Dashboard() {
       
       // Removed "/api" prefix from these calls because baseURL in axios.js already includes it
       const [balanceRes, requestsRes] = await Promise.all([
-        api.post("/balance", { email: user.email }),
+        api.post("/api/balance", { email: user.email }),
         api.get(`/cac/user-requests/${targetId}`)
       ]);
 

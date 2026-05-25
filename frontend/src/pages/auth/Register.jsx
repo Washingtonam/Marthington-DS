@@ -31,7 +31,7 @@ export default function Register() {
 
     setLoading(true);
     try {
-      await api.post("/auth/register", form);
+      await api.post("/api/auth/register", form);
       alert("Registration successful! Please log in.");
       navigate("/login");
     } catch (error) {

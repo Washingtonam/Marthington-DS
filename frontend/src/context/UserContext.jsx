@@ -32,7 +32,7 @@ export function UserProvider({ children }) {
   const apiUnits = async (retryCount = 0) => {
     const MAX_RETRIES = 2;
     try {
-      const res = await api.get("/balance");
+      const res = await api.get("/api/balance");
       
       if (res.data && res.data.units !== undefined) {
         updateUnits(res.data.units);
