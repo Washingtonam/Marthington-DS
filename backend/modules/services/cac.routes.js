@@ -31,10 +31,15 @@ router.post("/submit", verifyToken, async (req, res) => {
     const user = await User.findById(userId).session(session);
     if (user.units < unitsRequired && cost > 0) throw new Error(`Insufficient units. Required: ${unitsRequired}`);
 
-    // Deduct units
+    // Deduct units atomically to prevent race conditions
     if (cost > 0) {
-      user.units -= unitsRequired;
-      await user.save({ session });
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $inc: { units: -unitsRequired } },
+        { new: true, session }
+      );
+      if (!updatedUser) throw new Error("Failed to update user units");
+      user.units = updatedUser.units;
     }
 
     // Persist Registry

@@ -83,7 +83,14 @@ app.get("/api/cac/user-requests/:id", async (req, res) => {
                       ...cacRequests.map(c => ({ ...c, pipelineSource: "cac" }))]
                       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     res.json(combined);
-  } catch (error) { res.status(500).json([]); }
+  } catch (error) { 
+    console.error("Error fetching user requests:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: "Failed to fetch requests",
+      code: "USER_REQUESTS_FETCH_FAILED"
+    }); 
+  }
 });
 
 // Modular Routes

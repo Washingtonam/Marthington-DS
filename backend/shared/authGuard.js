@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { SUPER_ADMIN_EMAIL } = require("../config/constants");
 
 /**
  * Core authentication middleware to verify JWT from incoming headers
@@ -40,7 +41,7 @@ const isAdmin = (req, res, next) => {
     return res.status(401).json({ success: false, message: "Unauthorized" });
   }
 
-  const isSuperAdminEmail = req.user.email === "washingtonamedu@gmail.com";
+  const isSuperAdminEmail = req.user.email === SUPER_ADMIN_EMAIL;
   const hasAdminRole = req.user.role === "super_admin" || req.user.role === "admin";
 
   if (isSuperAdminEmail || hasAdminRole) {

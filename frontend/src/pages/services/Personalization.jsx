@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Binary, ArrowLeft, Search, Loader2, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 
-const API_BASE = "https://xcombinator.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export default function Personalization() {
   const navigate = useNavigate();
@@ -40,7 +40,7 @@ export default function Personalization() {
 
     if (!trackingId.trim()) return alert("Please enter a valid Tracking ID");
 
-    const isAdmin = user?.email?.toLowerCase().trim() === "washingtonamedu@gmail.com";
+    const isAdmin = user?.email?.toLowerCase().trim() === import.meta.env.VITE_SUPER_ADMIN_EMAIL;
     if (!isAdmin && units < tokensRequired) {
       return alert(`Insufficient balance. You need ${tokensRequired} units (₦${trackingCost.toLocaleString()}).`);
     }

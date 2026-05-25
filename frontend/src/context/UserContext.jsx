@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import api from "../lib/axios"; // Fixed: Added space between import and api
+import api from "../lib/axios";
 
-const ADMIN_EMAIL = "washingtonamedu@gmail.com";
+const ADMIN_EMAIL = import.meta.env.VITE_SUPER_ADMIN_EMAIL || "admin@xcombinator.com";
 const UserContext = createContext();
 
 export function UserProvider({ children }) {
@@ -27,17 +27,25 @@ export function UserProvider({ children }) {
   };
 
   // =========================
-  // API UNITS FROM BACKEND 🔥
+  // API UNITS FROM BACKEND WITH RETRY 🔥
   // =========================
-  const apiUnits = async () => {
+  const apiUnits = async (retryCount = 0) => {
+    const MAX_RETRIES = 2;
     try {
-      const res = await api.get("/balance"); // Fixed: Added space between await and api
+      const res = await api.get("/balance");
       
       if (res.data && res.data.units !== undefined) {
         updateUnits(res.data.units);
       }
     } catch (error) {
-      console.error("❌ UNIT SYNC ERROR:", error.response?.data || error.message);
+      console.error("❌ UNIT SYNC ERROR:", error.response?.status, error.message);
+      
+      // Retry logic for network errors (not 4xx errors)
+      if (retryCount < MAX_RETRIES && (!error.response || error.response.status >= 500)) {
+        console.log(`Retrying unit sync... (${retryCount + 1}/${MAX_RETRIES})`);
+        setTimeout(() => apiUnits(retryCount + 1), 2000);
+      }
+      // Don't show error to user for background sync, just log
     }
   };
 

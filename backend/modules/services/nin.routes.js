@@ -7,9 +7,18 @@ const ServiceRequest = require("./ServiceRequest.model");
 const Transaction = require("../finance/Transaction.model");
 const { verifyToken, isAdmin } = require("../../shared/authGuard");
 const { validateServiceRequest, validateVerification } = require("../../shared/validators");
+const {
+  SUPER_ADMIN_EMAIL,
+  SERVICE_RATES,
+  NIN_VERIFY_URL,
+  NIN_PHONE_URL,
+  NIN_TRACKING_URL,
+  NIN_DEMOGRAPHY_URL,
+  NIN_API_TIMEOUT,
+  UNITS_REQUIRED
+} = require("../../config/constants");
 
 const API_KEY = process.env.NIN_API_KEY;
-const SUPER_ADMIN_EMAIL = "washingtonamedu@gmail.com";
 
 // ==============================================================
 // 🧾 ROUTE 1: SUBMIT MANUAL NIMC / CAC / MODIFICATION REQUESTS
@@ -29,12 +38,7 @@ router.post("/request", verifyToken, async (req, res) => {
       if (type === "address") mappedType = "addressMapping";
     }
 
-    const matrixRates = {
-      noRecord: 5000, updateRecord: 5000, modificationVerify: 5000, vnin: 5000,
-      inProcessing: 1000, stillProcessing: 1000, newEnrollment: 1000, invalidTracking: 1000,
-      nameCorrection: 7000, dob: 50000, addressMapping: 7000, phoneSync: 7000,
-      trackingLookup: 1000, emailRetrieval: 4500, deviceUnlink: 5500
-    };
+    const matrixRates = SERVICE_RATES;
     
     let basePrice = matrixRates[mappedType] ?? 1500;
     let slipCost = (String(service).toLowerCase() === "validation" && slipType && slipType !== "none") ? 250 : 0;
@@ -93,17 +97,28 @@ router.post("/verify", verifyToken, async (req, res) => {
       return res.json({ status: "success", data: mockData, units: user.units });
     }
 
-    let unitsRequired = ["phone", "demographic", "tracking"].includes(method) ? 2 : 1;
+    let unitsRequired = UNITS_REQUIRED[method] || UNITS_REQUIRED.standard;
     if (!isSuperAdmin && user.units < unitsRequired) return res.status(400).json({ error: "Insufficient wallet units." });
 
     let url = "";
     let payload = {};
-    if (method === "nin") { url = "https://ninbvnportal.com.ng/api/nin-verification"; payload = { nin, consent: true }; }
-    else if (method === "phone") { url = "https://ninbvnportal.com.ng/api/nin-phone"; payload = { phone, consent: true }; }
-    else if (method === "tracking") { url = "https://ninbvnportal.com.ng/api/nin-tracking"; payload = { tracking_id, consent: true }; }
-    else if (method === "demographic") { url = "https://ninbvnportal.com.ng/api/nin-demography"; payload = { firstname, lastname: surname, gender: gender?.toLowerCase(), dob: birthdate, consent: true }; }
+    if (method === "nin") { url = NIN_VERIFY_URL; payload = { nin, consent: true }; }
+    else if (method === "phone") { url = NIN_PHONE_URL; payload = { phone, consent: true }; }
+    else if (method === "tracking") { url = NIN_TRACKING_URL; payload = { tracking_id, consent: true }; }
+    else if (method === "demographic") { url = NIN_DEMOGRAPHY_URL; payload = { firstname, lastname: surname, gender: gender?.toLowerCase(), dob: birthdate, consent: true }; }
 
-    const response = await axios.post(url, payload, { headers: { "x-api-key": API_KEY, "Content-Type": "application/json" }, timeout: 15000 });
+    const response = await axios.post(url, payload, { headers: { "x-api-key": API_KEY, "Content-Type": "application/json" }, timeout: NIN_API_TIMEOUT });
+    
+    // Validate response structure before accessing properties
+    const responseSchema = Joi.object({
+      data: Joi.object().required()
+    }).unknown(true);
+    
+    const { error: responseError } = responseSchema.validate(response.data);
+    if (responseError) {
+      return res.status(502).json({ error: "Invalid response from verification service", code: "INVALID_RESPONSE" });
+    }
+    
     const cleanData = response.data?.data?.data || response.data?.data || response.data;
 
     if (!isSuperAdmin) { user.units -= unitsRequired; await user.save(); }
@@ -117,8 +132,16 @@ router.post("/verify", verifyToken, async (req, res) => {
 
     return res.json({ status: "success", data: cleanData, unitsUsed: unitsRequired, units: user.units });
   } catch (error) {
-    console.error("VERIFY ERROR:", error.message);
-    return res.status(500).json({ error: "Identity verification engine failure." });
+    console.error("VERIFY ERROR - Request:", { method, url: error.config?.url });
+    console.error("VERIFY ERROR - Response:", error.response?.status, error.response?.data);
+    
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return res.status(401).json({ error: "API authentication failed", code: "API_AUTH_FAILED" });
+    }
+    if (error.code === 'ECONNABORTED') {
+      return res.status(504).json({ error: "Verification service timeout", code: "SERVICE_TIMEOUT" });
+    }
+    return res.status(500).json({ error: "Identity verification engine failure.", code: "VERIFY_FAILED" });
   }
 });
 

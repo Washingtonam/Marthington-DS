@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
-
-const SUPER_ADMIN_EMAIL = "washingtonamedu@gmail.com";
+const { SUPER_ADMIN_EMAIL } = require("../../config/constants");
 
 const userSchema = new mongoose.Schema({
   // ==============================

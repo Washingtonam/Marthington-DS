@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useUser } from "../../context/UserContext";
 import { useNavigate } from "react-router-dom";
+import { api } from "../../lib/axios";
 import {
   ShieldCheck,
   Phone,
@@ -35,7 +36,7 @@ export default function VerifyNIN() {
     if (method === "phone" && phone.length < 10) return alert("Enter a valid phone number");
     if (method === "demographic" && Object.values(form).some(v => !v)) return alert("Complete all fields");
 
-    const isAdmin = user?.email?.toLowerCase().trim() === "washingtonamedu@gmail.com";
+    const isAdmin = user?.email?.toLowerCase().trim() === process.env.REACT_APP_SUPER_ADMIN_EMAIL;
     if (!isAdmin && units < unitsRequired) return alert(`Insufficient units. Need ${unitsRequired}`);
 
     setLoading(true);
@@ -45,15 +46,12 @@ export default function VerifyNIN() {
     try {
       const payload = { userId: user.id, method, ...(method === "nin" ? { nin } : method === "phone" ? { phone } : form) };
 
-      const res = await api("https://xcombinator.onrender.com/api/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const res = await api.post("/services/verify", payload, {
         signal: controller.signal,
       });
 
-      const data = await res;
-      if (!res.ok) throw new Error(data.error || "Verification failed");
+      const data = res.data;
+      if (!res) throw new Error(data?.error || "Verification failed");
 
       setUnits(data.units);
       localStorage.setItem("nin_result", JSON.stringify(data));

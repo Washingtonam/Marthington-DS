@@ -23,6 +23,6 @@ const auditLogSchema = new mongoose.Schema({
 
 // ... your schema definition code remains the same ...
 
-const AuditLog = mongoose.models.AuditLog || mongoose.model("AuditLog", AuditLogSchema);
+const AuditLog = mongoose.models.AuditLog || mongoose.model("AuditLog", auditLogSchema);
 
 module.exports = AuditLog;

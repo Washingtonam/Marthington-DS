@@ -22,7 +22,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
 
   // Fallback string directly prevents empty string/null header drops
-  const currentUserEmail = localStorage.getItem("email") || "washingtonamedu@gmail.com";
+  const currentUserEmail = localStorage.getItem("email") || (import.meta.env.VITE_SUPER_ADMIN_EMAIL || "admin@xcombinator.com");
 
   const headers = {
     email: currentUserEmail,

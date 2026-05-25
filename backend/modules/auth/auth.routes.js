@@ -7,6 +7,7 @@ const { Resend } = require("resend");
 // Localized feature path configuration
 const User = require("../users/User.model");
 const { verifyToken } = require("../../shared/authGuard");
+const { JWT_EXPIRY, SUPER_ADMIN_EMAIL } = require("../../config/constants");
 
 const router = express.Router();
 
@@ -20,26 +21,55 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // ==============================
 router.post("/register", async (req, res) => {
   try {
-    let { firstName, lastName, nin, email, password } = req.body;
+    let { firstName, lastName, nin, email, password, confirmPassword } = req.body;
 
+    // Input validation
     if (!email || !password) {
       return res.status(400).json({
         error: "Email and password are required",
       });
     }
 
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        error: "Passwords do not match",
+      });
+    }
+
+    // Sanitize inputs
     email = email.toLowerCase().trim();
+    firstName = (firstName || "").trim();
+    lastName = (lastName || "").trim();
+    nin = (nin || "").trim();
+
+    // Validate password strength
+    if (password.length < 12) {
+      return res.status(400).json({
+        error: "Password must be at least 12 characters long",
+      });
+    }
+
+    const hasPasswordUppercase = /[A-Z]/.test(password);
+    const hasPasswordLowercase = /[a-z]/.test(password);
+    const hasPasswordNumbers = /[0-9]/.test(password);
+    const hasPasswordSpecial = /[!@#$%^&*]/.test(password);
+
+    if (!hasPasswordUppercase || !hasPasswordLowercase || !hasPasswordNumbers || !hasPasswordSpecial) {
+      return res.status(400).json({
+        error: "Password must contain uppercase, lowercase, numbers, and special characters (!@#$%^&*)",
+      });
+    }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ error: "User already exists" });
+      return res.status(400).json({ error: "Email already registered" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Explicit check: If it's your primary email, automatically enforce super_admin role
     let assignedRole = "user";
-    if (email === "washingtonamedu@gmail.com") {
+    if (email === SUPER_ADMIN_EMAIL) {
       assignedRole = "super_admin";
     }
 
@@ -63,9 +93,10 @@ router.post("/register", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ REGISTER ERROR:", error);
+    console.error("❌ REGISTER ERROR:", error.message);
     res.status(500).json({
-      error: error.message || "Registration failed",
+      error: "Registration failed",
+      code: "REGISTRATION_FAILED"
     });
   }
 });
