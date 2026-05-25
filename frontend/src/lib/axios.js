@@ -2,7 +2,7 @@ import axios from "axios";
 
 const api = axios.create({
   // Use VITE_ prefix for Vite projects
-  baseURL: import.meta.env.VITE_API_URL || "https://your-render-backend-url.onrender.com/api",
+  baseURL: import.meta.env.VITE_API_URL || "https://xcombinator.onrender.com/api",
   headers: {
     "Content-Type": "application/json",
   },
