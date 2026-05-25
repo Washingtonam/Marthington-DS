@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useUser } from "../../context/UserContext";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../lib/axios";
+import api from "../../lib/axios";
 import {
   ShieldCheck,
   Phone,

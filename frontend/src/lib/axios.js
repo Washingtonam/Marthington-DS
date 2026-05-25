@@ -1,7 +1,8 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || "http://localhost:3000/api",
+  // Use VITE_ prefix for Vite projects
+  baseURL: import.meta.env.VITE_API_URL || "https://your-render-backend-url.onrender.com/api",
   headers: {
     "Content-Type": "application/json",
   },
