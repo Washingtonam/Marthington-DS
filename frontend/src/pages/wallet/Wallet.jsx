@@ -1,10 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useUser } from "../../context/UserContext";
-import api from "../../lib/axios"; // Ensure this is your configured axios instance
+import api from "../../lib/axios";
 import { Wallet2, Upload, ArrowRight, Copy, CheckCircle2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-
-const API_BASE = "https://xcombinator.onrender.com";
 
 export default function Wallet() {
   const { user, units } = useUser();
@@ -17,7 +15,7 @@ export default function Wallet() {
   useEffect(() => {
     const fetchPricing = async () => {
       try {
-        const res = await api.get(`${API_BASE}/api/pricing`);
+        const res = await api.get("/api/pricing");
         setUnitPrice(res.data?.nin?.unitPrice || 250);
       } catch (err) {
         console.error("Pricing error:", err);
@@ -50,7 +48,7 @@ export default function Wallet() {
 
     setLoading(true);
     try {
-      await api.post(`${API_BASE}/api/submit-payment`, {
+      await api.post("/api/finance/submit-payment", {
         userId: user.id,
         amount: Number(amount),
         units: calculatedUnits,

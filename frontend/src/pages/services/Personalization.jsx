@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "../../lib/axios";
 import { useUser } from "../../context/UserContext";
 import { useNavigate } from "react-router-dom";
 import { Binary, ArrowLeft, Search, Loader2, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
-
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export default function Personalization() {
   const navigate = useNavigate();
@@ -20,7 +18,7 @@ export default function Personalization() {
   useEffect(() => {
     const fetchPricing = async () => {
       try {
-        const { data } = await axios.get(`${API_BASE}/api/pricing`);
+        const { data } = await api.get("/api/pricing");
         if (data?.nin?.unitPrice) setUnitPrice(data.nin.unitPrice);
         if (data?.ninServices?.ipe?.invalidTracking) setTrackingCost(data.ninServices.ipe.invalidTracking);
       } catch (err) {
@@ -47,11 +45,11 @@ export default function Personalization() {
 
     setLoading(true);
     try {
-      const { data } = await axios.post(`${API_BASE}/api/verify`, {
+      const { data } = await api.post("/api/services/verify", {
         userId: user.id || user._id,
         method: "tracking",
         tracking_id: trackingId.trim().toUpperCase(),
-      }, { timeout: 20000 });
+      });
 
       if (data.units !== undefined) setUnits(data.units);
       localStorage.setItem("nin_result", JSON.stringify(data));
