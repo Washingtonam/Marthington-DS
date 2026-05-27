@@ -55,7 +55,7 @@ app.use(async (req, res, next) => {
 // 🎯 API ROUTES
 // ==============================
 
-// Balance Endpoints
+// Balance Endpoints - Updated for Naira Wallet Migration
 const getBalanceResponse = async (req) => {
   let user = req.user;
   if (!user && (req.body.email || req.query.email)) {
@@ -63,15 +63,14 @@ const getBalanceResponse = async (req) => {
     user = await User.findOne({ email: email.toLowerCase().trim() });
   }
   return user ? 
-    { success: true, units: user.units ?? 0, balance: user.units ?? 0 } :
-    { success: true, units: 0, balance: 0 };
+    { success: true, walletBalance: user.walletBalance ?? 0, balance: user.walletBalance ?? 0 } :
+    { success: true, walletBalance: 0, balance: 0 };
 };
 
 app.post("/api/balance", async (req, res) => res.json(await getBalanceResponse(req)));
 app.get("/api/balance", async (req, res) => res.json(await getBalanceResponse(req)));
 
 // Combined User Requests Route
-// Note: Frontend must call: api.get(`/cac/user-requests/${userId}`)
 app.get("/api/cac/user-requests/:id", async (req, res) => {
   try {
     const userId = req.params.id;

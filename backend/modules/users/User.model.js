@@ -26,18 +26,30 @@ const userSchema = new mongoose.Schema({
   },
 
   // ==============================
-  // 💰 WALLET
+  // 💰 WALLET (NAIRA-BASED SYSTEM)
+  // ==============================
+  walletBalance: {
+    type: Number,
+    default: 0.00,
+    min: 0,
+    description: "User wallet balance in Naira (NGN)",
+  },
+
+  // ==============================
+  // 💰 LEGACY UNITS SYSTEM (DEPRECATED)
   // ==============================
   units: {
     type: Number,
     default: 0,
     min: 0,
+    description: "[DEPRECATED] Legacy units - migrating to walletBalance",
   },
 
   balance: {
     type: Number,
     default: 0,
     min: 0,
+    description: "[DEPRECATED] Alias for units - kept for backward compatibility",
   },
 
   // ==============================
