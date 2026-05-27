@@ -1,4 +1,4 @@
-const Transaction = require("../../models/Transaction"); 
+const Transaction = require("../models/Transaction"); 
 const User = require("../modules/users/User.model");
 
 // Submit a payment for Admin approval
