@@ -1,4 +1,4 @@
-const Transaction = require("../../models/Transaction"); // Adjust path if your model is elsewhere
+const Transaction = require("../../models/Transaction"); 
 const User = require("../users/User.model");
 
 // Submit a payment for Admin approval
@@ -12,7 +12,7 @@ exports.submitPaymentReceipt = async (req, res) => {
             type: "credit",
             amount,
             reference,
-            status: "pending", // This ensures it shows in Admin dashboard
+            status: "pending", 
             description: `Wallet funding via ${paymentMethod}`,
             proof
         });
@@ -27,9 +27,9 @@ exports.submitPaymentReceipt = async (req, res) => {
 // Fetch pending payments for Admin
 exports.getPendingPayments = async (req, res) => {
     try {
-        // Querying based on the status enum in your Transaction model
+        // Querying pending payments to populate in the admin dashboard
         const pendingPayments = await Transaction.find({ status: "pending" })
-            .populate("userId", "username email");
+            .populate("userId", "username email walletBalance");
         res.status(200).json(pendingPayments);
     } catch (error) {
         res.status(500).json({ message: "Error fetching pending payments", error: error.message });
@@ -43,8 +43,10 @@ exports.approvePayment = async (req, res) => {
         const transaction = await Transaction.findById(id);
         
         if (!transaction) return res.status(404).json({ message: "Transaction not found" });
+        if (transaction.status === "approved") return res.status(400).json({ message: "Transaction already processed" });
 
         // Update User Balance
+        // We use $inc to safely add the transaction amount to the current balance
         await User.findByIdAndUpdate(transaction.userId, {
             $inc: { walletBalance: transaction.amount }
         });
