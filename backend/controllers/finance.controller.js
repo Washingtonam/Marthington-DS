@@ -1,7 +1,7 @@
-const Transaction = require("../models/Transaction"); 
+const Transaction = require("../models/transaction.model");
 const User = require("../modules/users/User.model");
 
-// Submit a payment for Admin approval
+// Submit a payment
 exports.submitPaymentReceipt = async (req, res) => {
     try {
         const { amount, reference, paymentMethod, proof } = req.body;
@@ -10,9 +10,9 @@ exports.submitPaymentReceipt = async (req, res) => {
         const newTransaction = new Transaction({
             userId,
             type: "credit",
-            amount,
+            amount, // Amount in Naira
             reference,
-            status: "pending", 
+            status: "pending",
             description: `Wallet funding via ${paymentMethod}`,
             proof
         });
@@ -24,32 +24,39 @@ exports.submitPaymentReceipt = async (req, res) => {
     }
 };
 
-// Fetch pending payments for Admin
+// Fetch pending payments
 exports.getPendingPayments = async (req, res) => {
     try {
-        // Querying pending payments to populate in the admin dashboard
         const pendingPayments = await Transaction.find({ status: "pending" })
-            .populate("userId", "username email walletBalance");
+            .populate("userId", "email");
         res.status(200).json(pendingPayments);
     } catch (error) {
         res.status(500).json({ message: "Error fetching pending payments", error: error.message });
     }
 };
 
-// Approve payment and update user wallet
+// Approve payment and credit wallet
 exports.approvePayment = async (req, res) => {
     try {
         const { id } = req.params;
         const transaction = await Transaction.findById(id);
         
         if (!transaction) return res.status(404).json({ message: "Transaction not found" });
-        if (transaction.status === "approved") return res.status(400).json({ message: "Transaction already processed" });
+        if (transaction.status !== "pending") return res.status(400).json({ message: "Transaction already processed" });
 
-        // Update User Balance
-        // We use $inc to safely add the transaction amount to the current balance
-        await User.findByIdAndUpdate(transaction.userId, {
-            $inc: { walletBalance: transaction.amount }
-        });
+        // Update User Balance: Add the Naira amount to walletBalance
+        const user = await User.findById(transaction.userId);
+        
+        // --- CONVERSION LOGIC ---
+        // If there are legacy units, convert them to Naira (1 unit = 250 Naira)
+        if (user.units > 0) {
+            user.walletBalance += (user.units * 250);
+            user.units = 0; // Clear units after conversion
+        }
+
+        // Add the new transaction amount
+        user.walletBalance += transaction.amount;
+        await user.save();
 
         // Update Transaction Status
         transaction.status = "approved";

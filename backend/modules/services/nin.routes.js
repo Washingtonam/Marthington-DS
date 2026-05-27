@@ -4,7 +4,7 @@ const router = express.Router();
 
 const User = require("../users/User.model");
 const ServiceRequest = require("./ServiceRequest.model");
-const Transaction = require("../../models/Transaction");
+const Transaction = require("../../models/transaction.model");
 const { verifyToken, isAdmin } = require("../../shared/authGuard");
 const { validateServiceRequest, validateVerification } = require("../../shared/validators");
 const {

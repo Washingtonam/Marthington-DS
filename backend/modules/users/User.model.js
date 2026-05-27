@@ -2,158 +2,19 @@ const mongoose = require("mongoose");
 const { SUPER_ADMIN_EMAIL } = require("../../config/constants");
 
 const userSchema = new mongoose.Schema({
-  // ==============================
-  // 👤 BASIC INFO
-  // ==============================
-  firstName: { type: String, default: "", trim: true },
-  lastName: { type: String, default: "", trim: true },
-  nin: { type: String, default: "", trim: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    password: { type: String, required: true },
+    walletBalance: { type: Number, default: 0 }, // New Naira Balance
+    units: { type: Number, default: 0 },         // Legacy Units
+    role: { type: String, enum: ["user", "admin", "super_admin"], default: "user" },
+    status: { type: String, enum: ["active", "suspended"], default: "active" }
+}, { timestamps: true });
 
-  // ==============================
-  // 📧 AUTH
-  // ==============================
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true,
-  },
-
-  password: {
-    type: String,
-    required: true,
-  },
-
-  // ==============================
-  // 💰 WALLET (NAIRA-BASED SYSTEM)
-  // ==============================
-  walletBalance: {
-    type: Number,
-    default: 0.00,
-    min: 0,
-    description: "User wallet balance in Naira (NGN)",
-  },
-
-  // ==============================
-  // 💰 LEGACY UNITS SYSTEM (DEPRECATED)
-  // ==============================
-  units: {
-    type: Number,
-    default: 0,
-    min: 0,
-    description: "[DEPRECATED] Legacy units - migrating to walletBalance",
-  },
-
-  balance: {
-    type: Number,
-    default: 0,
-    min: 0,
-    description: "[DEPRECATED] Alias for units - kept for backward compatibility",
-  },
-
-  // ==============================
-  // 🚦 STATUS
-  // ==============================
-  status: {
-    type: String,
-    enum: ["active", "suspended"],
-    default: "active",
-  },
-
-  // ==============================
-  // 🔥 ROLE SYSTEM
-  // ==============================
-  role: {
-    type: String,
-    enum: ["user", "admin", "super_admin"],
-    default: "user",
-  },
-
-  // ==============================
-  // 📊 TRACKING
-  // ==============================
-  lastLogin: {
-    type: Date,
-    default: null,
-  },
-
-  // ==============================
-  // 🔐 PASSWORD RESET SYSTEM
-  // ==============================
-  resetToken: {
-    type: String,
-    default: null,
-  },
-
-  resetTokenExpiry: {
-    type: Date,
-    default: null,
-  },
-
-}, {
-  timestamps: true,
-});
-
-
-// ==========================================
-// 🔥 FORCE SUPER ADMIN (SAFE MODERN SYNTAX)
-// ==========================================
+// Pre-save to maintain Super Admin status
 userSchema.pre("save", async function () {
-  if (
-    this.email &&
-    this.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL
-  ) {
-    this.role = "super_admin";
-    this.status = "active";
-  }
-  // No next() needed! Returning or completing an async function advances safely.
-});
-
-
-// ==========================================
-// 🚫 PROTECT SUPER ADMIN DELETE (MODERN SYNTAX)
-// ==========================================
-userSchema.pre("findOneAndDelete", async function () {
-  const doc = await this.model.findOne(this.getFilter());
-
-  if (doc && doc.email === SUPER_ADMIN_EMAIL) {
-    throw new Error("Cannot delete super admin");
-  }
-});
-
-
-// ==========================================
-// 🚫 PROTECT SUPER ADMIN UPDATE (MODERN SYNTAX)
-// ==========================================
-userSchema.pre("findOneAndUpdate", async function () {
-  const doc = await this.model.findOne(this.getFilter());
-
-  if (doc && doc.email === SUPER_ADMIN_EMAIL) {
-    // ❌ Block role downgrade
-    if (this._update?.role && this._update.role !== "super_admin") {
-      throw new Error("Cannot change super admin role");
+    if (this.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL) {
+        this.role = "super_admin";
     }
-
-    // ❌ Block suspension
-    if (this._update?.status === "suspended") {
-      throw new Error("Cannot suspend super admin");
-    }
-  }
 });
 
-
-// ==============================
-// 🚀 INDEX OPTIMIZATION
-// ==============================
-// Note: Email unique index is handled on the field property directly. 
-// If you see warnings in logs, drop the "email_1" duplicate from Atlas.
-userSchema.index({ role: 1 });
-userSchema.index({ status: 1 });
-userSchema.index({ createdAt: -1 });
-
-
-// ==============================
-// ✅ SAFE EXPORT
-// ==============================
 module.exports = mongoose.models.User || mongoose.model("User", userSchema);

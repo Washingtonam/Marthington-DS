@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const router = express.Router();
 
 const User = require("../users/User.model");
-const Transaction = require("../../models/Transaction");
+const Transaction = require("../../models/transaction.model");
 const CacRequest = require("./CacRequest.model");
 const Pricing = require("./Pricing.model");
 const { verifyToken, isAdmin } = require("../../shared/authGuard");
