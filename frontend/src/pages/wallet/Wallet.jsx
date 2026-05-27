@@ -1,30 +1,21 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { Wallet2, Upload, ArrowRight, Copy, CheckCircle2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Wallet() {
-  const { user, units } = useUser();
+  const { user } = useUser();
   const [amount, setAmount] = useState("");
   const [proof, setProof] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [unitPrice, setUnitPrice] = useState(250);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    const fetchPricing = async () => {
-      try {
-        const res = await api.get("/api/pricing");
-        setUnitPrice(res.data?.nin?.unitPrice || 250);
-      } catch (err) {
-        console.error("Pricing error:", err);
-      }
-    };
-    fetchPricing();
-  }, []);
-
-  const calculatedUnits = useMemo(() => Math.floor(Number(amount) / unitPrice), [amount, unitPrice]);
+  const copyAccount = () => {
+    navigator.clipboard.writeText("6104102697");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleFile = (e) => {
     const file = e.target.files[0];
@@ -36,22 +27,15 @@ export default function Wallet() {
     reader.readAsDataURL(file);
   };
 
-  const copyAccount = () => {
-    navigator.clipboard.writeText("6104102697");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const submitPayment = async () => {
-    if (!amount || Number(amount) < unitPrice) return alert(`Minimum amount is ₦${unitPrice}`);
+    if (!amount || Number(amount) < 100) return alert(`Minimum deposit is ₦100`);
     if (!proof) return alert("Please upload your payment screenshot");
 
     setLoading(true);
     try {
       await api.post("/api/finance/submit-payment", {
-        userId: user.id,
+        userId: user.id || user._id,
         amount: Number(amount),
-        units: calculatedUnits,
         proof
       });
 
@@ -70,11 +54,11 @@ export default function Wallet() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-blue-700 to-indigo-900 text-white p-8 rounded-[2rem] shadow-2xl mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
           <h1 className="text-4xl font-black">Wallet</h1>
-          <p className="text-blue-100">Fund your account to access services</p>
+          <p className="text-blue-100">Fund your account to access platform services</p>
         </div>
         <div className="bg-white/10 backdrop-blur p-6 rounded-3xl min-w-[200px] text-center">
-          <p className="text-xs uppercase tracking-widest text-blue-200">Available Units</p>
-          <h2 className="text-5xl font-black">{units}</h2>
+          <p className="text-xs uppercase tracking-widest text-blue-200">Wallet Balance</p>
+          <h2 className="text-5xl font-black">₦{user?.walletBalance?.toLocaleString() || "0.00"}</h2>
         </div>
       </motion.div>
 
@@ -90,7 +74,13 @@ export default function Wallet() {
             <p className="mt-4 font-semibold">WASHINGTON AMEDU (OPAY)</p>
           </div>
 
-          <input type="number" placeholder="Enter amount (₦)" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full p-4 rounded-2xl border mb-4 bg-gray-50 dark:bg-gray-800" />
+          <input 
+            type="number" 
+            placeholder="Enter amount (₦)" 
+            value={amount} 
+            onChange={(e) => setAmount(e.target.value)} 
+            className="w-full p-4 rounded-2xl border mb-4 bg-gray-50 dark:bg-gray-800" 
+          />
           
           <label className="border-2 border-dashed p-8 rounded-2xl flex flex-col items-center cursor-pointer hover:bg-gray-50 transition">
             <Upload className="text-blue-500 mb-2" />
@@ -104,16 +94,12 @@ export default function Wallet() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-xl border text-center">
-            <p className="text-sm text-gray-500">Price Per Unit</p>
-            <h2 className="text-4xl font-black text-blue-600">₦{unitPrice}</h2>
-          </div>
           <div className="bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
             <h3 className="font-bold">Important Notice</h3>
             <ul className="text-gray-500 space-y-2">
               <li>• Payments require manual review.</li>
               <li>• Only upload clear transfer receipts.</li>
-              <li>• Units reflect once approved.</li>
+              <li>• Balance reflects once approved.</li>
             </ul>
           </div>
         </div>
