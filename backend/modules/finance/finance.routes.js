@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const { submitPaymentReceipt, getPendingPayments, approvePayment } = require("../controllers/finance.controller");
+// Use ../../ to go up from 'modules/finance' to 'backend' root
+const { submitPaymentReceipt, getPendingPayments, approvePayment } = require("../../controllers/finance.controller");
 const { verifyToken, isAdmin } = require("../../shared/authGuard");
 
 // User Routes
