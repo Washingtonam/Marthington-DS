@@ -15,10 +15,11 @@ const app = express();
 
 // ✅ MIDDLEWARE
 app.use(cors({
-  origin: ["https://www.xcombinator.com.ng", "https://xcombinator.com.ng", "http://localhost:5173"],
+  origin: ["https://www.xcombinator.com.ng", "https://www.xcombinator.com.ng", "https://xcombinator.com.ng", "http://localhost:5173"],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization"]
+  // Added "email" to the allowed headers as requested
+  allowedHeaders: ["Content-Type", "Authorization", "email"]
 }));
 
 app.use(express.json({ limit: "10mb" }));
