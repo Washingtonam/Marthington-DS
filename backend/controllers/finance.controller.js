@@ -1,5 +1,5 @@
 const Transaction = require("../../models/Transaction"); 
-const User = require("../users/User.model");
+const User = require("../modules/users/User.model");
 
 // Submit a payment for Admin approval
 exports.submitPaymentReceipt = async (req, res) => {
