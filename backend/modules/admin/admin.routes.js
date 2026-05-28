@@ -3,7 +3,7 @@ const router = express.Router();
 const mongoose = require("mongoose");
 
 const User = require("../users/User.model");
-const Transaction = require("../finance/Transaction.model");
+const Transaction = require("../../models/transaction.model");
 const AuditLog = require("./AuditLog.model");
 const Pricing = require("../services/Pricing.model");
 
