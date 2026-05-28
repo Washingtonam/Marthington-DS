@@ -4,6 +4,10 @@ const connectDB = require("./config/db"); // We use the professional config file
 
 const PORT = process.env.PORT || 5000;
 
+// When running behind a proxy (Render, Heroku, etc.), enable trust proxy
+// so Express can correctly identify secure connections for cookies.
+app.set("trust proxy", 1);
+
 // Connect to DB then start the listener
 connectDB().then(() => {
     app.listen(PORT, () => {

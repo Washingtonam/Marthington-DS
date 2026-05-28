@@ -24,10 +24,33 @@ export default function Dashboard() {
     try {
       const targetId = user.id || user._id;
       
-      const [balanceRes, requestsRes] = await Promise.all([
-        api.get("/api/users/balance"),
-        api.get(`/api/cac/user-requests/${targetId}`)
-      ]);
+      // Try to fetch balance and user-specific CAC requests. If the user-requests endpoint is missing,
+      // fall back to the general CAC history and filter by userId.
+      const balancePromise = api.get("/api/users/balance");
+      let requestsPromise = api.get(`/api/cac/user-requests/${targetId}`);
+
+      let balanceRes, requestsRes;
+      try {
+        [balanceRes, requestsRes] = await Promise.all([balancePromise, requestsPromise]);
+      } catch (err) {
+        // If user-requests 404s, fallback to /api/cac/history and filter
+        if (err?.response?.status === 404) {
+          try {
+            balanceRes = await balancePromise;
+            const hist = await api.get(`/api/cac/history`);
+            requestsRes = { data: (hist.data || []).filter(r => String(r.userId) === String(targetId)) };
+          } catch (err2) {
+            console.error("Fallback CAC history failed:", err2);
+            balanceRes = await balancePromise.catch(() => ({ data: { walletBalance: 0 } }));
+            requestsRes = { data: [] };
+          }
+        } else {
+          // Other errors – log and default
+          console.error("DASHBOARD SYNC ERROR (parallel):", err);
+          balanceRes = await balancePromise.catch(() => ({ data: { walletBalance: 0 } }));
+          requestsRes = { data: [] };
+        }
+      }
 
       // Update Balance (Using walletBalance)
       setWalletBalance(balanceRes.data.walletBalance ?? 0);

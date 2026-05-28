@@ -7,6 +7,7 @@ const Transaction = require("../../models/transaction.model");
 const CacRequest = require("./CacRequest.model");
 const Pricing = require("./Pricing.model");
 const { verifyToken, isAdmin } = require("../../shared/authGuard");
+const { SUPER_ADMIN_EMAIL } = require("../../config/constants");
 const { validateCacRegistration } = require("../../shared/validators");
 
 router.post("/submit", verifyToken, async (req, res) => {
@@ -72,6 +73,28 @@ router.get("/history", verifyToken, async (req, res) => {
     const history = await CacRequest.find({ userId: req.user.id }).sort({ createdAt: -1 });
     res.json(history);
   } catch (error) { res.status(500).json({ message: "Failed to load logs." }); }
+});
+
+// ✅ Get CAC requests for a specific user (owner or admin only)
+router.get("/user-requests/:id", verifyToken, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+
+    // Allow access if requester is the owner, a platform admin, or super admin email
+    const isOwner = req.user && (req.user.id === targetId || req.user._id === targetId);
+    const isAdminRole = req.user && (req.user.role === "admin" || req.user.role === "super_admin");
+    const isSuperAdminEmail = req.user && req.user.email === SUPER_ADMIN_EMAIL;
+
+    if (!isOwner && !isAdminRole && !isSuperAdminEmail) {
+      return res.status(403).json({ message: "Forbidden: insufficient privileges" });
+    }
+
+    const records = await CacRequest.find({ userId: targetId }).sort({ createdAt: -1 }).lean();
+    return res.json(records);
+  } catch (error) {
+    console.error("🔥 CAC USER REQUESTS ERROR:", error);
+    return res.status(500).json({ message: "Failed to load user CAC requests" });
+  }
 });
 
 router.get("/admin/requests", verifyToken, isAdmin, async (req, res) => {

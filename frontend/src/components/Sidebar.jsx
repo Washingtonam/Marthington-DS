@@ -73,28 +73,30 @@ useEffect(() => {
 
     const apiData = async () => {
       try {
-        // 1. Core Payments Sync
-        const payRes = await axios.get(`${API_BASE}/api/admin/payments`, { headers });
-        const paymentsData = payRes.data?.data || payRes.data || [];
+        // 1. Core Payments Sync with fallback to /api/finance/payments
+        let paymentsData = [];
+        try {
+          const payRes = await axios.get(`${API_BASE}/api/admin/payments`, { headers });
+          paymentsData = payRes.data?.data || payRes.data || [];
+        } catch (err) {
+          // If admin payments not available, try finance payments endpoint
+          try {
+            const alt = await axios.get(`${API_BASE}/api/finance/payments`, { headers });
+            paymentsData = alt.data?.data || alt.data || [];
+          } catch (err2) {
+            console.error("Payments fetch fallback failed:", err.message, err2?.message);
+            paymentsData = [];
+          }
+        }
+
         if (Array.isArray(paymentsData)) {
           setPendingPayments(paymentsData.filter((p) => p && p.status === "pending").length);
         } else {
           setPendingPayments(0);
         }
 
-        // 2. Core Service Requests Sync 
-        // NOTE: Commented out because /api/admin/requests returns a 404 on the backend.
-        // Once your backend engineer deploys this route, uncomment these lines.
-        /*
-        const reqRes = await axios.get(`${API_BASE}/api/admin/requests`, { headers });
-        const requestsData = reqRes.data?.data || reqRes.data?.requests || reqRes.data || [];
-        if (Array.isArray(requestsData)) {
-          setPendingRequests(requestsData.filter((r) => r && r.status === "pending").length);
-        } else {
-          setPendingRequests(0);
-        }
-        */
-        setPendingRequests(0); // Temporary placeholder to keep UI stable
+        // 2. Core Service Requests Sync (left as placeholder)
+        setPendingRequests(0);
 
       } catch (err) {
         console.error("Sidebar counts sync error:", err.message);
