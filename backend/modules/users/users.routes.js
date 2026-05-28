@@ -5,7 +5,7 @@ const { verifyToken, isAdmin } = require("../../shared/authGuard");
 
 // Lazy-loaded model definitions for localized structural feature calls
 // (These paths look straight into your adjacent modules folder structure seamlessly)
-const Transaction = require("../../models/Transaction");
+const Transaction = require("../../models/transaction.model");
 const ServiceRequest = require("../services/ServiceRequest.model");
 const CacRequest = require("../services/CacRequest.model");
 
