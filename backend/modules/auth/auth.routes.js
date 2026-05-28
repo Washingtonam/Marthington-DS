@@ -88,6 +88,8 @@ router.post("/register", async (req, res) => {
         id: newUser._id,
         email: newUser.email,
         units: newUser.units || 0,
+        walletBalance: newUser.walletBalance || 0,
+        walletBalanceKobo: newUser.walletBalanceKobo || 0,
         role: newUser.role,
       },
     });
@@ -152,6 +154,8 @@ router.post("/login", async (req, res) => {
         id: user._id,
         email: user.email,
         units: user.units || 0,
+        walletBalance: user.walletBalance || 0,
+        walletBalanceKobo: user.walletBalanceKobo || 0,
         role: user.role,
       },
     });

@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUser } from "../../context/UserContext";
+import api from "../../lib/axios";
+import { formatNaira } from "../../lib/currency";
 import { Loader2, ShieldCheck, CreditCard, User } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -60,11 +62,11 @@ export default function VerifyBVN() {
       <div className="grid md:grid-cols-2 gap-4 mb-8">
         <div className="bg-blue-600 text-white p-6 rounded-3xl">
           <p className="text-blue-100 text-sm">Available Balance</p>
-          <h2 className="text-3xl font-bold">₦{balance?.toLocaleString()}</h2>
+          <h2 className="text-3xl font-bold">{formatNaira(balance ?? 0)}</h2>
         </div>
         <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-3xl">
           <p className="text-gray-500 text-sm">Service Cost</p>
-          <h2 className="text-3xl font-bold dark:text-white">₦{price}</h2>
+          <h2 className="text-3xl font-bold dark:text-white">{formatNaira(price)}</h2>
         </div>
       </div>
 
@@ -83,7 +85,7 @@ export default function VerifyBVN() {
           className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold transition flex items-center justify-center gap-2"
         >
           {loading ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-          {loading ? "Verifying..." : `Verify BVN (₦${price})`}
+          {loading ? "Verifying..." : `Verify BVN (${formatNaira(price)})`}
         </button>
       </div>
 

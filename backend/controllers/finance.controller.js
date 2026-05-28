@@ -7,10 +7,13 @@ exports.submitPaymentReceipt = async (req, res) => {
         const { amount, reference, paymentMethod, proof } = req.body;
         const userId = req.user._id;
 
+        const amountKobo = Math.round(Number(amount) * 100);
+
         const newTransaction = new Transaction({
             userId,
             type: "credit",
             amount, // Amount in Naira
+            amountKobo,
             reference,
             status: "pending",
             description: `Wallet funding via ${paymentMethod}`,
@@ -46,16 +49,22 @@ exports.approvePayment = async (req, res) => {
 
         // Update User Balance: Add the Naira amount to walletBalance
         const user = await User.findById(transaction.userId);
-        
-        // --- CONVERSION LOGIC ---
-        // If there are legacy units, convert them to Naira (1 unit = 250 Naira)
-        if (user.units > 0) {
-            user.walletBalance += (user.units * 250);
-            user.units = 0; // Clear units after conversion
+
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        if (user.walletBalanceKobo == null) {
+            user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
         }
 
-        // Add the new transaction amount
-        user.walletBalance += transaction.amount;
+        // --- CONVERSION LOGIC ---
+        // If there are legacy units, convert them to Naira (1 unit = 250 Naira => 25000 kobo)
+        if (user.units > 0) {
+            user.walletBalanceKobo += user.units * 25000;
+            user.units = 0; // Clear legacy units after conversion
+        }
+
+        const paymentAmountKobo = transaction.amountKobo || Math.round((transaction.amount || 0) * 100);
+        user.walletBalanceKobo += paymentAmountKobo;
         await user.save();
 
         // Update Transaction Status

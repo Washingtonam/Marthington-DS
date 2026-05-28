@@ -7,6 +7,7 @@ const UserContext = createContext();
 export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
   const [units, setUnits] = useState(0);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   // =========================
   // NORMALIZE USER
@@ -18,6 +19,7 @@ export function UserProvider({ children }) {
       ...userData,
       id: userData.id || userData._id,
       units: userData.units || 0,
+      walletBalance: Number(userData.walletBalance ?? userData.balance ?? 0),
     };
 
     normalized.isAdmin =
@@ -27,25 +29,28 @@ export function UserProvider({ children }) {
   };
 
   // =========================
-  // API UNITS FROM BACKEND WITH RETRY 🔥
+  // API BALANCE FROM BACKEND WITH RETRY 🔥
   // =========================
   const apiUnits = async (retryCount = 0) => {
     const MAX_RETRIES = 2;
     try {
-      const res = await api.get("/api/balance");
+      const res = await api.get("/api/users/balance");
       
-      if (res.data && res.data.units !== undefined) {
-        updateUnits(res.data.units);
+      if (res.data) {
+        if (res.data.units !== undefined) {
+          updateUnits(res.data.units);
+        }
+        if (res.data.walletBalance !== undefined) {
+          updateWalletBalance(res.data.walletBalance);
+        }
       }
     } catch (error) {
-      console.error("❌ UNIT SYNC ERROR:", error.response?.status, error.message);
+      console.error("❌ BALANCE SYNC ERROR:", error.response?.status, error.message);
       
-      // Retry logic for network errors (not 4xx errors)
       if (retryCount < MAX_RETRIES && (!error.response || error.response.status >= 500)) {
-        console.log(`Retrying unit sync... (${retryCount + 1}/${MAX_RETRIES})`);
+        console.log(`Retrying balance sync... (${retryCount + 1}/${MAX_RETRIES})`);
         setTimeout(() => apiUnits(retryCount + 1), 2000);
       }
-      // Don't show error to user for background sync, just log
     }
   };
 
@@ -58,7 +63,8 @@ export function UserProvider({ children }) {
       const normalized = normalizeUser(storedUser);
       setUser(normalized);
       setUnits(normalized.units);
-      apiUnits(); // Fixed: Added space
+      setWalletBalance(normalized.walletBalance);
+      apiUnits();
     }
   }, []);
 
@@ -78,6 +84,7 @@ export function UserProvider({ children }) {
     const normalized = normalizeUser(userData);
     setUser(normalized);
     setUnits(normalized.units);
+    setWalletBalance(normalized.walletBalance);
     localStorage.setItem("user", JSON.stringify(normalized));
   };
 
@@ -95,11 +102,25 @@ export function UserProvider({ children }) {
   };
 
   // =========================
+  // UPDATE WALLET BALANCE
+  // =========================
+  const updateWalletBalance = (newBalance) => {
+    setWalletBalance(newBalance);
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, walletBalance: newBalance };
+      localStorage.setItem("user", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // =========================
   // LOGOUT
   // =========================
   const clearUser = () => {
     setUser(null);
     setUnits(0);
+    setWalletBalance(0);
     localStorage.removeItem("user");
     localStorage.removeItem("token");
   };
@@ -109,11 +130,14 @@ export function UserProvider({ children }) {
       value={{
         user,
         units,
+        walletBalance,
+        balance: walletBalance,
         setUnits: updateUnits,
         setUser: updateUser,
+        setBalance: updateWalletBalance,
         clearUser,
         isAdmin: user?.isAdmin || false,
-        refreshUnits: apiUnits,
+        refreshBalance: apiUnits,
       }}
     >
       {children}

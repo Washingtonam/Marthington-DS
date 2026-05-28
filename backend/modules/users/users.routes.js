@@ -25,8 +25,10 @@ router.get("/balance", verifyToken, async (req, res) => {
     }
 
     return res.json({
-      units: user.units || 0,     // ✅ PRIMARY SYSTEM
-      balance: user.balance || 0, // optional (legacy)
+      units: user.units || 0,     // ✅ Legacy units still available for backward compatibility
+      walletBalance: user.walletBalance || 0,
+      walletBalanceKobo: user.walletBalanceKobo || 0,
+      balance: user.balance || 0, // optional legacy field
     });
 
   } catch (error) {

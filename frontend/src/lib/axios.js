@@ -1,9 +1,16 @@
 import axios from "axios";
 
+const apiUrl = import.meta.env.VITE_API_URL;
+if (!apiUrl) {
+  throw new Error(
+    "Missing required environment variable VITE_API_URL. Set it to your backend API URL."
+  );
+}
+
 const api = axios.create({
-  // Ensure this points to the root URL (without /api) 
+  // Ensure this points to the root URL (without /api)
   // because your server.js routes all start with /api
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: apiUrl,
   headers: {
     "Content-Type": "application/json",
   },

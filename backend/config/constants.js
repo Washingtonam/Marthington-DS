@@ -59,17 +59,18 @@ module.exports.UNITS_REQUIRED = {
 module.exports.DEFAULT_PAGE_SIZE = 20;
 module.exports.MAX_PAGE_SIZE = 100;
 
+const FRONTEND_URL = process.env.FRONTEND_URL;
+if (!FRONTEND_URL) {
+  throw new Error(
+    "Missing required environment variable FRONTEND_URL. This is required for CORS and frontend callbacks."
+  );
+}
+
 // CORS Origins
-module.exports.CORS_ORIGINS = [
-  "https://www.xcombinator.com.ng",
-  "https://xcombinator.com.ng",
-  "http://localhost:5173",
-  "http://localhost:3000"
-];
+module.exports.CORS_ORIGINS = [FRONTEND_URL];
 
 // Frontend URLs
 module.exports.FRONTEND_URLs = {
-  production: "https://xcombinator.com.ng",
-  development: "http://localhost:5173",
-  staging: "https://staging.xcombinator.com.ng"
+  production: FRONTEND_URL,
+  staging: process.env.FRONTEND_STAGING_URL
 };

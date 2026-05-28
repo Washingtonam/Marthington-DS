@@ -4,6 +4,7 @@ import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { ShieldCheck, Wallet, FileText, CreditCard } from "lucide-react";
 import { motion } from "framer-motion";
+import { formatNaira } from "../../lib/currency";
 
 import StatCard from "../../components/ui/StatCard";
 import PageHeader from "../../components/ui/PageHeader";
@@ -11,7 +12,7 @@ import Button from "../../components/ui/Button";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, refreshUser } = useUser(); // Ensure your context has a refreshUser method
+  const { user, refreshBalance } = useUser();
   const [stats, setStats] = useState({ total: 0, completed: 0, pending: 0 });
   const [walletBalance, setWalletBalance] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -24,13 +25,12 @@ export default function Dashboard() {
       const targetId = user.id || user._id;
       
       const [balanceRes, requestsRes] = await Promise.all([
-        api.post("/api/balance", { email: user.email }),
+        api.get("/api/users/balance"),
         api.get(`/api/cac/user-requests/${targetId}`)
       ]);
 
       // Update Balance (Using walletBalance)
       setWalletBalance(balanceRes.data.walletBalance ?? 0);
-      if (refreshUser) refreshUser();
 
       // Update Stats
       const data = requestsRes.data || [];
@@ -44,7 +44,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [user, refreshUser]);
+  }, [user, refreshBalance]);
 
   useEffect(() => {
     fetchData();
@@ -67,7 +67,7 @@ export default function Dashboard() {
         <div className="relative z-10 flex flex-col lg:flex-row justify-between gap-8">
           <div>
             <p className="text-white/70 text-sm mb-3">Available Wallet Balance</p>
-            <h1 className="text-6xl font-black tracking-tight">{loading ? "..." : `₦${walletBalance.toLocaleString()}`}</h1>
+            <h1 className="text-6xl font-black tracking-tight">{loading ? "..." : formatNaira(walletBalance)}</h1>
             <div className="flex gap-3 mt-6">
               <Button onClick={() => navigate("/wallet")} className="bg-white text-blue-700 hover:bg-gray-100 font-bold px-6 py-2.5 rounded-xl">Fund Wallet</Button>
               <Button onClick={() => navigate("/my-requests")} className="bg-white/10 border border-white/20 text-white px-6 py-2.5 rounded-xl">View Requests</Button>
@@ -92,7 +92,7 @@ export default function Dashboard() {
         <StatCard title="Total Requests" value={stats.total} icon={<FileText size={20} />} color="blue" />
         <StatCard title="Completed" value={stats.completed} icon={<ShieldCheck size={20} />} color="green" />
         <StatCard title="Pending" value={stats.pending} icon={<CreditCard size={20} />} color="red" />
-        <StatCard title="Wallet Balance" value={`₦${walletBalance.toLocaleString()}`} icon={<Wallet size={20} />} color="purple" />
+        <StatCard title="Wallet Balance" value={formatNaira(walletBalance)} icon={<Wallet size={20} />} color="purple" />
       </div>
     </div>
   );

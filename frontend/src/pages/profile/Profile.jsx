@@ -6,6 +6,7 @@ import {
   UserCircle2, Mail, ShieldCheck, Wallet, LockKeyhole, 
   Eye, EyeOff, CreditCard, FileText, ArrowRight, BadgeCheck, Loader2 
 } from "lucide-react";
+import { formatNaira } from "../../lib/currency";
 import { motion } from "framer-motion";
 
 export default function Profile() {
@@ -54,8 +55,8 @@ export default function Profile() {
             </div>
           </div>
           <div className="bg-white/10 border border-white/10 backdrop-blur rounded-3xl p-5 min-w-[220px]">
-            <p className="text-sm text-white/60 mb-1">Available Units</p>
-            <h2 className="text-5xl font-black">{user.units || 0}</h2>
+            <p className="text-sm text-white/60 mb-1">Available Wallet Balance</p>
+            <h2 className="text-5xl font-black">{formatNaira(user.walletBalance ?? 0)}</h2>
           </div>
         </div>
       </motion.div>
@@ -68,6 +69,7 @@ export default function Profile() {
             <div className="space-y-4">
               <InfoItem label="Email" value={user.email} icon={<Mail size={18} />} />
               <InfoItem label="Role" value={user.role?.replace("_", " ")} icon={<BadgeCheck size={18} />} />
+              <InfoItem label="Wallet Balance" value={formatNaira(user.walletBalance ?? 0)} icon={<Wallet size={18} />} />
               <InfoItem label="Units" value={`${user.units || 0} Units`} icon={<Wallet size={18} />} />
             </div>
           </div>

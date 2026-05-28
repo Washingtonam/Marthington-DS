@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
+import { formatNaira } from "../../lib/currency";
 import { Wallet2, Upload, ArrowRight, Copy, CheckCircle2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -58,7 +59,7 @@ export default function Wallet() {
         </div>
         <div className="bg-white/10 backdrop-blur p-6 rounded-3xl min-w-[200px] text-center">
           <p className="text-xs uppercase tracking-widest text-blue-200">Wallet Balance</p>
-          <h2 className="text-5xl font-black">₦{user?.walletBalance?.toLocaleString() || "0.00"}</h2>
+          <h2 className="text-5xl font-black">{formatNaira(user?.walletBalance ?? 0)}</h2>
         </div>
       </motion.div>
 
