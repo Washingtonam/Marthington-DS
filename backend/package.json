@@ -4,7 +4,8 @@
   "description": "NIN Verification Backend",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "migrate:units-to-kobo": "node ./scripts/migrate-units-to-kobo.js"
   },
   "type": "commonjs",
   "dependencies": {

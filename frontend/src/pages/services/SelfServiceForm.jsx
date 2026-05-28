@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -18,12 +18,11 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const API_BASE = "https://xcombinator.onrender.com";
+import api from "../../lib/axios";
+import { submitSelfServiceRequest } from "../../services/api";
 
 export default function SelfServiceForm() {
   const navigate = useNavigate();
-  const fileInputRef = useRef(null);
-  
   const [activeTab, setActiveTab] = useState("email"); // "email" or "unlink"
   const [pricing, setPricing] = useState(null);
   const [loadingPricing, setLoadingPricing] = useState(true);
@@ -36,9 +35,7 @@ export default function SelfServiceForm() {
     additionalInfo: ""
   });
   
-  // File Upload State
-  const [receiptFile, setReceiptFile] = useState(null);
-  const [receiptPreview, setReceiptPreview] = useState("");
+  // File Upload State (deprecated) - removed receipt requirement; backend will deduct from wallet
   
   // Copy Clipboard State
   const [copied, setCopied] = useState(false);
@@ -88,29 +85,7 @@ export default function SelfServiceForm() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert("Maximum upload size is 2MB");
-        return;
-      }
-      setReceiptFile(file);
-      setReceiptPreview(URL.createObjectURL(file));
-    }
-  };
-
-  // ==========================================
-  // ☁️ HELPER: CONVERT FILE TO BASE64 STRING
-  // ==========================================
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const fileReader = new FileReader();
-      fileReader.readAsDataURL(file);
-      fileReader.onload = () => resolve(fileReader.result);
-      fileReader.onerror = (error) => reject(error);
-    });
-  };
+  // No client-side proof required anymore; service fees deducted from wallet automatically.
 
   // =========================
   // SUBMIT REQUEST TO BACKEND
@@ -120,31 +95,20 @@ export default function SelfServiceForm() {
     setErrorMessage("");
     setSuccessMessage("");
 
-    if (!receiptFile) {
-      setErrorMessage("Please upload your payment transfer receipt snapshot to proceed.");
-      return;
-    }
-
     setIsSubmitting(true);
-
     try {
-      // Convert incoming transfer receipt image into a valid base64 stream string
-      const base64Receipt = await convertToBase64(receiptFile);
-      
-      const token = localStorage.getItem("token") || ""; 
-      const userEmail = localStorage.getItem("email") || "guest-user@xcombinator.com"; 
-      const userId = localStorage.getItem("userId") || ""; // Clean empty string instead of undefined 
+      const token = localStorage.getItem("token") || "";
+      const userEmail = localStorage.getItem("email") || "guest-user@xcombinator.com";
+      const userId = localStorage.getItem("userId") || "";
 
-      // Construct a clean unified payload matching your backend expectations perfectly
       const payload = {
-        userId: userId,
+        userId,
         email: userEmail,
         service: "self-service",
         type: activeTab === "email" ? "emailRetrieval" : "deviceUnlink",
         nin: formData.nin,
         slipType: "none",
-        proof: base64Receipt, 
-        passport: "none", // ✅ Provided string alignment parameter to stop data architecture drops
+        // No proof required — backend will debit walletBalanceKobo atomically
         formData: {
           fullName: formData.fullName,
           phoneNumber: formData.phoneNumber,
@@ -152,29 +116,9 @@ export default function SelfServiceForm() {
         }
       };
 
-      // Correct URL route path pairing with your unified server engine routes
-      const res = await api(`${API_BASE}/api/nin-services/request`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-          "email": userEmail
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res;
-
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to submit request parameters.");
-      }
-
-      setSuccessMessage(`Success! Your ${activeTab === "email" ? "Email Retrieval" : "Device Unlink"} execution logs and transaction receipt have been forwarded. Admin will confirm the transfer manually.`);
-      
-      // Reset input form & receipt preview states
+      const res = await submitSelfServiceRequest(payload);
+      setSuccessMessage(`Success! Your request has been submitted and the service fee was debited from your wallet.`);
       setFormData({ nin: "", phoneNumber: "", fullName: "", additionalInfo: "" });
-      setReceiptFile(null);
-      setReceiptPreview("");
     } catch (err) {
       setErrorMessage(err.message || "An unexpected infrastructure error occurred.");
     } finally {
@@ -314,36 +258,9 @@ export default function SelfServiceForm() {
 
             {/* INTEGRATED MANUAL BANK TRANSFER SLATE */}
             <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-3 uppercase tracking-wider">
-                Upload Payment Proof
-              </label>
-              
-              <input 
-                type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden"
-              />
-
-              {!receiptPreview ? (
-                <div 
-                  onClick={() => fileInputRef.current.click()}
-                  className="border-2 border-dashed border-gray-200 dark:border-gray-800 hover:border-purple-500 dark:hover:border-purple-500 rounded-2xl p-8 text-center cursor-pointer transition bg-gray-50/50 dark:bg-[#0B1120]/30"
-                >
-                  <UploadCloud size={32} className="mx-auto mb-3 text-gray-400" />
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Click to upload transfer screenshot</p>
-                  <p className="text-xs text-gray-400 mt-1">Maximum file size payload limits: 2MB</p>
-                </div>
-              ) : (
-                <div className="relative border border-gray-200 dark:border-gray-800 rounded-2xl p-3 bg-gray-50 dark:bg-[#0B1120]">
-                  <img 
-                    src={receiptPreview} alt="Receipt Preview" className="max-h-48 rounded-xl object-contain mx-auto"
-                  />
-                  <button
-                    type="button" onClick={() => { setReceiptFile(null); setReceiptPreview(""); }}
-                    className="absolute top-4 right-4 bg-red-600 text-white rounded-full p-1.5 text-xs font-bold shadow-md hover:bg-red-700 transition"
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
+              <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#0B1120]/20 border border-gray-100 dark:border-gray-800 text-sm text-gray-600">
+                Payment proof upload is no longer required. The service fee will be deducted from your walletBalance automatically when you submit.
+              </div>
             </div>
 
             <button

@@ -31,3 +31,20 @@ module.exports = {
   cloudinary,
   uploadToCloudinary,
 };
+
+// Ensure the provided value is a Cloudinary-hosted URL. If the value appears to be
+// a data URL or a local/base64 image, upload it and return the secure URL.
+const isDataUrl = (str) => typeof str === 'string' && /^data:.*;base64,/.test(str);
+const isHttpUrl = (str) => typeof str === 'string' && /^(https?:)?\/\//i.test(str);
+
+const ensureUploaded = async (value, folder = 'uploads') => {
+  if (!value) return null;
+  if (isHttpUrl(value)) return value;
+  // For any non-http string (likely base64), attempt upload
+  if (isDataUrl(value) || typeof value === 'string') {
+    return await uploadToCloudinary(value, folder);
+  }
+  return null;
+};
+
+module.exports.ensureUploaded = ensureUploaded;

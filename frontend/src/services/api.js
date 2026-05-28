@@ -18,6 +18,7 @@ export const submitPaymentReceipt = async (paymentData) => (await api.post("/api
 // ==========================================
 export const triggerInstantVerify = async (payload) => (await api.post("/api/services/verify", payload)).data;
 export const submitManualNInRequest = async (payload) => (await api.post("/api/services/request", payload)).data;
+export const submitSelfServiceRequest = async (payload) => (await api.post("/api/services/request", payload)).data;
 
 // ==========================================
 // 🏢 CORPORATE AFFAIRS (CAC)

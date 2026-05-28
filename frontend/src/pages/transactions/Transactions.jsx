@@ -8,6 +8,8 @@ export default function Transactions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   // Get user from local storage
   const user = useMemo(() => {
@@ -60,6 +62,9 @@ export default function Transactions() {
       tx?.status?.toLowerCase().includes(q)
     );
   }, [search, transactions]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // Transaction Title Helper
   const getTitle = (tx) => {
@@ -149,7 +154,7 @@ export default function Transactions() {
 
       {/* TRANSACTION LIST */}
       <div className="space-y-5">
-        {filtered.map((tx) => (
+        {paged.map((tx) => (
           <motion.div 
             key={tx._id} 
             className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-5"
@@ -170,6 +175,13 @@ export default function Transactions() {
             </div>
           </motion.div>
         ))}
+      </div>
+
+      {/* PAGINATION CONTROLS */}
+      <div className="flex items-center justify-center gap-3 mt-8">
+        <button className="px-3 py-2 rounded-md bg-gray-100" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
+        <span className="text-sm text-gray-600">Page {page} / {totalPages}</span>
+        <button className="px-3 py-2 rounded-md bg-gray-100" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</button>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 const Transaction = require("../models/transaction.model");
 const User = require("../modules/users/User.model");
+const { ensureUploaded } = require("../shared/cloudinary");
 
 // Submit a payment
 exports.submitPaymentReceipt = async (req, res) => {
@@ -9,6 +10,8 @@ exports.submitPaymentReceipt = async (req, res) => {
 
         const amountKobo = Math.round(Number(amount) * 100);
 
+        const proofUrl = proof ? await ensureUploaded(proof, 'payment_proofs') : proof || null;
+
         const newTransaction = new Transaction({
             userId,
             type: "credit",
@@ -17,7 +20,7 @@ exports.submitPaymentReceipt = async (req, res) => {
             reference,
             status: "pending",
             description: `Wallet funding via ${paymentMethod}`,
-            proof
+            proof: proofUrl
         });
 
         await newTransaction.save();

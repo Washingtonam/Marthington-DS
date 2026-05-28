@@ -1,10 +1,12 @@
 const express = require("express");
 const axios = require("axios");
+const mongoose = require("mongoose");
 const router = express.Router();
 
 const User = require("../users/User.model");
 const ServiceRequest = require("./ServiceRequest.model");
 const Transaction = require("../../models/transaction.model");
+const { ensureUploaded } = require("../../shared/cloudinary");
 const { verifyToken, isAdmin } = require("../../shared/authGuard");
 const { validateServiceRequest, validateVerification } = require("../../shared/validators");
 const {
@@ -20,12 +22,18 @@ const {
 
 const API_KEY = process.env.NIN_API_KEY;
 
+// Each legacy unit is treated as ₦250 => 25000 kobo
+const KOBO_PER_UNIT = 25000;
+
 // ==============================================================
 // 🧾 ROUTE 1: SUBMIT MANUAL NIMC / CAC / MODIFICATION REQUESTS
 // ==============================================================
 router.post("/request", verifyToken, async (req, res) => {
   const { error } = validateServiceRequest.validate(req.body);
   if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
     const userId = req.user.id;
@@ -39,35 +47,67 @@ router.post("/request", verifyToken, async (req, res) => {
     }
 
     const matrixRates = SERVICE_RATES;
-    
     let basePrice = matrixRates[mappedType] ?? 1500;
     let slipCost = (String(service).toLowerCase() === "validation" && slipType && slipType !== "none") ? 250 : 0;
-    const totalCalculatedAmount = basePrice + slipCost;
+    const totalCalculatedAmount = basePrice + slipCost; // Naira
+    const totalKobo = Math.round(Number(totalCalculatedAmount) * 100);
 
-    const savedRequest = await ServiceRequest.create({
-      userId,
-      service: String(service),
-      type: String(mappedType),
-      nin: nin ? String(nin) : "N/A",
-      slipType: slipType ? String(slipType) : "none",
-      amount: Number(totalCalculatedAmount),
-      proof: proof || "N/A",
-      passport: passport || "N/A",
-      formData: typeof formData === "object" ? formData : {},
-      status: "pending",
-      statusHistory: [{ status: "pending", note: "Initialized manual pipeline sequence successfully." }]
-    });
+    const user = await User.findById(userId).session(session);
+    if (!user) throw new Error("User not found");
 
-    await Transaction.create({
+    if (user.walletBalanceKobo == null) {
+      user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
+    }
+
+    const isSuperAdmin = user.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim();
+
+    if (!isSuperAdmin && user.walletBalanceKobo < totalKobo) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "Insufficient wallet balance." });
+    }
+
+    if (!isSuperAdmin) {
+      user.walletBalanceKobo -= totalKobo;
+      await user.save({ session });
+    }
+
+    // Ensure image fields are uploaded to Cloudinary (no raw base64 saved)
+    const processedProof = proof ? await ensureUploaded(proof, 'service_proofs') : null;
+    const processedPassport = passport ? await ensureUploaded(passport, 'service_passports') : null;
+
+    const [savedRequest] = await ServiceRequest.create([
+      {
+        userId,
+        service: String(service),
+        type: String(mappedType),
+        nin: nin ? String(nin) : "N/A",
+        slipType: slipType ? String(slipType) : "none",
+        amount: Number(totalCalculatedAmount),
+        unitsUsed: 0,
+        proof: processedProof || (proof ? "N/A" : "N/A"),
+        passport: processedPassport || (passport ? "N/A" : "N/A"),
+        formData: typeof formData === "object" ? formData : {},
+        status: "pending",
+        statusHistory: [{ status: "pending", note: "Initialized manual pipeline sequence successfully." }]
+      }
+    ], { session });
+
+    await Transaction.create([{
       type: "SERVICE",
       amount: Number(totalCalculatedAmount),
-      status: "pending",
+      amountKobo: totalKobo,
+      status: "success",
       userId,
       requestId: savedRequest._id
-    });
+    }], { session });
 
-    return res.status(200).json({ success: true, message: "Submission compiled successfully.", request: savedRequest });
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({ success: true, message: "Submission compiled successfully.", request: savedRequest, walletBalance: user.getWalletBalanceNaira() });
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     console.error("❌ MANUAL SERVICE SUBMISSION ERROR:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -84,21 +124,49 @@ router.post("/verify", verifyToken, async (req, res) => {
   const { method, nin, phone, tracking_id, firstname, surname, gender, birthdate } = req.body;
 
   try {
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ error: "User profile context not found." });
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    const user = await User.findById(userId).session(session);
+    if (!user) {
+      await session.abortTransaction();
+      return res.status(404).json({ error: "User profile context not found." });
+    }
 
     const isSuperAdmin = user.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim();
 
     if (nin === "00000000000") {
-      if (!isSuperAdmin && user.units < 1) return res.status(400).json({ error: "Insufficient balance units." });
-      if (!isSuperAdmin) { user.units -= 1; await user.save(); }
+      // mock lookup for test NIN
+      if (!isSuperAdmin && (user.walletBalanceKobo == null ? Math.round((user.walletBalance || 0) * 100) : user.walletBalanceKobo) < KOBO_PER_UNIT) {
+        await session.abortTransaction();
+        return res.status(400).json({ error: "Insufficient wallet balance." });
+      }
+
+      if (!isSuperAdmin) {
+        if (user.walletBalanceKobo == null) user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
+        user.walletBalanceKobo -= KOBO_PER_UNIT;
+        await user.save({ session });
+      }
+
       const mockData = { firstname: "JOHN", surname: "TEST", nin: "00000000000", birthdate: "1995-01-01", gender: "Male" };
-      await Transaction.create({ type: "NIN", unitsUsed: isSuperAdmin ? 0 : 1, status: "success", userId: user._id });
-      return res.json({ status: "success", data: mockData, units: user.units });
+      await Transaction.create([{ type: "NIN", amount: KOBO_PER_UNIT/100, amountKobo: KOBO_PER_UNIT, unitsUsed: isSuperAdmin ? 0 : 1, status: "success", userId: user._id }], { session });
+      await session.commitTransaction();
+      session.endSession();
+      return res.json({ status: "success", data: mockData, walletBalance: user.getWalletBalanceNaira() });
     }
 
     let unitsRequired = UNITS_REQUIRED[method] || UNITS_REQUIRED.standard;
-    if (!isSuperAdmin && user.units < unitsRequired) return res.status(400).json({ error: "Insufficient wallet units." });
+    const costKobo = unitsRequired * KOBO_PER_UNIT;
+    if (!isSuperAdmin) {
+      if (user.walletBalanceKobo == null) user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
+      if (user.walletBalanceKobo < costKobo) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ error: "Insufficient wallet balance." });
+      }
+      user.walletBalanceKobo -= costKobo;
+      await user.save({ session });
+    }
 
     let url = "";
     let payload = {};
@@ -121,20 +189,40 @@ router.post("/verify", verifyToken, async (req, res) => {
     
     const cleanData = response.data?.data?.data || response.data?.data || response.data;
 
-    if (!isSuperAdmin) { user.units -= unitsRequired; await user.save(); }
+    // Persist service request and transaction under the same transaction session
+    await ServiceRequest.create([{
+      userId: user._id,
+      service: "automated_lookup",
+      type: method,
+      nin: nin || "N/A",
+      unitsUsed: unitsRequired,
+      amount: costKobo / 100,
+      amountKobo: costKobo,
+      status: "completed",
+      apiResponseData: cleanData,
+      statusHistory: [{ status: "completed", note: "Automated identity payload sync completed." }]
+    }], { session });
 
-    await ServiceRequest.create({
-      userId: user._id, service: "automated_lookup", type: method, nin: nin || "N/A", unitsUsed: unitsRequired, status: "completed",
-      apiResponseData: cleanData, statusHistory: [{ status: "completed", note: "Automated identity payload sync completed." }]
-    });
+    await Transaction.create([{
+      type: "NIN_AUTO",
+      unitsUsed: isSuperAdmin ? 0 : unitsRequired,
+      amount: costKobo / 100,
+      amountKobo: costKobo,
+      userId: user._id,
+      status: "success"
+    }], { session });
 
-    await Transaction.create({ type: "NIN_AUTO", unitsUsed: isSuperAdmin ? 0 : unitsRequired, userId: user._id, status: "success" });
+    await session.commitTransaction();
+    session.endSession();
 
-    return res.json({ status: "success", data: cleanData, unitsUsed: unitsRequired, units: user.units });
+    return res.json({ status: "success", data: cleanData, unitsUsed: unitsRequired, walletBalance: user.getWalletBalanceNaira() });
   } catch (error) {
     console.error("VERIFY ERROR - Request:", { method, url: error.config?.url });
     console.error("VERIFY ERROR - Response:", error.response?.status, error.response?.data);
-    
+    if (session && session.inTransaction()) {
+      try { await session.abortTransaction(); } catch (e) { /* ignore */ }
+      session.endSession();
+    }
     if (error.response?.status === 401 || error.response?.status === 403) {
       return res.status(401).json({ error: "API authentication failed", code: "API_AUTH_FAILED" });
     }
