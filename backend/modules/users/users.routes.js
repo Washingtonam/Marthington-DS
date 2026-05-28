@@ -114,6 +114,37 @@ router.get("/requests/history", verifyToken, async (req, res) => {
   }
 });
 
+router.get("/requests/:id", verifyToken, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const isOwner = req.user && req.user.id === targetId;
+    const isAdminRole = req.user && ["admin", "super_admin"].includes(req.user.role);
+    if (!isOwner && !isAdminRole) {
+      return res.status(403).json({ success: false, message: "Forbidden: insufficient privileges" });
+    }
+
+    const [services, cacRequests] = await Promise.all([
+      ServiceRequest.find({ userId: targetId }).lean(),
+      CacRequest.find({ userId: targetId }).lean()
+    ]);
+
+    const normalizedServices = services.map(s => ({ ...s, pipelineSource: "service" }));
+    const normalizedCac = cacRequests.map(c => ({ ...c, pipelineSource: "cac" }));
+    const combinedHistory = [...normalizedServices, ...normalizedCac].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: combinedHistory.length,
+      data: combinedHistory
+    });
+  } catch (error) {
+    console.error("🔥 USER REQUESTS ALIAS ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to load user requests." });
+  }
+});
+
 // ==============================================================
 // 🛠️ ADMIN ROUTE: GET ALL REGISTERED SYSTEM USERS (FOR ADMIN CONTROL)
 // ==============================================================

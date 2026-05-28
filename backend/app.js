@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const { verifyToken } = require("./shared/authGuard");
 const app = express();
 
 // Allowed frontend origins for production (explicit - do not use '*')
@@ -34,6 +35,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use("/api/auth", require("./modules/auth/auth.routes"));
 app.use("/api/finance", require("./modules/finance/finance.routes"));
 app.use("/api/users", require("./modules/users/users.routes"));
+app.use("/api/user", require("./modules/users/users.routes"));
 // Match frontend expectations:
 // - /api/services/*  -> core services routes (verify, request, etc.)
 // - /api/cac/*       -> CAC service routes
@@ -42,6 +44,27 @@ app.use("/api/cac", require("./modules/services/cac.routes"));
 
 // Administrative routes (frontend calls /api/admin/*)
 app.use("/api/admin", require("./modules/admin/admin.routes"));
+
+// Backwards compatibility alias for legacy transaction path
+app.get("/api/transactions", verifyToken, async (req, res) => {
+    try {
+        const Transaction = require("./models/transaction.model");
+        const transactions = await Transaction.find({ userId: req.user.id }).sort({ createdAt: -1 });
+        const formatted = transactions.map(tx => ({
+            _id: tx._id,
+            type: tx.type,
+            nin: tx.nin || null,
+            amount: tx.amount || 0,
+            units: tx.units || tx.unitsUsed || 0,
+            status: tx.status,
+            createdAt: tx.createdAt,
+        }));
+        res.json(formatted);
+    } catch (err) {
+        console.error("DEPRECATED TRANSACTIONS ROUTE ERROR:", err);
+        res.status(500).json({ error: "Failed to load transactions" });
+    }
+});
 
 // Public pricing endpoint (frontend requests GET /api/pricing)
 app.get("/api/pricing", async (req, res) => {

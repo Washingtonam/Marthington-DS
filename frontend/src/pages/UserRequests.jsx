@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
-
-const API_BASE = "https://xcombinator.onrender.com";
+import api from "../lib/axios";
 
 export default function UserRequests() {
   // =========================
@@ -35,11 +33,18 @@ export default function UserRequests() {
       if (append) setLoadingMore(true);
       else setLoading(true);
 
-      const res = await axios.get(
-        `${API_BASE}/api/user/requests/${userId}?page=${pageNum}&limit=10`
-      );
+      let res;
+      try {
+        res = await api.get(`/api/users/requests/history?page=${pageNum}&limit=10`);
+      } catch (err) {
+        if (err?.response?.status === 404) {
+          res = await api.get(`/api/user/requests/${userId}?page=${pageNum}&limit=10`);
+        } else {
+          throw err;
+        }
+      }
 
-      const newData = res.data?.data || [];
+      const newData = res.data?.data || res.data || [];
       
       if (append) {
         setRequests((prev) => [

@@ -28,12 +28,21 @@ export default function Transactions() {
 
     const fetchTransactions = async () => {
       try {
-        // Using your configured axios instance for authenticated requests
-        const res = await api.get(`/api/transactions?userId=${user.id}`);
+        const res = await api.get(`/api/users/transactions`);
         setTransactions(res.data || []);
       } catch (err) {
-        console.error("Transaction fetch error:", err);
-        setError("Could not load transactions.");
+        if (err?.response?.status === 404) {
+          try {
+            const fallback = await api.get(`/api/transactions?userId=${user.id}`);
+            setTransactions(fallback.data || []);
+          } catch (fallbackErr) {
+            console.error("Transaction fallback failed:", fallbackErr);
+            setError("Could not load transactions.");
+          }
+        } else {
+          console.error("Transaction fetch error:", err);
+          setError("Could not load transactions.");
+        }
       } finally {
         setLoading(false);
       }

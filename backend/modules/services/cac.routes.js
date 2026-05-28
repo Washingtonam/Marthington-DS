@@ -75,6 +75,22 @@ router.get("/history", verifyToken, async (req, res) => {
   } catch (error) { res.status(500).json({ message: "Failed to load logs." }); }
 });
 
+router.get("/user-history/:id", verifyToken, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const isOwner = req.user && req.user.id === targetId;
+    const isAdminRole = req.user && ["admin", "super_admin"].includes(req.user.role);
+    if (!isOwner && !isAdminRole) {
+      return res.status(403).json({ message: "Forbidden: insufficient privileges" });
+    }
+    const records = await CacRequest.find({ userId: targetId }).sort({ createdAt: -1 }).lean();
+    res.json(records);
+  } catch (error) {
+    console.error("🔥 CAC USER HISTORY ALIAS ERROR:", error);
+    res.status(500).json({ message: "Failed to load CAC user history." });
+  }
+});
+
 // ✅ Get CAC requests for a specific user (owner or admin only)
 router.get("/user-requests/:id", verifyToken, async (req, res) => {
   try {

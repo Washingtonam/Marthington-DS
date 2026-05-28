@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "../../lib/axios";
 import { 
   Building2, UserPlus, Trash2, Upload, CheckCircle, 
   HelpCircle, Loader2, Users, Briefcase, Globe 
@@ -38,13 +38,31 @@ export default function CacServices() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [pricingRes, historyRes] = await Promise.all([
-          axios.get(`${API_BASE}/api/pricing`),
-          userId ? axios.get(`${API_BASE}/api/cac/user-history/${userId}`) : { data: [] }
-        ]);
-        
-        if (pricingRes.data?.nin?.unitPrice) setUnitPrice(pricingRes.data.nin.unitPrice);
-        if (pricingRes.data?.cacServices) {
+        const pricingPromise = api.get(`/api/pricing`);
+      const historyPromise = userId ? api.get(`/api/cac/user-requests/${userId}`) : Promise.resolve({ data: [] });
+      let pricingRes;
+      let historyRes;
+
+      try {
+        [pricingRes, historyRes] = await Promise.all([pricingPromise, historyPromise]);
+      } catch (err) {
+        if (err?.response?.status === 404) {
+          pricingRes = await pricingPromise;
+          try {
+            historyRes = await api.get(`/api/cac/history`);
+          } catch (err2) {
+            console.error("CAC history fallback failed:", err2);
+            historyRes = { data: [] };
+          }
+        } else {
+          console.error("Initialization error:", err);
+          pricingRes = await pricingPromise.catch(() => ({ data: {} }));
+          historyRes = { data: [] };
+        }
+      }
+
+      if (pricingRes.data?.nin?.unitPrice) setUnitPrice(pricingRes.data.nin.unitPrice);
+      if (pricingRes.data?.cacServices) {
           setPrices({
             sole_proprietorship: pricingRes.data.cacServices.soleProprietorship || 30000,
             partnership: pricingRes.data.cacServices.partnership || 32000,
