@@ -2,13 +2,26 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
-import { ShieldCheck, Wallet, FileText, CreditCard } from "lucide-react";
+import { 
+  ShieldCheck, 
+  Wallet, 
+  FileText, 
+  CreditCard,
+  Send,
+  TrendingUp,
+  Settings,
+  HelpCircle,
+  Clock,
+  CheckCircle,
+  AlertCircle
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { formatNaira } from "../../lib/currency";
 
 import StatCard from "../../components/ui/StatCard";
 import PageHeader from "../../components/ui/PageHeader";
 import Button from "../../components/ui/Button";
+import ActionButton from "../../components/ui/ActionButton";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -117,6 +130,176 @@ export default function Dashboard() {
         <StatCard title="Pending" value={stats.pending} icon={<CreditCard size={20} />} color="red" />
         <StatCard title="Wallet Balance" value={formatNaira(walletBalance)} icon={<Wallet size={20} />} color="purple" />
       </div>
+
+      {/* Quick Actions Grid */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="mb-10"
+      >
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Quick Actions</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <ActionButton
+            title="Fund Wallet"
+            icon={Wallet}
+            onClick={() => navigate("/wallet")}
+          />
+          <ActionButton
+            title="New Request"
+            icon={FileText}
+            onClick={() => navigate("/services/nin")}
+          />
+          <ActionButton
+            title="View Requests"
+            icon={Send}
+            onClick={() => navigate("/my-requests")}
+          />
+          <ActionButton
+            title="Settings"
+            icon={Settings}
+            onClick={() => navigate("/profile")}
+          />
+        </div>
+      </motion.div>
+
+      {/* Recent Activity Feed */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="bg-white/50 backdrop-blur-lg border border-white/20 rounded-3xl p-6 md:p-8 shadow-xl"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Recent Activity</h2>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            onClick={() => navigate("/my-requests")}
+            className="text-blue-600 hover:text-blue-700 text-sm font-semibold"
+          >
+            View All →
+          </motion.button>
+        </div>
+
+        <div className="space-y-4">
+          {stats.total === 0 ? (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
+                <FileText size={28} className="text-blue-600" />
+              </div>
+              <p className="text-gray-600 font-medium">No requests yet</p>
+              <p className="text-gray-500 text-sm mt-1">Start by creating your first verification request</p>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate("/services/nin")}
+                className="mt-4 inline-block bg-blue-600 text-white px-6 py-2 rounded-xl font-semibold hover:bg-blue-700 transition"
+              >
+                Create Request
+              </motion.button>
+            </div>
+          ) : (
+            <>
+              {/* Sample activity items - would be replaced with actual data */}
+              {[
+                {
+                  id: 1,
+                  type: "completed",
+                  title: "NIN Verification Completed",
+                  description: "Your verification request has been completed",
+                  time: "2 hours ago",
+                  icon: CheckCircle,
+                  color: "green",
+                },
+                {
+                  id: 2,
+                  type: "pending",
+                  title: "Pending Review",
+                  description: "Your CAC request is being reviewed",
+                  time: "1 day ago",
+                  icon: Clock,
+                  color: "amber",
+                },
+                {
+                  id: 3,
+                  type: "alert",
+                  title: "Document Required",
+                  description: "Please submit additional documentation",
+                  time: "3 days ago",
+                  icon: AlertCircle,
+                  color: "orange",
+                },
+              ].map((activity) => (
+                <motion.div
+                  key={activity.id}
+                  whileHover={{ x: 4 }}
+                  className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 hover:bg-gray-100/50 transition-colors cursor-pointer"
+                >
+                  <div
+                    className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center
+                    ${
+                      activity.color === "green"
+                        ? "bg-green-100"
+                        : activity.color === "amber"
+                        ? "bg-amber-100"
+                        : "bg-orange-100"
+                    }
+                  `}
+                  >
+                    <activity.icon
+                      size={20}
+                      className={
+                        activity.color === "green"
+                          ? "text-green-600"
+                          : activity.color === "amber"
+                          ? "text-amber-600"
+                          : "text-orange-600"
+                      }
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900">{activity.title}</h3>
+                    <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
+                  </div>
+                  <div className="flex-shrink-0 text-xs text-gray-500 whitespace-nowrap">
+                    {activity.time}
+                  </div>
+                </motion.div>
+              ))}
+            </>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Premium Glass Stats Footer */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="mt-10 grid md:grid-cols-3 gap-5"
+      >
+        <StatCard
+          glassEffect
+          title="Success Rate"
+          value="98.5%"
+          icon={<TrendingUp size={20} className="text-blue-600" />}
+          subtitle="Last 30 days"
+        />
+        <StatCard
+          glassEffect
+          title="Avg Processing Time"
+          value="2.4h"
+          icon={<Clock size={20} className="text-blue-600" />}
+          subtitle="Per request"
+        />
+        <StatCard
+          glassEffect
+          title="Total Saved"
+          value={formatNaira(walletBalance * 0.02)}
+          icon={<TrendingUp size={20} className="text-blue-600" />}
+          subtitle="Promotional credits"
+        />
+      </motion.div>
     </div>
   );
 }

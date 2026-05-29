@@ -4,6 +4,7 @@ export default function StatCard({
   icon,
   color = "blue",
   subtitle,
+  glassEffect = false,
 }) {
 
   const colors = {
@@ -16,8 +17,11 @@ export default function StatCard({
   return (
     <div className={`
       relative overflow-hidden rounded-3xl p-6 text-white
-      bg-gradient-to-br ${colors[color]}
-      shadow-xl
+      ${glassEffect 
+        ? "bg-white/50 backdrop-blur-lg border border-white/20 text-gray-900" 
+        : `bg-gradient-to-br ${colors[color]}`
+      }
+      shadow-xl hover:shadow-2xl transition-shadow duration-200
     `}>
 
       {/* glow */}
@@ -29,23 +33,23 @@ export default function StatCard({
 
           <div>
 
-            <p className="text-sm text-white/70 mb-2">
+            <p className={`text-sm mb-2 ${glassEffect ? "text-gray-600" : "text-white/70"}`}>
               {title}
             </p>
 
-            <h2 className="text-4xl font-bold tracking-tight">
+            <h2 className={`text-4xl font-bold tracking-tight ${glassEffect ? "text-gray-900" : "text-white"}`}>
               {value}
             </h2>
 
             {subtitle && (
-              <p className="text-xs text-white/70 mt-2">
+              <p className={`text-xs mt-2 ${glassEffect ? "text-gray-600" : "text-white/70"}`}>
                 {subtitle}
               </p>
             )}
 
           </div>
 
-          <div className="bg-white/10 p-3 rounded-2xl backdrop-blur">
+          <div className={`p-3 rounded-2xl backdrop-blur ${glassEffect ? "bg-blue-500/20" : "bg-white/10"}`}>
             {icon}
           </div>
 
