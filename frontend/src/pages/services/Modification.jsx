@@ -43,7 +43,6 @@ export default function Modification() {
         service: "modification",
         type: selectedType,
         nin: formData.nin,
-        amount: total,
         formData
       });
 

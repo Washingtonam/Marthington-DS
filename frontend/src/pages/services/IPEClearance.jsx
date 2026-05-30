@@ -44,7 +44,6 @@ export default function IPEClearance() {
         service: "ipe",
         type: selectedType,
         nin,
-        amount: total,
       });
 
       await refreshBalance();

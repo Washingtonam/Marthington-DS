@@ -53,7 +53,6 @@ export default function SelfServiceForm() {
         service: "self-service",
         type: activeTab === "email" ? "emailRetrieval" : "deviceUnlink",
         nin: formData.nin,
-        amount: currentCost,
         formData: {
           fullName: formData.fullName,
           phoneNumber: formData.phoneNumber,

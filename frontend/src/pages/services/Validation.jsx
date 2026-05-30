@@ -58,7 +58,6 @@ export default function Validation() {
         type: selectedService,
         nin,
         slipType: slip,
-        amount: total,
       });
 
       await refreshBalance();

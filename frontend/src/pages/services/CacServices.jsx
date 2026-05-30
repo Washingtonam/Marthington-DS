@@ -126,7 +126,6 @@ export default function CacServices() {
     try {
       await api.post("/api/cac/submit", {
         serviceType: service,
-        amount: currentPrice,
         ...businessInfo,
         proprietors,
         witness: showWitness ? witness : undefined,
