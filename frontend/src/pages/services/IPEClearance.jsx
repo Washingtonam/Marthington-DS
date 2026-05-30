@@ -40,7 +40,7 @@ export default function IPEClearance() {
 
     setLoading(true);
     try {
-      await api.post("/api/nin-services/request", {
+      await api.post("/api/services/request", {
         userId: user?.id,
         service: "ipe",
         type: selectedType,

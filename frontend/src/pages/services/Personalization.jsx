@@ -18,8 +18,7 @@ export default function Personalization() {
     const fetchPricing = async () => {
       try {
         const { data } = await api.get("/api/pricing");
-        // Adjust this path based on your actual database pricing structure
-        setCost(data?.ninServices?.personalization?.price || 1000);
+        setCost(data?.ninServices?.validation?.tracking || 1000);
       } catch (err) {
         console.error("Pricing fetch error:", err);
       }
@@ -38,10 +37,9 @@ export default function Personalization() {
 
     setLoading(true);
     try {
-      const { data } = await api.post("/api/services/personalization", {
-        userId: user.id,
-        trackingId: trackingId.trim().toUpperCase(),
-        amount: cost
+      const { data } = await api.post("/api/services/verify", {
+        method: "tracking",
+        tracking_id: trackingId.trim().toUpperCase(),
       });
 
       await refreshBalance(); // Sync wallet balance

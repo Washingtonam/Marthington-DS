@@ -49,7 +49,7 @@ export default function SelfServiceForm() {
     setErrorMessage("");
 
     try {
-      await api.post("/api/nin-services/request", {
+      await api.post("/api/services/request", {
         userId: user?.id,
         service: "self-service",
         type: activeTab === "email" ? "emailRetrieval" : "deviceUnlink",
