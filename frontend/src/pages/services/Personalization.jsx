@@ -1,61 +1,54 @@
 import { useState, useEffect } from "react";
-import api from "../../lib/axios";
-import { useUser } from "../../context/UserContext";
 import { useNavigate } from "react-router-dom";
-import { Binary, ArrowLeft, Search, Loader2, AlertTriangle } from "lucide-react";
+import { useUser } from "../../context/UserContext";
+import api from "../../lib/axios";
+import { ArrowLeft, Loader2, Search, Wallet } from "lucide-react";
+import { formatNaira } from "../../lib/currency";
 import { motion } from "framer-motion";
 
 export default function Personalization() {
   const navigate = useNavigate();
-  const { user, units, setUnits } = useUser();
+  const { user, refreshBalance } = useUser();
 
   const [trackingId, setTrackingId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isPricingLoading, setIsPricingLoading] = useState(true);
-  const [trackingCost, setTrackingCost] = useState(1000);
-  const [unitPrice, setUnitPrice] = useState(215);
+  const [cost, setCost] = useState(0);
 
   useEffect(() => {
     const fetchPricing = async () => {
       try {
         const { data } = await api.get("/api/pricing");
-        if (data?.nin?.unitPrice) setUnitPrice(data.nin.unitPrice);
-        if (data?.ninServices?.ipe?.invalidTracking) setTrackingCost(data.ninServices.ipe.invalidTracking);
+        // Adjust this path based on your actual database pricing structure
+        setCost(data?.ninServices?.personalization?.price || 1000);
       } catch (err) {
         console.error("Pricing fetch error:", err);
-      } finally {
-        setIsPricingLoading(false);
       }
     };
     fetchPricing();
   }, []);
 
-  const tokensRequired = Math.ceil(trackingCost / unitPrice);
-
-  const handleTrackingSearch = async (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
-    if (loading) return;
-
     if (!trackingId.trim()) return alert("Please enter a valid Tracking ID");
-
-    const isAdmin = user?.email?.toLowerCase().trim() === import.meta.env.VITE_SUPER_ADMIN_EMAIL;
-    if (!isAdmin && units < tokensRequired) {
-      return alert(`Insufficient balance. You need ${tokensRequired} units (₦${trackingCost.toLocaleString()}).`);
+    
+    // Wallet-First Validation
+    if (cost > (user?.walletBalance || 0)) {
+      return alert("Insufficient wallet balance. Please fund your wallet.");
     }
 
     setLoading(true);
     try {
-      const { data } = await api.post("/api/services/verify", {
-        userId: user.id || user._id,
-        method: "tracking",
-        tracking_id: trackingId.trim().toUpperCase(),
+      const { data } = await api.post("/api/services/personalization", {
+        userId: user.id,
+        trackingId: trackingId.trim().toUpperCase(),
+        amount: cost
       });
 
-      if (data.units !== undefined) setUnits(data.units);
+      await refreshBalance(); // Sync wallet balance
       localStorage.setItem("nin_result", JSON.stringify(data));
       navigate("/verify-result");
     } catch (err) {
-      alert(err.response?.data?.message || "Operation failed. Registry may be unreachable.");
+      alert(err.response?.data?.message || "Operation failed.");
     } finally {
       setLoading(false);
     }
@@ -74,23 +67,23 @@ export default function Personalization() {
             <p className="text-white/70 text-sm">Trace profile states using raw identifiers</p>
           </div>
           <div className="text-right">
-            <p className="text-xs opacity-60">BALANCE</p>
-            <h2 className="text-2xl font-bold">{units} Units</h2>
+            <p className="text-xs opacity-60">WALLET BALANCE</p>
+            <h2 className="text-2xl font-bold">{formatNaira(user?.walletBalance || 0)}</h2>
           </div>
         </div>
       </div>
 
       <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl p-8 border">
-        <form onSubmit={handleTrackingSearch} className="space-y-6">
+        <form onSubmit={handleSearch} className="space-y-6">
           <input 
             required 
             placeholder="e.g. R-12345678-ABCD-EFGH" 
-            className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-2xl p-4 pl-12 uppercase"
+            className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-2xl p-4 uppercase dark:text-white"
             value={trackingId} 
             onChange={(e) => setTrackingId(e.target.value)} 
           />
-          <button disabled={loading || isPricingLoading} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold">
-            {loading ? <Loader2 className="animate-spin mx-auto" /> : `Search Records (₦${trackingCost.toLocaleString()})`}
+          <button disabled={loading} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2">
+            {loading ? <Loader2 className="animate-spin" /> : <>Search Records ({formatNaira(cost)})</>}
           </button>
         </form>
       </div>

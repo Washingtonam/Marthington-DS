@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import api from "../lib/axios";
+import { useUser } from "../context/UserContext";
 
 export default function UserRequests() {
   // =========================
   // STATE
   // =========================
+  const { user } = useUser();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -16,15 +18,7 @@ export default function UserRequests() {
   // API CALL
   // =========================
   const apiRequests = async (pageNum = 1, append = false) => {
-    let user = null;
-    try {
-      user = JSON.parse(localStorage.getItem("user"));
-    } catch {
-      user = null;
-    }
-
-    const userId = user?._id || user?.id;
-    if (!userId) {
+    if (!user?.id) {
       setLoading(false);
       return;
     }
@@ -38,7 +32,7 @@ export default function UserRequests() {
         res = await api.get(`/api/users/requests/history?page=${pageNum}&limit=10`);
       } catch (err) {
         if (err?.response?.status === 404) {
-          res = await api.get(`/api/user/requests/${userId}?page=${pageNum}&limit=10`);
+          res = await api.get(`/api/user/requests/${user.id}?page=${pageNum}&limit=10`);
         } else {
           throw err;
         }
@@ -69,7 +63,7 @@ export default function UserRequests() {
 
   useEffect(() => {
     apiRequests(1);
-  }, []);
+  }, [user?.id]);
 
   const loadMore = async () => {
     if (loadingMore) return;
@@ -81,14 +75,14 @@ export default function UserRequests() {
   // =========================
   const statusStyle = (status) => {
     switch (status?.toLowerCase()) {
-      case "pending": return "bg-yellow-100 text-yellow-700";
-      case "processing": return "bg-blue-100 text-blue-700";
+      case "pending": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
+      case "processing": return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
       case "completed":
       case "success":
-      case "successful": return "bg-green-100 text-green-700";
+      case "successful": return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
       case "failed":
-      case "rejected": return "bg-red-100 text-red-700";
-      default: return "bg-gray-100 text-gray-700";
+      case "rejected": return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+      default: return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400";
     }
   };
 
@@ -127,7 +121,7 @@ export default function UserRequests() {
       </div>
 
       {requests.length === 0 && (
-        <div className="card-ui p-10 text-center">
+        <div className="card-ui p-10 text-center border-dashed border-2">
           <div className="text-5xl mb-4">📭</div>
           <h2 className="text-xl font-semibold mb-2">No Requests Yet</h2>
           <p className="text-gray-500">Your submitted requests will appear here</p>
@@ -139,7 +133,7 @@ export default function UserRequests() {
           <div
             key={r._id}
             onClick={() => setActive(r)}
-            className="card-ui p-5 cursor-pointer hover:scale-[1.01] transition-all duration-200"
+            className="card-ui p-5 cursor-pointer hover:scale-[1.01] transition-all duration-200 border shadow-sm"
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
@@ -148,7 +142,7 @@ export default function UserRequests() {
                   <span className="text-gray-400">•</span>
                   <p className="capitalize text-gray-600">{r.type}</p>
                   {r.serviceCategory && (
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{r.serviceCategory}</span>
+                    <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs">{r.serviceCategory}</span>
                   )}
                 </div>
                 <p className="text-sm text-gray-500 mt-1">{new Date(r.createdAt).toLocaleString()}</p>
@@ -176,13 +170,13 @@ export default function UserRequests() {
       {/* MODAL */}
       {active && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
-          <div className="bg-[var(--card)] text-[var(--text)] rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl">
-            <div className="sticky top-0 bg-[var(--card)] border-b border-[var(--border)] p-5 flex justify-between items-center z-10">
+          <div className="bg-[var(--card)] text-[var(--text)] rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl border">
+            <div className="sticky top-0 bg-[var(--card)] border-b p-5 flex justify-between items-center z-10">
               <div>
                 <h2 className="text-2xl font-bold capitalize">{active.service}</h2>
                 <p className="text-sm text-gray-500 capitalize">{active.type}</p>
               </div>
-              <button onClick={() => setActive(null)} className="w-10 h-10 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition">✕</button>
+              <button onClick={() => setActive(null)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 transition">✕</button>
             </div>
 
             <div className="p-6 space-y-6">
@@ -206,7 +200,7 @@ export default function UserRequests() {
                   <h3 className="font-bold text-lg mb-4">Submitted Information</h3>
                   <div className="grid md:grid-cols-2 gap-3">
                     {Object.entries(active.formData).map(([k, v]) => (
-                      <div key={k} className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl">
+                      <div key={k} className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border">
                         <p className="text-xs text-gray-500 capitalize">{k}</p>
                         <p className="font-medium break-words">{String(v)}</p>
                       </div>
@@ -267,7 +261,7 @@ export default function UserRequests() {
 
 function Detail({ label, value }) {
   return (
-    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl">
+    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border">
       <p className="text-xs text-gray-500 mb-1">{label}</p>
       <p className="font-semibold break-words">{value || "-"}</p>
     </div>

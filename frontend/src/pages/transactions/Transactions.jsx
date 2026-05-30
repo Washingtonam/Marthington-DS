@@ -1,97 +1,60 @@
 import { useEffect, useState, useMemo } from "react";
-import api from "../../lib/axios"; // Uses your configured axios instance
-import { Search, AlertCircle } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, AlertCircle, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import api from "../../lib/axios";
+import { useUser } from "../../context/UserContext";
+import { formatNaira } from "../../lib/currency";
 
 export default function Transactions() {
+  const { user } = useUser();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  
   const PAGE_SIZE = 10;
 
-  // Get user from local storage
-  const user = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem("user"));
-    } catch {
-      return null;
-    }
-  }, []);
-
-  // API Call to fetch transactions
   useEffect(() => {
-    if (!user?.id) {
-      setLoading(false);
-      setError("User session not found.");
-      return;
-    }
+    if (!user?.id) return;
 
     const fetchTransactions = async () => {
       try {
         setLoading(true);
-        setError(null);
-        const res = await api.get(`/api/users/transactions?page=${page}&limit=${PAGE_SIZE}`);
+        const res = await api.get(`/api/users/transactions`, { 
+          params: { page, limit: PAGE_SIZE } 
+        });
         setTransactions(res.data?.data || []);
         setTotalPages(res.data?.totalPages || 1);
       } catch (err) {
-        if (err?.response?.status === 404) {
-          try {
-            const fallback = await api.get(`/api/transactions?page=${page}&limit=${PAGE_SIZE}`);
-            setTransactions(fallback.data?.data || fallback.data || []);
-            setTotalPages(fallback.data?.totalPages || 1);
-          } catch (fallbackErr) {
-            console.error("Transaction fallback failed:", fallbackErr);
-            setError("Could not load transactions.");
-          }
-        } else {
-          console.error("Transaction fetch error:", err);
-          setError("Could not load transactions.");
-        }
+        setError("Failed to load transaction history.");
       } finally {
         setLoading(false);
       }
     };
-
     fetchTransactions();
   }, [user?.id, page]);
 
-  // Optimized Search Filter
   const filtered = useMemo(() => {
     if (!search) return transactions;
     const q = search.toLowerCase();
     return transactions.filter((tx) =>
-      getTitle(tx).toLowerCase().includes(q) ||
-      tx?.status?.toLowerCase().includes(q)
+      getTitle(tx).toLowerCase().includes(q) || tx?.status?.toLowerCase().includes(q)
     );
   }, [search, transactions]);
 
-  const paged = filtered;
-
-  // Transaction Title Helper
   const getTitle = (tx) => {
-    const map = {
-      UNIT_ADD: "Wallet Funding",
-      UNIT_DEDUCT: "Unit Usage",
-      NIN: "NIN Verification",
-      SERVICE: "NIN Service Request",
-    };
+    const map = { UNIT_ADD: "Wallet Funding", UNIT_DEDUCT: "Service Usage", NIN: "NIN Verification", SERVICE: "Service Request" };
     return map[tx.type] || "Transaction";
   };
 
-  // Transaction Amount Helper
   const getAmount = (tx) => {
-    if (tx.amount > 0) return `₦${tx.amount.toLocaleString()}`;
+    if (tx.amount > 0) return `+${formatNaira(tx.amount)}`;
     if (tx.unitsUsed > 0) return `-${tx.unitsUsed} unit(s)`;
-    if (tx.units > 0) return `+${tx.units} unit(s)`;
     return "-";
   };
 
-  const isCredit = (tx) => tx.type === "UNIT_ADD";
-
-  // Status Styling Helper
   const statusStyle = (status) => {
     const s = status?.toLowerCase();
     if (s === "success" || s === "approved") return "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-300";
@@ -99,93 +62,57 @@ export default function Transactions() {
     return "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300";
   };
 
-  // Calculate Total Funding
-  const totalFunding = useMemo(() => 
-    transactions
-      .filter((tx) => tx.type === "UNIT_ADD" && (tx.status === "success" || tx.status === "approved"))
-      .reduce((acc, tx) => acc + (tx.amount || 0), 0), 
-    [transactions]
-  );
-
   return (
-    <div className="max-w-6xl mx-auto p-4">
-      {/* HERO SECTION */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 text-white p-8 md:p-10 shadow-2xl mb-8"
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* HEADER CARD */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} 
+        className="relative bg-gradient-to-br from-indigo-950 to-slate-900 rounded-[2rem] p-8 text-white shadow-2xl mb-8"
       >
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-8">
-          <div>
-            <h1 className="text-4xl font-black">Transactions</h1>
-            <p className="text-white/70 mt-1">Track your wallet funding and service history</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur rounded-3xl p-6 min-w-[200px]">
-            <p className="text-sm text-white/60">Total Lifetime Funding</p>
-            <h2 className="text-4xl font-black">₦{totalFunding.toLocaleString()}</h2>
-          </div>
-        </div>
+        <h1 className="text-3xl font-black">Transaction Logs</h1>
+        <p className="text-indigo-200 text-sm mt-1">Review your historical wallet and service activity.</p>
       </motion.div>
 
-      {/* SEARCH INPUT */}
-      <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-5 mb-6">
-        <div className="relative">
-          <Search size={20} className="absolute left-4 top-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by transaction type or status..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-gray-50 dark:bg-[#0B1120] border border-gray-200 dark:border-gray-700 rounded-2xl py-4 pl-12 pr-4 outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+      {/* SEARCH BAR */}
+      <div className="relative mb-6">
+        <Search className="absolute left-4 top-4 text-slate-400" size={20} />
+        <input
+          type="text"
+          placeholder="Filter by type or status..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 outline-none focus:ring-2 focus:ring-blue-500"
+        />
       </div>
 
-      {/* ERROR & LOADING STATES */}
-      {loading && <div className="text-center p-10 text-gray-500">Loading your transactions...</div>}
-      
-      {error && (
-        <div className="text-center p-10 text-red-500 flex justify-center items-center gap-2">
-          <AlertCircle /> {error}
-        </div>
-      )}
-      
-      {!loading && !error && filtered.length === 0 && (
-        <div className="text-center p-10">
-          <p className="text-gray-500">No transactions found matching your search.</p>
-        </div>
-      )}
-
-      {/* TRANSACTION LIST */}
-      <div className="space-y-5">
-        {paged.map((tx) => (
-          <motion.div 
-            key={tx._id} 
-            className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-5"
-          >
-            <div>
-              <h2 className="font-bold text-lg">{getTitle(tx)}</h2>
-              <p className="text-sm text-gray-500">
-                {new Date(tx.createdAt).toLocaleString()}
-              </p>
-            </div>
-            <div className="md:text-right">
-              <h2 className={`text-2xl font-black ${isCredit(tx) ? "text-green-600" : "text-red-500"}`}>
-                {getAmount(tx)}
-              </h2>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusStyle(tx.status)}`}>
-                {tx.status?.toUpperCase()}
-              </span>
-            </div>
-          </motion.div>
-        ))}
+      {/* LIST CONTENT */}
+      <div className="space-y-4">
+        {loading ? (
+          <div className="flex justify-center p-12"><RefreshCw className="animate-spin text-blue-500" /></div>
+        ) : error ? (
+          <div className="text-center p-12 text-red-500 flex flex-col items-center gap-2"><AlertCircle /> {error}</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center p-12 text-slate-500">No transactions recorded.</div>
+        ) : (
+          filtered.map((tx) => (
+            <motion.div key={tx._id} layout className="bg-white dark:bg-[#111827] border dark:border-slate-800 rounded-2xl p-6 flex items-center justify-between shadow-sm">
+              <div>
+                <p className="font-bold">{getTitle(tx)}</p>
+                <p className="text-xs text-slate-500">{new Date(tx.createdAt).toLocaleString()}</p>
+              </div>
+              <div className="text-right">
+                <p className={`font-black ${tx.amount > 0 ? "text-green-600" : "text-slate-900 dark:text-white"}`}>{getAmount(tx)}</p>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${statusStyle(tx.status)}`}>{tx.status}</span>
+              </div>
+            </motion.div>
+          ))
+        )}
       </div>
 
-      {/* PAGINATION CONTROLS */}
-      <div className="flex items-center justify-center gap-3 mt-8">
-        <button className="px-3 py-2 rounded-md bg-gray-100" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
-        <span className="text-sm text-gray-600">Page {page} / {totalPages}</span>
-        <button className="px-3 py-2 rounded-md bg-gray-100" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</button>
+      {/* PAGINATION */}
+      <div className="flex items-center justify-center gap-6 mt-8">
+        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-2 bg-slate-100 rounded-full disabled:opacity-50"><ChevronLeft size={20}/></button>
+        <span className="text-sm font-semibold">Page {page} of {totalPages}</span>
+        <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-2 bg-slate-100 rounded-full disabled:opacity-50"><ChevronRight size={20}/></button>
       </div>
     </div>
   );

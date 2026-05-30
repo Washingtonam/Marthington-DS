@@ -1,126 +1,73 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useUser } from "../../context/UserContext";
+import api from "../../lib/axios";
 import { 
-  ArrowLeft, 
-  Mail, 
-  Smartphone, 
-  User, 
-  Fingerprint, 
-  FileText,
-  AlertCircle, 
-  CheckCircle2, 
-  Loader2,
-  KeyRound,
-  UploadCloud,
-  Copy,
-  Check,
-  CreditCard
+  ArrowLeft, Mail, Smartphone, User, Fingerprint, FileText,
+  AlertCircle, CheckCircle2, Loader2, KeyRound, Wallet, BadgeCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-
-import api from "../../lib/axios";
-import { submitSelfServiceRequest } from "../../services/api";
+import { formatNaira } from "../../lib/currency";
 
 export default function SelfServiceForm() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("email"); // "email" or "unlink"
-  const [pricing, setPricing] = useState(null);
+  const { user, refreshBalance } = useUser();
+  const [activeTab, setActiveTab] = useState("email");
+  const [pricing, setPricing] = useState({});
   const [loadingPricing, setLoadingPricing] = useState(true);
   
-  // Form State
-  const [formData, setFormData] = useState({
-    nin: "",
-    phoneNumber: "",
-    fullName: "",
-    additionalInfo: ""
-  });
-  
-  // File Upload State (deprecated) - removed receipt requirement; backend will deduct from wallet
-  
-  // Copy Clipboard State
-  const [copied, setCopied] = useState(false);
-  
-  // Status States
+  const [formData, setFormData] = useState({ nin: "", phoneNumber: "", fullName: "", additionalInfo: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  // Bank Transfer Credentials
-  const bankDetails = {
-    bankName: "OPAY",
-    accountNumber: "6104102697",
-    accountName: "WASHINGTON AMEDU"
-  };
-
-  // =========================
-  // api PRICING DATA
-  // =========================
   useEffect(() => {
-    const apiPricing = async () => {
+    const fetchPricing = async () => {
       try {
-        const res = await api(`${API_BASE}/api/pricing`);
-        const data = await res;
-        setPricing(data);
-      } catch (err) {
-        console.error("Error  apiing pricing:", err);
-      }
-      setLoadingPricing(false);
+        const { data } = await api.get("/api/pricing");
+        setPricing(data?.ninServices?.selfService || {});
+      } catch (err) { console.error("Error fetching pricing:", err); }
+      finally { setLoadingPricing(false); }
     };
-     apiPricing();
+    fetchPricing();
   }, []);
 
-  // Get current active cost based on tab selection
-  const currentCost = activeTab === "email" 
-    ? (pricing?.ninServices?.selfService?.emailRetrieval || 1500)
-    : (pricing?.ninServices?.selfService?.deviceUnlink || 2000);
+  const currentCost = activeTab === "email" ? (pricing?.emailRetrieval || 1500) : (pricing?.deviceUnlink || 2000);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleCopyAccount = () => {
-    navigator.clipboard.writeText(bankDetails.accountNumber);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // No client-side proof required anymore; service fees deducted from wallet automatically.
-
-  // =========================
-  // SUBMIT REQUEST TO BACKEND
-  // =========================
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrorMessage("");
-    setSuccessMessage("");
+    if (currentCost > (user?.walletBalance || 0)) {
+      return setErrorMessage("Insufficient wallet balance. Please fund your account.");
+    }
 
     setIsSubmitting(true);
-    try {
-      const token = localStorage.getItem("token") || "";
-      const userEmail = localStorage.getItem("email") || "guest-user@xcombinator.com";
-      const userId = localStorage.getItem("userId") || "";
+    setErrorMessage("");
 
-      const payload = {
-        userId,
-        email: userEmail,
+    try {
+      await api.post("/api/nin-services/request", {
+        userId: user?.id,
         service: "self-service",
         type: activeTab === "email" ? "emailRetrieval" : "deviceUnlink",
         nin: formData.nin,
-        slipType: "none",
-        // No proof required — backend will debit walletBalanceKobo atomically
+        amount: currentCost,
         formData: {
           fullName: formData.fullName,
           phoneNumber: formData.phoneNumber,
           additionalNotes: formData.additionalInfo
         }
-      };
+      });
 
-      const res = await submitSelfServiceRequest(payload);
-      setSuccessMessage(`Success! Your request has been submitted and the service fee was debited from your wallet.`);
+      await refreshBalance();
+      setSuccessMessage("Request submitted successfully! Funds have been deducted from your wallet.");
       setFormData({ nin: "", phoneNumber: "", fullName: "", additionalInfo: "" });
+      setTimeout(() => navigate("/my-requests"), 2000);
     } catch (err) {
-      setErrorMessage(err.message || "An unexpected infrastructure error occurred.");
+      setErrorMessage(err.response?.data?.message || "An unexpected error occurred.");
     } finally {
       setIsSubmitting(false);
     }
@@ -128,230 +75,57 @@ export default function SelfServiceForm() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 pt-6 pb-16">
-      
-      {/* BACK NAVIGATION */}
-      <button 
-        onClick={() => navigate("/nin-services")}
-        className="flex items-center gap-2 text-gray-500 hover:text-gray-800 dark:hover:text-white text-sm font-medium transition mb-6"
-      >
-        <ArrowLeft size={16} /> Back to NIMC Services
+      <button onClick={() => navigate("/nin-services")} className="flex items-center gap-2 text-gray-500 hover:text-blue-600 text-sm font-medium transition mb-6">
+        <ArrowLeft size={16} /> Back to Services
       </button>
 
-      {/* HEADER HERO MODULE */}
-      <div className="bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-950 text-white p-8 rounded-[2rem] shadow-xl mb-8 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl" />
-        <div className="relative z-10 flex items-center gap-4">
+      <div className="bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-950 text-white p-8 rounded-[2rem] shadow-xl mb-8">
+        <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center text-purple-400">
             <KeyRound size={28} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">NIMC Self-Service Portal</h1>
-            <p className="text-white/60 text-xs md:text-sm mt-1">
-              Direct verification parameter overrides fueled by direct ledger settlements
-            </p>
+            <h1 className="text-3xl font-bold">NIMC Self-Service Portal</h1>
+            <p className="text-white/60">Automated verification and device management.</p>
           </div>
         </div>
       </div>
 
-      {/* SERVICE SEGMENT TAB BAR */}
-      <div className="flex max-w-md bg-gray-100 dark:bg-[#111827] p-1.5 rounded-2xl mb-8 border border-gray-200/50 dark:border-gray-800/40">
-        <button
-          onClick={() => { setActiveTab("email"); setErrorMessage(""); setSuccessMessage(""); }}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-semibold transition ${
-            activeTab === "email" 
-              ? "bg-purple-600 text-white shadow-md" 
-              : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
-          }`}
-        >
-          <Mail size={15} />
-          Email Retrieval
+      <div className="flex max-w-md bg-gray-100 dark:bg-[#111827] p-1.5 rounded-2xl mb-8 border dark:border-gray-800">
+        <button onClick={() => setActiveTab("email")} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-semibold transition ${activeTab === "email" ? "bg-purple-600 text-white" : "text-gray-500"}`}>
+          <Mail size={15} /> Email Retrieval
         </button>
-        <button
-          onClick={() => { setActiveTab("unlink"); setErrorMessage(""); setSuccessMessage(""); }}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-semibold transition ${
-            activeTab === "unlink" 
-              ? "bg-purple-600 text-white shadow-md" 
-              : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
-          }`}
-        >
-          <Smartphone size={15} />
-          Device Unlink
+        <button onClick={() => setActiveTab("unlink")} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-semibold transition ${activeTab === "unlink" ? "bg-purple-600 text-white" : "text-gray-500"}`}>
+          <Smartphone size={15} /> Device Unlink
         </button>
       </div>
 
-      {/* GLOBAL FEEDBACK NOTIFICATIONS */}
-      <AnimatePresence mode="wait">
-        {errorMessage && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 rounded-2xl flex items-start gap-3 text-red-600 dark:text-red-400 text-xs font-medium">
-            <AlertCircle size={18} className="shrink-0 mt-0.5" />
-            <span>{errorMessage}</span>
-          </motion.div>
-        )}
-        {successMessage && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 rounded-2xl flex items-start gap-3 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-            <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
-            <span>{successMessage}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
-        {/* LEFT COLUMN: CORE INPUT FIELD LOGISTICS (7 Cols) */}
-        <div className="lg:col-span-7 bg-white dark:bg-[#111827] border border-gray-100 dark:border-gray-800 rounded-[2rem] shadow-xl p-6 md:p-8">
-          <h3 className="text-sm font-bold mb-6 text-gray-800 dark:text-white pb-3 border-b border-gray-100 dark:border-gray-800">
-            Subscriber Data Profile
-          </h3>
-
+      <div className="grid lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-7 bg-white dark:bg-[#111827] border dark:border-gray-800 rounded-[2rem] shadow-sm p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Subscriber's Full Name</label>
-              <div className="relative">
-                <span className="absolute left-4 top-3.5 text-gray-400"><User size={18} /></span>
-                <input 
-                  type="text" required name="fullName" value={formData.fullName} onChange={handleInputChange}
-                  placeholder="Enter citizen's verified identity name"
-                  className="w-full bg-gray-50 dark:bg-[#0B1120] border border-gray-100 dark:border-gray-800 rounded-xl pl-12 pr-4 py-3.5 text-sm outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 dark:text-white transition"
-                />
-              </div>
+            <input name="fullName" value={formData.fullName} onChange={handleInputChange} placeholder="Full Name" className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-xl p-4 text-sm dark:text-white" required />
+            <div className="grid md:grid-cols-2 gap-5">
+              <input name="nin" value={formData.nin} onChange={handleInputChange} maxLength={11} placeholder="11-digit NIN" className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-xl p-4 text-sm dark:text-white" required />
+              <input name="phoneNumber" value={formData.phoneNumber} onChange={handleInputChange} placeholder="Phone Number" className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-xl p-4 text-sm dark:text-white" required />
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">National Identification Number (NIN)</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-3.5 text-gray-400"><Fingerprint size={18} /></span>
-                  <input 
-                    type="text" required maxLength={11} minLength={11} name="nin" value={formData.nin} onChange={handleInputChange}
-                    placeholder="11-digit NIN identifier"
-                    className="w-full bg-gray-50 dark:bg-[#0B1120] border border-gray-100 dark:border-gray-800 rounded-xl pl-12 pr-4 py-3.5 text-sm outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 dark:text-white transition"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Linked Phone Number</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-3.5 text-gray-400"><Smartphone size={18} /></span>
-                  <input 
-                    type="tel" required name="phoneNumber" value={formData.phoneNumber} onChange={handleInputChange}
-                    placeholder="08000000000"
-                    className="w-full bg-gray-50 dark:bg-[#0B1120] border border-gray-100 dark:border-gray-800 rounded-xl pl-12 pr-4 py-3.5 text-sm outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 dark:text-white transition"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
-                {activeTab === "email" ? "Additional Tracking Notes (Optional)" : "Target Device / App Lock Details"}
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-3.5 text-gray-400"><FileText size={18} /></span>
-                <textarea 
-                  name="additionalInfo" rows={3} value={formData.additionalInfo} onChange={handleInputChange}
-                  placeholder={activeTab === "email" ? "Provide context parameters if tracking specific registers..." : "Specify phone model or platform profile application details (e.g., NIMC MWS app lockout error)"}
-                  className="w-full bg-gray-50 dark:bg-[#0B1120] border border-gray-100 dark:border-gray-800 rounded-xl pl-12 pr-4 py-3.5 text-sm outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 dark:text-white transition resize-none"
-                />
-              </div>
-            </div>
-
-            {/* INTEGRATED MANUAL BANK TRANSFER SLATE */}
-            <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
-              <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#0B1120]/20 border border-gray-100 dark:border-gray-800 text-sm text-gray-600">
-                Payment proof upload is no longer required. The service fee will be deducted from your walletBalance automatically when you submit.
-              </div>
-            </div>
-
-            <button
-              type="submit" disabled={isSubmitting || loadingPricing}
-              className="w-full bg-gradient-to-r from-purple-700 to-indigo-900 hover:opacity-95 text-white font-semibold py-4 rounded-xl text-sm transition shadow-md flex items-center justify-center gap-2 mt-6 disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="animate-spin" size={16} />
-                  Transmitting Payment and Verification Records...
-                </>
-              ) : (
-                "Submit Request For Manual Approval"
-              )}
+            <textarea name="additionalInfo" value={formData.additionalInfo} onChange={handleInputChange} rows={3} placeholder="Additional Notes..." className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-xl p-4 text-sm dark:text-white" />
+            
+            <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2">
+              {isSubmitting ? <Loader2 className="animate-spin" /> : <><BadgeCheck size={18} /> Confirm & Pay from Wallet</>}
             </button>
           </form>
         </div>
 
-        {/* RIGHT COLUMN: BANK DISPATCH CREDENTIALS & PRICE LOOKUP (5 Cols) */}
         <div className="lg:col-span-5 space-y-6">
-          
-          {/* DIGITAL INVOICE METRICS SUMMARY CARD */}
-          <div className="bg-white dark:bg-[#111827] border border-gray-100 dark:border-gray-800 rounded-[2rem] shadow-xl p-6">
-            <h3 className="text-sm font-bold mb-4 dark:text-white">Settlement Breakdowns</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center bg-gray-50 dark:bg-[#0B1120] rounded-xl p-3 text-xs">
-                <span className="text-gray-500">Active Pipeline</span>
-                <span className="font-semibold text-purple-500">{activeTab === "email" ? "Email Retrieval" : "Device Unlink"}</span>
-              </div>
-              
-              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 rounded-xl p-4 text-center">
-                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">Required Settlement Sum</p>
-                <h4 className="text-3xl font-black text-blue-700 dark:text-blue-400">
-                  {loadingPricing ? "Loading..." : `₦${currentCost.toLocaleString()}`}
-                </h4>
-              </div>
+          <div className="bg-white dark:bg-[#111827] border dark:border-gray-800 rounded-[2rem] shadow-sm p-8">
+            <h3 className="font-bold mb-4 flex items-center gap-2 dark:text-white"><Wallet className="text-purple-500" /> Wallet Deduction</h3>
+            <div className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-6 rounded-2xl text-center">
+              <p className="text-xs opacity-80 uppercase">Service Fee</p>
+              <h2 className="text-4xl font-black">{formatNaira(currentCost)}</h2>
             </div>
-          </div>
-
-          {/* BANK CREDENTIALS BOARD MODULE */}
-          <div className="bg-gradient-to-b from-slate-900 to-indigo-950 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden">
-            <div className="absolute -bottom-8 -right-8 w-32 h-32 bg-white/5 rounded-full blur-xl" />
-            
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
-              <CreditCard size={16} className="text-purple-400" />
-              <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300">
-                Manual Transfer Accounts
-              </h4>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <p className="text-[10px] uppercase text-white/50 tracking-wider">Bank Name</p>
-                <p className="text-sm font-bold tracking-wide">{bankDetails.bankName}</p>
-              </div>
-
-              <div>
-                <p className="text-[10px] uppercase text-white/50 tracking-wider">Account Number</p>
-                <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-3 mt-1">
-                  <span className="text-lg font-mono font-bold tracking-widest text-yellow-400">
-                    {bankDetails.accountNumber}
-                  </span>
-                  <button 
-                    onClick={handleCopyAccount}
-                    className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition text-white/80"
-                    type="button"
-                  >
-                    {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-[10px] uppercase text-white/50 tracking-wider">Account Name</p>
-                <p className="text-sm font-bold text-white/90 uppercase">{bankDetails.accountName}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* SYSTEM GUIDELINE ADVISORIES */}
-          <div className="bg-gray-50 dark:bg-[#111827] border border-transparent dark:border-gray-800 rounded-[2rem] p-6 text-[11px] text-gray-500 dark:text-gray-400 space-y-3 leading-relaxed">
-            <h4 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5 mb-1 text-xs">
-              <AlertCircle size={14} className="text-purple-500" />
-              Operational Protocols
-            </h4>
-            <p>• Payments are checked and reconciled by management manually before requests are authorized into processing execution.</p>
-            <p>• Ensure your transfer confirmation screens perfectly show transmission timestamp elements clearly for fast validation updates.</p>
-            <p>• Processed applications will immediately emerge inside the global Request Section matrices seamlessly for resolution tracking.</p>
+            <p className="text-[11px] text-gray-500 mt-4 text-center">Your balance will be deducted immediately upon submission.</p>
           </div>
         </div>
-
       </div>
     </div>
   );
