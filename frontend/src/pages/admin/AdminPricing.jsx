@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../../lib/axios";
 import {
   Wallet,
   ShieldCheck,
@@ -13,8 +13,6 @@ import {
   CheckCircle2,
   KeyRound,
 } from "lucide-react";
-
-const API_BASE = "https://xcombinator.onrender.com";
 
 export default function AdminPricing() {
   const user = JSON.parse(localStorage.getItem("user")) || {};
@@ -89,7 +87,7 @@ export default function AdminPricing() {
   const fetchPricing = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE}/api/pricing`);
+      const res = await api.get("/api/pricing");
       const data = res.data;
 
       setUnitPrice(data?.nin?.unitPrice ?? 215);
@@ -136,7 +134,12 @@ export default function AdminPricing() {
         });
       }
     } catch (err) {
-      console.error("FETCH Pricing Error:", err);
+      console.error("FETCH Pricing Error:", {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      });
+      alert(err?.response?.data?.message || "Unable to load pricing data. Check backend availability.");
     } finally {
       setLoading(false);
     }
@@ -152,12 +155,20 @@ export default function AdminPricing() {
   const saveSection = async (section, payload) => {
     try {
       setLoadingSection(section);
-      await axios.put(`${API_BASE}/api/admin/pricing`, payload, { headers });
+      await api.put("/api/admin/pricing", payload, { headers });
       alert(`${formatLabel(section)} Pricing updated successfully!`);
       fetchPricing();
     } catch (err) {
-      console.error(`Update Error (${section}):`, err.response?.data || err.message);
-      alert(err.response?.data?.message || "Update failed. Verify login authority.");
+      console.error(`Update Error (${section}):`, {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      });
+      alert(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Update failed. Verify login authority or check pricing payload."
+      );
     } finally {
       setLoadingSection("");
     }
