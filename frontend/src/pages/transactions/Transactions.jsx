@@ -9,6 +9,7 @@ export default function Transactions() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const PAGE_SIZE = 10;
 
   // Get user from local storage
@@ -30,13 +31,17 @@ export default function Transactions() {
 
     const fetchTransactions = async () => {
       try {
-        const res = await api.get(`/api/users/transactions`);
-        setTransactions(res.data || []);
+        setLoading(true);
+        setError(null);
+        const res = await api.get(`/api/users/transactions?page=${page}&limit=${PAGE_SIZE}`);
+        setTransactions(res.data?.data || []);
+        setTotalPages(res.data?.totalPages || 1);
       } catch (err) {
         if (err?.response?.status === 404) {
           try {
-            const fallback = await api.get(`/api/transactions?userId=${user.id}`);
-            setTransactions(fallback.data || []);
+            const fallback = await api.get(`/api/transactions?page=${page}&limit=${PAGE_SIZE}`);
+            setTransactions(fallback.data?.data || fallback.data || []);
+            setTotalPages(fallback.data?.totalPages || 1);
           } catch (fallbackErr) {
             console.error("Transaction fallback failed:", fallbackErr);
             setError("Could not load transactions.");
@@ -51,7 +56,7 @@ export default function Transactions() {
     };
 
     fetchTransactions();
-  }, [user?.id]);
+  }, [user?.id, page]);
 
   // Optimized Search Filter
   const filtered = useMemo(() => {

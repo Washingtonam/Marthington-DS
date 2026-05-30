@@ -49,7 +49,15 @@ app.use("/api/admin", require("./modules/admin/admin.routes"));
 app.get("/api/transactions", verifyToken, async (req, res) => {
     try {
         const Transaction = require("./models/transaction.model");
-        const transactions = await Transaction.find({ userId: req.user.id }).sort({ createdAt: -1 });
+        const page = Math.max(Number(req.query.page) || 1, 1);
+        const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+        const skip = (page - 1) * limit;
+
+        const [transactions, totalCount] = await Promise.all([
+            Transaction.find({ userId: req.user.id }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+            Transaction.countDocuments({ userId: req.user.id })
+        ]);
+
         const formatted = transactions.map(tx => ({
             _id: tx._id,
             type: tx.type,
@@ -59,7 +67,15 @@ app.get("/api/transactions", verifyToken, async (req, res) => {
             status: tx.status,
             createdAt: tx.createdAt,
         }));
-        res.json(formatted);
+
+        res.json({
+            success: true,
+            page,
+            limit,
+            totalCount,
+            totalPages: Math.ceil(totalCount / limit),
+            data: formatted
+        });
     } catch (err) {
         console.error("DEPRECATED TRANSACTIONS ROUTE ERROR:", err);
         res.status(500).json({ error: "Failed to load transactions" });

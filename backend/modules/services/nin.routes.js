@@ -1,17 +1,17 @@
 const express = require("express");
 const axios = require("axios");
+const Joi = require("joi");
 const mongoose = require("mongoose");
 const router = express.Router();
 
 const User = require("../users/User.model");
 const ServiceRequest = require("./ServiceRequest.model");
 const Transaction = require("../../models/transaction.model");
-const { ensureUploaded } = require("../../shared/cloudinary");
+const Pricing = require("./Pricing.model");
 const { verifyToken, isAdmin } = require("../../shared/authGuard");
 const { validateServiceRequest, validateVerification } = require("../../shared/validators");
 const {
   SUPER_ADMIN_EMAIL,
-  SERVICE_RATES,
   NIN_VERIFY_URL,
   NIN_PHONE_URL,
   NIN_TRACKING_URL,
@@ -39,18 +39,18 @@ router.post("/request", verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { service, type, nin, slipType, proof, passport, formData } = req.body;
 
+    const pricing = await Pricing.getPricing();
     let mappedType = type;
     if (service === "modification") {
-      if (type === "name") mappedType = "nameCorrection";
-      if (type === "phone") mappedType = "phoneSync";
-      if (type === "address") mappedType = "addressMapping";
+      if (type === "name") mappedType = "name";
+      if (type === "phone") mappedType = "phone";
+      if (type === "address") mappedType = "address";
     }
 
-    const matrixRates = SERVICE_RATES;
-    let basePrice = matrixRates[mappedType] ?? 1500;
-    let slipCost = (String(service).toLowerCase() === "validation" && slipType && slipType !== "none") ? 250 : 0;
-    const totalCalculatedAmount = basePrice + slipCost; // Naira
-    const totalKobo = Math.round(Number(totalCalculatedAmount) * 100);
+    let basePrice = pricing.ninServices?.[mappedType] ?? 1500;
+    let slipCost = (String(service).toLowerCase() === "validation" && slipType && slipType !== "none") ? pricing.ninServices?.slipPrice ?? 150 : 0;
+    const totalCalculatedAmount = Number(basePrice) + Number(slipCost); // Naira
+    const totalKobo = Math.round(totalCalculatedAmount * 100);
 
     const user = await User.findById(userId).session(session);
     if (!user) throw new Error("User not found");
@@ -61,31 +61,33 @@ router.post("/request", verifyToken, async (req, res) => {
 
     const isSuperAdmin = user.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim();
 
-    if (!isSuperAdmin && user.walletBalanceKobo < totalKobo) {
-      await session.abortTransaction();
-      return res.status(400).json({ success: false, message: "Insufficient wallet balance." });
-    }
+    let updatedUser = user;
+    if (!isSuperAdmin && totalKobo > 0) {
+      updatedUser = await User.findOneAndUpdate(
+        { _id: userId, walletBalanceKobo: { $gte: totalKobo } },
+        { $inc: { walletBalanceKobo: -totalKobo } },
+        { new: true, session }
+      );
 
-    if (!isSuperAdmin) {
-      user.walletBalanceKobo -= totalKobo;
-      await user.save({ session });
+      if (!updatedUser) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(402).json({ success: false, message: "Insufficient wallet balance for this request." });
+      }
     }
-
-    // Ensure image fields are uploaded to Cloudinary (no raw base64 saved)
-    const processedProof = proof ? await ensureUploaded(proof, 'service_proofs') : null;
-    const processedPassport = passport ? await ensureUploaded(passport, 'service_passports') : null;
 
     const [savedRequest] = await ServiceRequest.create([
       {
         userId,
         service: String(service),
         type: String(mappedType),
+        serviceCategory: "NIMC",
         nin: nin ? String(nin) : "N/A",
         slipType: slipType ? String(slipType) : "none",
         amount: Number(totalCalculatedAmount),
         unitsUsed: 0,
-        proof: processedProof || (proof ? "N/A" : "N/A"),
-        passport: processedPassport || (passport ? "N/A" : "N/A"),
+        proof: proof ? String(proof) : "wallet",
+        passport: passport ? String(passport) : "wallet",
         formData: typeof formData === "object" ? formData : {},
         status: "pending",
         statusHistory: [{ status: "pending", note: "Initialized manual pipeline sequence successfully." }]
@@ -104,7 +106,7 @@ router.post("/request", verifyToken, async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    return res.status(200).json({ success: true, message: "Submission compiled successfully.", request: savedRequest, walletBalance: user.getWalletBalanceNaira() });
+    return res.status(200).json({ success: true, message: "Submission compiled successfully.", request: savedRequest, walletBalance: updatedUser.getWalletBalanceNaira() });
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
@@ -127,6 +129,7 @@ router.post("/verify", verifyToken, async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
+    const pricing = await Pricing.getPricing();
     const user = await User.findById(userId).session(session);
     if (!user) {
       await session.abortTransaction();
@@ -134,38 +137,46 @@ router.post("/verify", verifyToken, async (req, res) => {
     }
 
     const isSuperAdmin = user.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim();
+    const unitPriceNaira = pricing.nin?.unitPrice ?? 250;
 
     if (nin === "00000000000") {
-      // mock lookup for test NIN
-      if (!isSuperAdmin && (user.walletBalanceKobo == null ? Math.round((user.walletBalance || 0) * 100) : user.walletBalanceKobo) < KOBO_PER_UNIT) {
-        await session.abortTransaction();
-        return res.status(400).json({ error: "Insufficient wallet balance." });
-      }
-
+      const mockCostKobo = Math.round(unitPriceNaira * 100);
       if (!isSuperAdmin) {
-        if (user.walletBalanceKobo == null) user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
-        user.walletBalanceKobo -= KOBO_PER_UNIT;
-        await user.save({ session });
+        const updatedUser = await User.findOneAndUpdate(
+          { _id: userId, walletBalanceKobo: { $gte: mockCostKobo } },
+          { $inc: { walletBalanceKobo: -mockCostKobo } },
+          { new: true, session }
+        );
+
+        if (!updatedUser) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(402).json({ error: "Insufficient wallet balance." });
+        }
+        user.walletBalanceKobo = updatedUser.walletBalanceKobo;
       }
 
       const mockData = { firstname: "JOHN", surname: "TEST", nin: "00000000000", birthdate: "1995-01-01", gender: "Male" };
-      await Transaction.create([{ type: "NIN", amount: KOBO_PER_UNIT/100, amountKobo: KOBO_PER_UNIT, unitsUsed: isSuperAdmin ? 0 : 1, status: "success", userId: user._id }], { session });
+      await Transaction.create([{ type: "NIN", amount: mockCostKobo / 100, amountKobo: mockCostKobo, unitsUsed: isSuperAdmin ? 0 : 1, status: "success", userId: user._id }], { session });
       await session.commitTransaction();
       session.endSession();
       return res.json({ status: "success", data: mockData, walletBalance: user.getWalletBalanceNaira() });
     }
 
     let unitsRequired = UNITS_REQUIRED[method] || UNITS_REQUIRED.standard;
-    const costKobo = unitsRequired * KOBO_PER_UNIT;
+    const costKobo = Math.round(unitsRequired * unitPriceNaira * 100);
     if (!isSuperAdmin) {
-      if (user.walletBalanceKobo == null) user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
-      if (user.walletBalanceKobo < costKobo) {
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: userId, walletBalanceKobo: { $gte: costKobo } },
+        { $inc: { walletBalanceKobo: -costKobo } },
+        { new: true, session }
+      );
+      if (!updatedUser) {
         await session.abortTransaction();
         session.endSession();
-        return res.status(400).json({ error: "Insufficient wallet balance." });
+        return res.status(402).json({ error: "Insufficient wallet balance." });
       }
-      user.walletBalanceKobo -= costKobo;
-      await user.save({ session });
+      user.walletBalanceKobo = updatedUser.walletBalanceKobo;
     }
 
     let url = "";

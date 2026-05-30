@@ -55,10 +55,10 @@ export default function UserRequests() {
         setRequests(newData);
       }
 
-      const currentPage = res.data?.pagination?.page || 1;
-      const totalPages = res.data?.pagination?.pages || 1;
+      const currentPage = res.data?.page || 1;
+      const totalPages = res.data?.totalPages || 1;
       setHasMore(currentPage < totalPages);
-      setPage(pageNum);
+      setPage(currentPage);
     } catch (err) {
       console.error("REQUEST api ERROR:", err.response?.data || err.message);
     } finally {
@@ -80,21 +80,27 @@ export default function UserRequests() {
   // UI HELPERS
   // =========================
   const statusStyle = (status) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case "pending": return "bg-yellow-100 text-yellow-700";
-      case "approved": return "bg-green-100 text-green-700";
-      case "completed": return "bg-blue-100 text-blue-700";
+      case "processing": return "bg-blue-100 text-blue-700";
+      case "completed":
+      case "success":
+      case "successful": return "bg-green-100 text-green-700";
+      case "failed":
       case "rejected": return "bg-red-100 text-red-700";
       default: return "bg-gray-100 text-gray-700";
     }
   };
 
   const statusText = (status) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case "pending": return "⏳ Waiting for Review";
-      case "approved": return "⚙️ Processing";
-      case "completed": return "✅ Completed";
-      case "rejected": return "❌ Rejected";
+      case "processing": return "⚙️ In Progress";
+      case "completed":
+      case "success":
+      case "successful": return "✅ Completed";
+      case "failed":
+      case "rejected": return "❌ Failed";
       default: return status;
     }
   };
@@ -137,10 +143,13 @@ export default function UserRequests() {
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="font-bold text-lg capitalize">{r.service}</p>
                   <span className="text-gray-400">•</span>
                   <p className="capitalize text-gray-600">{r.type}</p>
+                  {r.serviceCategory && (
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{r.serviceCategory}</span>
+                  )}
                 </div>
                 <p className="text-sm text-gray-500 mt-1">{new Date(r.createdAt).toLocaleString()}</p>
                 <p className="text-xs text-gray-400 mt-2">NIN: {r.nin}</p>
@@ -187,6 +196,7 @@ export default function UserRequests() {
               <div className="grid md:grid-cols-2 gap-4">
                 <Detail label="NIN" value={active.nin} />
                 <Detail label="Service" value={active.service} />
+                <Detail label="Category" value={active.serviceCategory || "NIMC"} />
                 <Detail label="Type" value={active.type} />
                 <Detail label="Created" value={new Date(active.createdAt).toLocaleString()} />
               </div>
@@ -215,7 +225,7 @@ export default function UserRequests() {
                         <div>
                           <p className="font-semibold capitalize">{s.status}</p>
                           <p className="text-sm text-gray-500">{s.note}</p>
-                          <p className="text-xs text-gray-400 mt-1">{new Date(s.date).toLocaleString()}</p>
+                          <p className="text-xs text-gray-400 mt-1">{new Date(s.createdAt || s.date).toLocaleString()}</p>
                         </div>
                       </div>
                     ))}
@@ -237,7 +247,7 @@ export default function UserRequests() {
                 </div>
               )}
 
-              {active.proof && (
+              {typeof active.proof === "string" && active.proof.startsWith("http") && (
                 <div>
                   <h3 className="font-bold text-lg mb-4">Payment Proof</h3>
                   <img src={active.proof} alt="proof" className="w-full rounded-2xl border" />

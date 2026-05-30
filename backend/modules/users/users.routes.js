@@ -45,11 +45,19 @@ router.get("/balance", verifyToken, async (req, res) => {
 router.get("/transactions", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id; // Securely pulled from request payload
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const skip = (page - 1) * limit;
 
-    const transactions = await Transaction.find({ userId })
-      .sort({ createdAt: -1 });
+    const [transactions, totalCount] = await Promise.all([
+      Transaction.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments({ userId })
+    ]);
 
-    // 🔥 NORMALIZE RESPONSE FOR FRONTEND
     const formatted = transactions.map(tx => ({
       _id: tx._id,
       type: tx.type,
@@ -60,7 +68,14 @@ router.get("/transactions", verifyToken, async (req, res) => {
       createdAt: tx.createdAt,
     }));
 
-    return res.json(formatted);
+    return res.json({
+      success: true,
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      data: formatted
+    });
 
   } catch (error) {
     console.error("🔥 TRANSACTION ERROR:", error.message);
@@ -76,40 +91,49 @@ router.get("/transactions", verifyToken, async (req, res) => {
 router.get("/requests/history", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id; // Fully token authenticated
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const take = page * limit;
 
-    // Execute database scans concurrently to save memory cycles
-    const [services, cacRequests] = await Promise.all([
-      ServiceRequest.find({ userId }).lean(),
-      CacRequest.find({ userId }).lean()
+    const [services, cacRequests, serviceCount, cacCount] = await Promise.all([
+      ServiceRequest.find({ userId }).sort({ createdAt: -1 }).limit(take).lean(),
+      CacRequest.find({ userId }).sort({ createdAt: -1 }).limit(take).lean(),
+      ServiceRequest.countDocuments({ userId }),
+      CacRequest.countDocuments({ userId })
     ]);
 
-    // Tag and normalize properties so your client UI identifies layout components clearly
-    const normalizedServices = services.map(s => ({ 
-      ...s, 
-      pipelineSource: "service" 
-    }));
-    
-    const normalizedCac = cacRequests.map(c => ({ 
-      ...c, 
-      pipelineSource: "cac" 
+    const normalizedServices = services.map(s => ({
+      ...s,
+      pipelineSource: "service",
+      serviceCategory: s.serviceCategory || "NIMC"
     }));
 
-    // Merge the arrays and sort descending by newest creation dates
-    const combinedHistory = [...normalizedServices, ...normalizedCac].sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-    );
+    const normalizedCac = cacRequests.map(c => ({
+      ...c,
+      pipelineSource: "cac",
+      serviceCategory: c.serviceCategory || "CAC"
+    }));
+
+    const combinedHistory = [...normalizedServices, ...normalizedCac]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const pagedData = combinedHistory.slice((page - 1) * limit, page * limit);
+    const totalCount = serviceCount + cacCount;
 
     return res.status(200).json({
       success: true,
-      count: combinedHistory.length,
-      data: combinedHistory
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      data: pagedData
     });
 
   } catch (error) {
     console.error("🔥 INDIVIDUAL USER REQUESTS ERROR:", error.message);
-    return res.status(500).json({ 
-      success: false, 
-      message: "Server error querying target user data logs." 
+    return res.status(500).json({
+      success: false,
+      message: "Server error querying target user data logs."
     });
   }
 });

@@ -6,7 +6,6 @@ const User = require("../users/User.model");
 const Transaction = require("../../models/transaction.model");
 const CacRequest = require("./CacRequest.model");
 const Pricing = require("./Pricing.model");
-const { ensureUploaded } = require("../../shared/cloudinary");
 const { verifyToken, isAdmin } = require("../../shared/authGuard");
 const { SUPER_ADMIN_EMAIL } = require("../../config/constants");
 const { validateCacRegistration } = require("../../shared/validators");
@@ -23,9 +22,14 @@ router.post("/submit", verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { serviceType, businessName1, businessName2, companyEmail, companyPhone, category, state, lga, shopNo, streetAddress, proprietors, witness, secretary } = req.body;
 
-    const platformPricing = await Pricing.findOne().session(session);
-    const rates = { sole_proprietorship: platformPricing?.cacServices?.soleProprietorship ?? 28000, partnership: platformPricing?.cacServices?.partnership ?? 32000, limited_1m: platformPricing?.cacServices?.limited1M ?? 40000, custom_ngo: 0 };
-    
+    const pricing = await Pricing.getPricing();
+    const rates = {
+      sole_proprietorship: pricing?.cacServices?.soleProprietorship ?? 28000,
+      partnership: pricing?.cacServices?.partnership ?? 32000,
+      limited_1m: pricing?.cacServices?.limited1M ?? 40000,
+      custom_ngo: 0
+    };
+
     const cost = rates[serviceType];
     const costKobo = Math.round(Number(cost) * 100);
 
@@ -36,41 +40,52 @@ router.post("/submit", verifyToken, async (req, res) => {
       user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
     }
 
-    // Deduct wallet balance atomically to prevent race conditions
     if (cost > 0) {
-      if (user.walletBalanceKobo < costKobo) throw new Error(`Insufficient wallet balance. Required: ${cost}`);
-
-      const updatedUser = await User.findByIdAndUpdate(
-        userId,
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: userId, walletBalanceKobo: { $gte: costKobo } },
         { $inc: { walletBalanceKobo: -costKobo } },
         { new: true, session }
       );
-      if (!updatedUser) throw new Error("Failed to debit user wallet");
+      if (!updatedUser) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(402).json({ message: `Insufficient wallet balance. Required ₦${cost}.` });
+      }
       user.walletBalanceKobo = updatedUser.walletBalanceKobo;
     }
 
-    // Ensure image fields are uploaded to Cloudinary (no raw base64 saved)
-    let processedProprietors = proprietors;
+    let processedProprietors = [];
     if (Array.isArray(proprietors)) {
-      processedProprietors = [];
       for (const p of proprietors) {
-        const item = { ...p };
-        if (item.signature) item.signature = await ensureUploaded(item.signature, 'cac_proprietors');
-        if (item.passport) item.passport = await ensureUploaded(item.passport, 'cac_proprietor_passports');
-        processedProprietors.push(item);
+        const { signature, passport, ...cleaned } = p || {};
+        processedProprietors.push(cleaned);
       }
     }
 
-    let processedWitness = witness;
+    let processedWitness = null;
     if (witness && typeof witness === 'object') {
-      processedWitness = { ...witness };
-      if (processedWitness.signature) processedWitness.signature = await ensureUploaded(processedWitness.signature, 'cac_witnesses');
-      if (processedWitness.passport) processedWitness.passport = await ensureUploaded(processedWitness.passport, 'cac_witness_passports');
+      const { signature, passport, ...cleanedWitness } = witness;
+      processedWitness = cleanedWitness;
     }
 
     // Persist Registry
     const [newCacJob] = await CacRequest.create([{
-      userId, serviceType, amountCharged: cost, businessName1, businessName2, companyEmail, companyPhone, category, state, lga, shopNo, streetAddress, proprietors: processedProprietors, witness: processedWitness, secretary,
+      userId,
+      serviceType,
+      serviceCategory: "CAC",
+      amountCharged: cost,
+      businessName1,
+      businessName2,
+      companyEmail,
+      companyPhone,
+      category,
+      state,
+      lga,
+      shopNo,
+      streetAddress,
+      proprietors: processedProprietors,
+      witness: processedWitness,
+      secretary,
       statusHistory: [{ status: "pending", note: "Corporate pipeline structure initialized." }]
     }], { session });
 

@@ -10,8 +10,8 @@ const ProprietorSchema = new mongoose.Schema({
   state: { type: String },
   lga: { type: String },
   address: { type: String },
-  signature: { type: String, required: true }, // Cloudinary storage asset link
-  passport: { type: String, required: true }   // Cloudinary storage asset link
+  signature: { type: String, required: false },
+  passport: { type: String, required: false }
 });
 
 const CacRequestSchema = new mongoose.Schema({
@@ -22,6 +22,7 @@ const CacRequestSchema = new mongoose.Schema({
     enum: ["sole_proprietorship", "partnership", "limited_1m", "custom_ngo"] 
   },
   amountCharged: { type: Number, required: true },
+  serviceCategory: { type: String, enum: ["CAC", "NIMC"], default: "CAC" },
   
   // Business Core Information Block
   businessName1: { type: String, required: true },

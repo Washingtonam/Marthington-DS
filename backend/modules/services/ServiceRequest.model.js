@@ -14,6 +14,11 @@ const ServiceRequestSchema = new mongoose.Schema({
     type: String,
     required: true // e.g., "nameCorrection", "trackingLookup", "vnin"
   },
+  serviceCategory: {
+    type: String,
+    enum: ["NIMC", "CAC"],
+    default: "NIMC"
+  },
   nin: {
     type: String,
     default: "N/A"
@@ -25,6 +30,10 @@ const ServiceRequestSchema = new mongoose.Schema({
   amount: {
     type: Number,
     required: true,
+    default: 0
+  },
+  amountKobo: {
+    type: Number,
     default: 0
   },
   unitsUsed: {
