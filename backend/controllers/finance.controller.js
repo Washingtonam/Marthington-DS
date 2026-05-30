@@ -6,26 +6,39 @@ const { ensureUploaded } = require("../shared/cloudinary");
 exports.submitPaymentReceipt = async (req, res) => {
     try {
         const { amount, reference, paymentMethod, proof } = req.body;
-        const userId = req.user._id;
+        const userId = req.user.id || req.user._id;
 
-        const amountKobo = Math.round(Number(amount) * 100);
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized: user context missing." });
+        }
 
-        const proofUrl = proof ? await ensureUploaded(proof, 'payment_proofs') : proof || null;
+        const parsedAmount = Number(amount);
+        if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({ message: "Invalid payment amount." });
+        }
+
+        if (!proof) {
+            return res.status(400).json({ message: "Payment proof is required." });
+        }
+
+        const amountKobo = Math.round(parsedAmount * 100);
+        const proofUrl = await ensureUploaded(proof, 'payment_proofs');
 
         const newTransaction = new Transaction({
             userId,
             type: "credit",
-            amount, // Amount in Naira
+            amount: parsedAmount,
             amountKobo,
             reference,
             status: "pending",
-            description: `Wallet funding via ${paymentMethod}`,
+            description: `Wallet funding via ${paymentMethod || "bank transfer"}`,
             proof: proofUrl
         });
 
         await newTransaction.save();
         res.status(201).json({ message: "Payment submitted successfully", transaction: newTransaction });
     } catch (error) {
+        console.error("FINANCE SUBMIT PAYMENT ERROR:", error);
         res.status(500).json({ message: "Error submitting payment", error: error.message });
     }
 };

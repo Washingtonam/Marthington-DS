@@ -35,8 +35,8 @@ export default function Wallet() {
     setLoading(true);
     try {
       await api.post("/api/finance/submit-payment", {
-        userId: user.id || user._id,
         amount: Number(amount),
+        paymentMethod: "bank_transfer",
         proof
       });
 
