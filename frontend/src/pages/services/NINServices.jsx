@@ -18,7 +18,7 @@ export default function NINServices() {
     { id: 'ipe', title: 'IPE Clearance', icon: <RefreshCcw />, color: 'bg-indigo-500', route: '/nin-services/ipe-clearance', desc: 'Resolve processing roadblocks.' },
     { id: 'modification', title: 'Modification', icon: <Fingerprint />, color: 'bg-emerald-500', route: '/nin-services/modification', desc: 'Secure data corrections.' },
     { id: 'personalization', title: 'Personalization', icon: <Sparkles />, color: 'bg-purple-500', route: '/nin-services/personalization', desc: 'Requires 15-digit tracking ID.', badge: 'NEW' },
-    { id: 'selfService', title: 'Self Service', icon: <UserCog />, color: 'bg-orange-500', route: '/nin-services/self-service', desc: 'Email recovery & unlinking.', badge: 'NEW' }
+    { id: 'selfService', title: 'Self Service', icon: <UserCog />, color: 'bg-orange-500', route: '/nin-services/selfservice', desc: 'Email recovery & unlinking.', badge: 'NEW' }
   ];
 
   useEffect(() => {
