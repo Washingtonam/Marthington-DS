@@ -68,8 +68,7 @@ export default function Transactions() {
     );
   }, [search, transactions]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const paged = filtered;
 
   // Transaction Title Helper
   const getTitle = (tx) => {
