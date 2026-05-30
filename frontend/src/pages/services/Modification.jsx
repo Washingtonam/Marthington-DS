@@ -40,7 +40,6 @@ export default function Modification() {
     setLoading(true);
     try {
       await api.post("/api/services/request", {
-        userId: user?.id,
         service: "modification",
         type: selectedType,
         nin: formData.nin,

@@ -54,7 +54,6 @@ export default function Validation() {
     setLoading(true);
     try {
       await api.post("/api/services/request", {
-        userId: user?.id || user?._id,
         service: "validation",
         type: selectedService,
         nin,

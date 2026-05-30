@@ -50,7 +50,6 @@ export default function SelfServiceForm() {
 
     try {
       await api.post("/api/services/request", {
-        userId: user?.id,
         service: "self-service",
         type: activeTab === "email" ? "emailRetrieval" : "deviceUnlink",
         nin: formData.nin,
