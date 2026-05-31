@@ -36,15 +36,15 @@ app.use(express.json({ limit: "10mb" }));
 // Match frontend expectations:
 // - /api/services/*  -> core services routes (verify, request, etc.)
 // - /api/cac/*       -> CAC service routes
-app.use("/api/auth", require("./modules/auth/auth.routes"));
-app.use("/api/finance", require("./modules/finance/finance.routes"));
-app.use("/api/users", require("./modules/users/users.routes"));
-app.use("/api/user", require("./modules/users/users.routes"));
-app.use("/api/services", require("./modules/services/nin.routes"));
-app.use("/api/cac", require("./modules/services/cac.routes"));
+app.use("/api/auth", require("./routes/users.routes"));
+app.use("/api/finance", require("./routes/finance.routes"));
+app.use("/api/users", require("./routes/users.routes"));
+app.use("/api/user", require("./routes/users.routes"));
+app.use("/api/services", require("./routes/services.routes"));
+app.use("/api/cac", require("./routes/services.routes"));
 
 // Administrative routes (frontend calls /api/admin/*)
-app.use("/api/admin", require("./modules/admin/admin.routes"));
+app.use("/api/admin", require("./routes/admin.routes"));
 
 // Backwards compatibility alias for legacy transaction path
 app.get("/api/transactions", verifyToken, async (req, res) => {
@@ -86,7 +86,7 @@ app.get("/api/transactions", verifyToken, async (req, res) => {
 // Public pricing endpoint (frontend requests GET /api/pricing)
 app.get("/api/pricing", async (req, res) => {
     try {
-        const Pricing = require("./modules/services/Pricing.model");
+        const Pricing = require("./models/Pricing.model");
         const pricing = await Pricing.getPricing();
         res.json(pricing);
     } catch (err) {
