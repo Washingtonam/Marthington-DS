@@ -1,5 +1,5 @@
 const Transaction = require("../models/transaction.model");
-const User = require("../modules/users/User.model");
+const User = require("../models/User.model");
 const { ensureUploaded } = require("../shared/cloudinary");
 
 // Submit a payment

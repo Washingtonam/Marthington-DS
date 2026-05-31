@@ -1,6 +1,9 @@
 const express = require("express");
 const cors = require("cors");
 const { verifyToken } = require("./shared/authGuard");
+const express = require("express");
+const cors = require("cors");
+const { verifyToken } = require("./shared/authGuard");
 const app = express();
 
 // Allowed frontend origins for production (explicit - do not use '*')
@@ -32,13 +35,13 @@ app.use(express.json({ limit: "10mb" }));
 
 // Routes
 // We group these by service. The controller logic is now hidden inside these routes.
+// Match frontend expectations:
+// - /api/services/*  -> core services routes (verify, request, etc.)
+// - /api/cac/*       -> CAC service routes
 app.use("/api/auth", require("./modules/auth/auth.routes"));
 app.use("/api/finance", require("./modules/finance/finance.routes"));
 app.use("/api/users", require("./modules/users/users.routes"));
 app.use("/api/user", require("./modules/users/users.routes"));
-// Match frontend expectations:
-// - /api/services/*  -> core services routes (verify, request, etc.)
-// - /api/cac/*       -> CAC service routes
 app.use("/api/services", require("./modules/services/nin.routes"));
 app.use("/api/cac", require("./modules/services/cac.routes"));
 
