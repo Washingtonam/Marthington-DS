@@ -2,9 +2,13 @@
 const express = require('express');
 const router = express.Router();
 const financeController = require('../controllers/finance.controller');
+const { verifyToken, isAdmin } = require('../shared/authGuard');
 
-// Example routes (match your old modules/finance/finance.routes.js)
-router.get('/payments', financeController.getAllPayments);
-router.post('/payment-requests', financeController.createPaymentRequest);
+// User Routes
+router.post('/submit-payment', verifyToken, financeController.submitPaymentReceipt);
+
+// Admin Routes
+router.get('/payments', verifyToken, isAdmin, financeController.getPendingPayments);
+router.post('/payments/:id/approve', verifyToken, isAdmin, financeController.approvePayment);
 
 module.exports = router;
