@@ -1,22 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import {
-  CheckCircle2,
-  XCircle,
-  Clock3,
-  Eye,
-  MessageSquare,
-  ShieldCheck,
-  FileText,
-  User,
-  ChevronLeft,
-  ChevronRight,
-  Save,
-  Send,
-  BadgeCheck,
-  X,
-  Building2,
-  Fingerprint
+  CheckCircle2, XCircle, Clock3, Eye, MessageSquare, ShieldCheck,
+  FileText, User, ChevronLeft, ChevronRight, Save, Send,
+  BadgeCheck, X, Building2, Fingerprint, Search, ArrowUpDown
 } from "lucide-react";
 
 const API_BASE = "https://xcombinator.onrender.com";
@@ -26,6 +13,9 @@ export default function AdminRequests() {
   const [requests, setRequests] = useState([]);
   const [filter, setFilter] = useState("pending");
   const [selected, setSelected] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortOrder, setSortOrder] = useState("desc");
+
   const [note, setNote] = useState("");
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
@@ -33,6 +23,7 @@ export default function AdminRequests() {
   const [noteSaving, setNoteSaving] = useState(false);
   const [commentPushing, setCommentPushing] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
+
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const LIMIT = 20;
@@ -46,23 +37,17 @@ export default function AdminRequests() {
         `${API_BASE}/api/admin/requests?page=${page}&limit=${LIMIT}&status=${filter}`,
         { headers }
       );
-
-      const data = res.data?.data || res.data?.requests || [];
-      
-      const filtered = data.filter((item) => {
+      const rawData = res.data?.data || res.data?.requests || [];
+      const filteredByModule = rawData.filter((item) => {
         if (!item) return false;
-        const service = (item.service || "").toLowerCase();
-        if (activeTab === "cac") {
-          return service === "cac" || item.businessType || item.proposedName1;
-        } else {
-          return service === "nimc" || service === "validation" || service === "modification" || item.nin;
-        }
+        if (activeTab === "cac") return item.service?.toLowerCase() === "cac" || item.businessType || item.proposedName1;
+        return item.service?.toLowerCase() === "nimc" || item.service?.toLowerCase() === "validation" || 
+               item.service?.toLowerCase() === "modification" || item.nin || (!item.proposedName1 && item.service?.toLowerCase() !== "cac");
       });
-
-      setRequests(filtered);
+      setRequests(filteredByModule);
       setPages(res.data?.pagination?.pages || 1);
     } catch (err) {
-      console.error("Fetch Error:", err);
+      console.error("FETCH ERROR:", err);
       setRequests([]);
     } finally {
       setLoading(false);
@@ -73,118 +58,94 @@ export default function AdminRequests() {
     fetchRequests();
   }, [activeTab, filter, page]);
 
+  const processedRequests = useMemo(() => {
+    let data = [...requests];
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      data = data.filter(r => 
+        r.userId?.email?.toLowerCase().includes(lower) ||
+        r.nin?.toLowerCase().includes(lower) ||
+        r.proposedName1?.toLowerCase().includes(lower) ||
+        r.businessType?.toLowerCase().includes(lower)
+      );
+    }
+    data.sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
+    });
+    return data;
+  }, [requests, searchTerm, sortOrder]);
+
   const handleStatusTransition = async (id, targetStatus) => {
-    if (!window.confirm(`Set status to ${targetStatus}?`)) return;
+    if (!window.confirm(`Mark as ${targetStatus}?`)) return;
     try {
       setActionLoading(id);
-      await axios.put(
-        `${API_BASE}/api/admin/update-status/${id}`,
-        { status: targetStatus, note: `Status updated to ${targetStatus}` },
-        { headers }
-      );
+      await axios.put(`${API_BASE}/api/admin/update-status/${id}`, { status: targetStatus }, { headers });
       setRequests(prev => prev.filter(r => r._id !== id));
       if (selected?._id === id) setSelected(null);
-    } catch (err) {
-      alert("Update failed.");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const saveNote = async () => {
-    if (!selected?._id) return;
-    setNoteSaving(true);
-    try {
-      await axios.put(`${API_BASE}/api/admin/update-notes/${selected._id}`, { adminNotes: note }, { headers });
-      setSelected(prev => ({ ...prev, adminNotes: note }));
-      alert("Notes synchronized.");
-    } catch {
-      alert("Save failed.");
-    } finally {
-      setNoteSaving(false);
-    }
-  };
-
-  const addComment = async () => {
-    if (!comment || !selected?._id) return;
-    setCommentPushing(true);
-    try {
-      const payload = { text: comment, by: headers.email || "Admin" };
-      await axios.post(`${API_BASE}/api/admin/requests/${selected._id}/comments`, payload, { headers });
-      setSelected(prev => ({ ...prev, comments: [...(prev.comments || []), payload] }));
-      setComment("");
-    } catch {
-      alert("Comment push failed.");
-    } finally {
-      setCommentPushing(false);
-    }
+    } catch (err) { alert("Failed to update."); }
+    finally { setActionLoading(null); }
   };
 
   const statusStyle = (status) => {
-    const s = String(status).toLowerCase();
-    if (s === "pending") return "bg-yellow-100 text-yellow-700";
-    if (s === "approved" || s === "completed") return "bg-green-100 text-green-700";
-    return "bg-red-100 text-red-700";
+    switch (String(status).toLowerCase()) {
+      case "pending": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
+      case "approved": return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
+      case "completed": return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+      case "failed": case "rejected": return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+      default: return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
+    }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 pb-20 pt-6">
-      <div className="bg-gradient-to-r from-slate-900 to-blue-900 rounded-3xl p-8 text-white mb-8">
-        <h1 className="text-3xl font-bold mb-2">Operations Control</h1>
-        <p className="text-blue-100 opacity-80">Manage {activeTab.toUpperCase()} stream lifecycle.</p>
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-900 to-blue-900 rounded-3xl p-8 text-white shadow-2xl mb-8">
+        <h1 className="text-3xl md:text-5xl font-bold mb-3 tracking-tight">Operations Control</h1>
+        <p className="text-blue-100 opacity-90 max-w-xl">Manage internal data streams, filings, and status lifecycles.</p>
       </div>
 
-      <div className="flex gap-4 mb-6">
-        {["nimc", "cac"].map(tab => (
-          <button 
-            key={tab} 
-            onClick={() => { setActiveTab(tab); setPage(1); }}
-            className={`px-6 py-2 rounded-xl font-bold capitalize ${activeTab === tab ? "bg-blue-600 text-white" : "bg-gray-200"}`}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="flex flex-col md:flex-row gap-4 mb-8">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3.5 text-gray-400" size={18} />
+          <input type="text" placeholder="Search by email, NIN, or business name..." className="w-full pl-10 pr-4 py-3 rounded-2xl border border-gray-200 dark:bg-[#161616] dark:border-gray-800 focus:ring-2 focus:ring-blue-500 outline-none" onChange={(e) => setSearchTerm(e.target.value)} />
+        </div>
+        <button onClick={() => setSortOrder(prev => prev === "desc" ? "asc" : "desc")} className="px-5 py-3 bg-white dark:bg-[#161616] border border-gray-200 dark:border-gray-800 rounded-2xl font-bold flex items-center gap-2">
+          <ArrowUpDown size={16} /> {sortOrder === "desc" ? "Newest" : "Oldest"}
+        </button>
+      </div>
+
+      <div className="flex border-b border-gray-200 dark:border-gray-800 mb-8 gap-2">
+        <button onClick={() => { setActiveTab("nimc"); setPage(1); }} className={`px-6 py-3 font-bold text-sm border-b-2 ${activeTab === "nimc" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500"}`}>NIMC</button>
+        <button onClick={() => { setActiveTab("cac"); setPage(1); }} className={`px-6 py-3 font-bold text-sm border-b-2 ${activeTab === "cac" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500"}`}>CAC</button>
       </div>
 
       {loading ? (
-        <div className="text-center py-20">Loading...</div>
+        <div className="text-center p-16">Syncing data...</div>
+      ) : processedRequests.length === 0 ? (
+        <div className="text-center p-16">No entries matching your criteria.</div>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {requests.map(r => (
-            <div key={r._id} className="bg-white p-6 rounded-3xl border shadow-sm">
-              <div className="flex justify-between mb-4">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusStyle(r.status)}`}>{r.status}</span>
-                <span className="text-xs font-mono text-gray-400">ID: {r._id.slice(-4)}</span>
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {processedRequests.map((r) => (
+            <div key={r._id} className="bg-white dark:bg-[#161616] rounded-3xl p-6 border border-gray-100 dark:border-gray-800">
+              <h2 className="font-bold text-sm truncate">{r.userId?.email || "No User"}</h2>
+              <span className={`text-xs px-2 py-1 rounded-full ${statusStyle(r.status)}`}>{r.status}</span>
+              <div className="mt-4 flex gap-2">
+                <button onClick={() => { setSelected(r); setNote(r.adminNotes || ""); }} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-xs">Inspect</button>
+                {r.status === "pending" && <button onClick={() => handleStatusTransition(r._id, "approved")} className="bg-green-600 text-white px-4 py-2 rounded-xl text-xs">Pass</button>}
               </div>
-              <h2 className="font-bold mb-2">{r.userId?.email || "N/A"}</h2>
-              <div className="text-sm text-gray-600 mb-4">{r.service || "Standard Entry"}</div>
-              <button onClick={() => { setSelected(r); setNote(r.adminNotes || ""); }} className="w-full bg-black text-white py-2 rounded-xl text-xs font-bold">Inspect</button>
             </div>
           ))}
         </div>
       )}
 
       {selected && (
-        <div className="fixed inset-0 bg-black/50 flex justify-center items-center p-4 z-50">
-          <div className="bg-white w-full max-w-2xl rounded-3xl p-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Details</h2>
-              <button onClick={() => setSelected(null)}><X /></button>
-            </div>
-            
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} className="w-full border rounded-xl p-3 mb-4 h-24" />
-            <button onClick={saveNote} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold mb-6">Save Notes</button>
-
-            <div className="space-y-4">
-              <h3 className="font-bold text-sm">Audit Trail</h3>
-              {(selected.comments || []).map((c, i) => (
-                <div key={i} className="bg-gray-50 p-3 rounded-lg text-xs">{c.text}</div>
-              ))}
-              <div className="flex gap-2">
-                <input value={comment} onChange={(e) => setComment(e.target.value)} className="flex-1 border rounded-xl p-3" placeholder="New comment..." />
-                <button onClick={addComment} className="bg-blue-600 text-white px-4 rounded-xl font-bold">Push</button>
-              </div>
-            </div>
+        <div className="fixed inset-0 bg-black/80 z-50 flex justify-center items-center p-4">
+          <div className="bg-white dark:bg-[#111111] w-full max-w-2xl rounded-3xl p-6">
+            <h2 className="text-xl font-bold mb-4">Inspection</h2>
+            <p className="mb-4 text-sm">{selected.userId?.email}</p>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} className="w-full h-20 p-2 bg-gray-100 dark:bg-gray-800 rounded-xl" />
+            <button onClick={() => setSelected(null)} className="mt-4 bg-red-500 text-white px-4 py-2 rounded-xl">Close</button>
           </div>
         </div>
       )}
