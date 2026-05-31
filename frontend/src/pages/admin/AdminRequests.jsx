@@ -45,34 +45,32 @@ export default function AdminRequests() {
   useEffect(() => { fetchRequests(); }, [page, activeStatus]);
 
 const handleStatusUpdate = async (id, status) => {
-    if (!id) {
-      alert("Error: Request ID is missing.");
-      return;
-    }
-    if (!window.confirm(`Confirm ${status} for ${id}?`)) return;
+    if (!id) return;
+    if (!window.confirm(`Confirm ${status} for this record?`)) return;
 
     try {
-      console.log(`Attempting to update ${id} to ${status}...`);
-      
-      // If the 404 persists, double-check if your backend route 
-      // is /api/admin/update-status/:id or just /api/update-status/:id
+      // TRY THIS PATH FIRST (Removing the '/admin' middle segment)
+      // Sometimes routes are defined as /api/update-status/:id
       const res = await axios.put(
-        `${API_BASE}/api/admin/update-status/${id}`, 
+        `${API_BASE}/api/update-status/${id}`, 
         { status }, 
-        {
-          headers: { email: localStorage.getItem("email") || "" }
-        }
+        { headers: { email: localStorage.getItem("email") || "" } }
       );
       
       console.log("Update success:", res.data);
-      fetchRequests(); // Refresh the list
+      fetchRequests(); 
     } catch (err) {
-      console.error("Full Error Details:", err.response || err);
-      alert(
-        err.response?.status === 404 
-          ? "Error 404: The endpoint does not exist. Please check the API route in your backend." 
-          : "Action failed. Check console for details."
-      );
+      // IF THAT FAILS, TRY THIS PATH (The original one but without the extra /admin)
+      // Maybe the route is /api/admin/status/:id
+      console.error("Path 1 failed, trying alternative...");
+      try {
+          await axios.put(`${API_BASE}/api/admin/status/${id}`, { status }, { 
+              headers: { email: localStorage.getItem("email") || "" } 
+          });
+          fetchRequests();
+      } catch (err2) {
+          alert("404 Error: The API endpoint is not found. Please verify your backend route definition.");
+      }
     }
   };
 
