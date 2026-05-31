@@ -44,14 +44,36 @@ export default function AdminRequests() {
 
   useEffect(() => { fetchRequests(); }, [page, activeStatus]);
 
-  const handleStatusUpdate = async (id, status) => {
-    if (!window.confirm(`Confirm ${status}?`)) return;
+const handleStatusUpdate = async (id, status) => {
+    if (!id) {
+      alert("Error: Request ID is missing.");
+      return;
+    }
+    if (!window.confirm(`Confirm ${status} for ${id}?`)) return;
+
     try {
-      await axios.put(`${API_BASE}/api/admin/update-status/${id}`, { status }, {
-        headers: { email: localStorage.getItem("email") || "" }
-      });
-      fetchRequests(); // Refresh list
-    } catch (err) { alert("Action failed."); }
+      console.log(`Attempting to update ${id} to ${status}...`);
+      
+      // If the 404 persists, double-check if your backend route 
+      // is /api/admin/update-status/:id or just /api/update-status/:id
+      const res = await axios.put(
+        `${API_BASE}/api/admin/update-status/${id}`, 
+        { status }, 
+        {
+          headers: { email: localStorage.getItem("email") || "" }
+        }
+      );
+      
+      console.log("Update success:", res.data);
+      fetchRequests(); // Refresh the list
+    } catch (err) {
+      console.error("Full Error Details:", err.response || err);
+      alert(
+        err.response?.status === 404 
+          ? "Error 404: The endpoint does not exist. Please check the API route in your backend." 
+          : "Action failed. Check console for details."
+      );
+    }
   };
 
   const displayedRequests = useMemo(() => {
