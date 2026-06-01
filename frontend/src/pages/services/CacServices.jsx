@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../../lib/axios";
-import { useUser } from "../../context/UserContext";
+import { useUser } from "../../context/UserContext"
 import {
   Building2,
   Users,
@@ -124,14 +124,17 @@ export default function CacServices() {
 
     setSubmitting(true);
     try {
-      await api.post("/api/cac/submit", {
+      const response = await api.post("/api/cac/submit", {
         serviceType: service,
         ...businessInfo,
         proprietors,
         witness: showWitness ? witness : undefined,
         secretary: includeSecretary ? secretary : undefined
       });
-      await refreshBalance();
+      // Instantly update wallet from API response (no extra fetch needed)
+      if (response.data?.walletBalance !== undefined) {
+        setBalance(response.data.walletBalance);
+      }
       alert("✅ CAC registration submitted.");
       setService("");
       setProprietors([{ fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "" }]);

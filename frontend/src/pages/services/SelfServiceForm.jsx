@@ -11,7 +11,7 @@ import { formatNaira } from "../../lib/currency";
 
 export default function SelfServiceForm() {
   const navigate = useNavigate();
-  const { user, refreshBalance } = useUser();
+  const { user, setBalance } = useUser();
   const [activeTab, setActiveTab] = useState("email");
   const [pricing, setPricing] = useState({});
   const [loadingPricing, setLoadingPricing] = useState(true);
@@ -49,7 +49,7 @@ export default function SelfServiceForm() {
     setErrorMessage("");
 
     try {
-      await api.post("/api/services/request", {
+      const response = await api.post("/api/services/request", {
         service: "self-service",
         type: activeTab === "email" ? "emailRetrieval" : "deviceUnlink",
         nin: formData.nin,
@@ -60,7 +60,10 @@ export default function SelfServiceForm() {
         }
       });
 
-      await refreshBalance();
+      // Instantly update wallet from API response (no extra fetch needed)
+      if (response.data?.userWalletBalance !== undefined) {
+        setBalance(response.data.userWalletBalance);
+      }
       setSuccessMessage("Request submitted successfully! Funds have been deducted from your wallet.");
       setFormData({ nin: "", phoneNumber: "", fullName: "", additionalInfo: "" });
       setTimeout(() => navigate("/my-requests"), 2000);

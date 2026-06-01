@@ -5,6 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "test": "jest --detectOpenHandles --forceExit",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "migrate:units-to-kobo": "node ./scripts/migrate-units-to-kobo.js"
   },
   "type": "commonjs",
@@ -17,15 +20,19 @@
     "express": "^4.18.2",
     "googleapis": "^171.4.0",
     "html-pdf-node": "^1.0.8",
+    "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.3.2",
     "multer": "^2.1.1",
     "nodemailer": "^8.0.7",
     "pdfkit": "^0.18.0",
     "puppeteer": "^23.0.0",
-    "joi": "^17.13.3",
     "qrcode": "^1.5.4",
     "resend": "^6.12.2",
     "streamifier": "^0.1.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.4"
   }
 }

@@ -6,6 +6,7 @@ const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
 const Pricing = require("../models/Pricing.model");
+const { verifyToken, isAdmin } = require("../shared/authGuard");
 
 // =========================================================================
 // 🧠 SAFE SCHEMA COMPILATION & MODEL RESOLUTION
@@ -26,35 +27,6 @@ try {
   const dynamicCacSchema = new mongoose.Schema({}, { strict: false, timestamps: true });
   CACRequest = mongoose.model("CacRequest", dynamicCacSchema);
 }
-
-// =========================================================================
-// 🔐 AUTHENTICATION MIDDLEWARES (Unified & Multi-Tier Guard System)
-// =========================================================================
-const isAdmin = async (req, res, next) => {
-  try {
-    const email = req.headers["email"];
-
-    if (!email) {
-      return res.status(401).json({ success: false, message: "Unauthorized: Missing Email Verification Header" });
-    }
-
-    const user = await User.findOne({ email }).lean();
-
-    if (!user) {
-      return res.status(401).json({ success: false, message: "User workspace context not found" });
-    }
-
-    if (!["admin", "super_admin"].includes(user.role)) {
-      return res.status(403).json({ success: false, message: "Access denied: Administrative clearance required" });
-    }
-
-    req.user = user;
-    next();
-  } catch (err) {
-    console.error("🔥 SYSTEM AUTHORIZATION ERROR:", err);
-    res.status(500).json({ success: false, message: "Authentication sequence failure" });
-  }
-};
 
 const isSuperAdmin = (req, res, next) => {
   if (!req.user || req.user.role !== "super_admin") {
@@ -177,7 +149,78 @@ router.get("/cac-requests", isAdmin, async (req, res) => {
   }
 });
 
-// 🔄 UNIFIED OPERATIONS LIFECYCLE CONTROLLER
+// � COMMAND-GATEWAY: UNIFIED REQUEST STATUS MANAGEMENT
+router.post("/requests/:id/status", isAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { action, comment } = req.body;
+  const adminEmail = req.user.email;
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid request ID format." });
+    }
+
+    const normalizedAction = String(action || "").toLowerCase();
+    const allowedActions = ["approve", "reject", "flag"];
+    if (!allowedActions.includes(normalizedAction)) {
+      return res.status(400).json({ success: false, message: "Invalid action. Allowed values are approve, reject, flag." });
+    }
+
+    const [serviceRecord, cacRecord] = await Promise.all([
+      ServiceRequest.findById(id),
+      CACRequest.findById(id)
+    ]);
+
+    const record = serviceRecord || cacRecord;
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Request ID not found in any registered collection." });
+    }
+
+    const statusMap = {
+      approve: "approved",
+      reject: "rejected",
+      flag: "flagged"
+    };
+    const newStatus = statusMap[normalizedAction];
+
+    record.status = newStatus;
+    if (!Array.isArray(record.statusHistory)) {
+      record.statusHistory = [];
+    }
+    record.statusHistory.push({
+      status: newStatus,
+      note: comment || `${adminEmail} set request status to ${newStatus}`,
+      createdAt: new Date()
+    });
+
+    record.markModified("status");
+    record.markModified("statusHistory");
+    await record.save();
+
+    try {
+      await AuditLog.create({
+        action: `REQUEST_${newStatus.toUpperCase()}`,
+        performedBy: adminEmail,
+        userId: record.userId || null,
+        amount: record.amount || 0,
+        note: `Action ${normalizedAction} performed on request ${id}. Comment: ${comment || "None"}`
+      });
+    } catch (auditErr) {
+      console.warn("Audit log skipped during status update:", auditErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: `Request successfully marked as ${newStatus}`,
+      data: record
+    });
+  } catch (err) {
+    console.error("🔥 REQUEST STATUS COMMAND ERROR:", err);
+    return res.status(500).json({ success: false, message: "Failed to update request status." });
+  }
+});
+
+// �🔄 UNIFIED OPERATIONS LIFECYCLE CONTROLLER
 router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
   const { targetModule, id } = req.params;
   const { status, note } = req.body; 
@@ -296,27 +339,38 @@ router.put("/status/:id", isAdmin, async (req, res) => {
   }
 });
 
-router.put("/update-status/:id", isAdmin, async (req, res) => {
-  // This legacy route accepts only an id; module may or may not be provided in body/query.
-  let targetModule = req.body.targetModule || req.query.targetModule;
-  const id = req.params.id;
+async function updateRequestStatus({
+  targetModule,
+  id,
+  status,
+  note,
+  adminEmail
+}) {
+  const TargetModel =
+    targetModule === "cac" ? CACRequest : ServiceRequest;
 
-  if (!targetModule && mongoose.Types.ObjectId.isValid(id)) {
-    const cacRecord = await CACRequest.findById(id).lean();
-    if (cacRecord) {
-      targetModule = 'cac';
-    } else {
-      const serviceRecord = await ServiceRequest.findById(id).lean();
-      if (serviceRecord) targetModule = 'nimc';
-    }
+  const record = await TargetModel.findById(id);
+
+  if (!record) {
+    throw new Error("Record not found");
   }
 
-  targetModule = targetModule || 'nimc';
-  req.params.targetModule = targetModule;
-  req.params.id = req.params.id;
-  // Delegate to the compatibility handler above
-  return router.handle(req, res);
-});
+  record.status = status;
+
+  if (!Array.isArray(record.statusHistory)) {
+    record.statusHistory = [];
+  }
+
+  record.statusHistory.push({
+    status,
+    note,
+    createdAt: new Date()
+  });
+
+  await record.save();
+
+  return record;
+}
 
 // ✅ UNIVERSAL ADMIN REQUEST APPROVAL ENDPOINT
 router.put("/approve-request/:id", isAdmin, async (req, res) => {

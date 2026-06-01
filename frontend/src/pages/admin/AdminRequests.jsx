@@ -44,49 +44,48 @@ export default function AdminRequests() {
 
   useEffect(() => { fetchRequests(); }, [page, activeStatus]);
 
-const handleStatusUpdate = async (id, status) => {
+  const handleStatusUpdate = async (id, status) => {
     if (!id) return;
     if (!window.confirm(`Confirm ${status} for this record?`)) return;
 
     try {
       if (status === 'approved') {
-        const res = await axios.put(
-          `${API_BASE}/api/admin/approve-request/${id}`,
-          {},
-          { headers: { email: localStorage.getItem("email") || "" } }
-        );
-        console.log("Approve success:", res.data);
-        fetchRequests();
-        return;
+        await axios.put(`${API_BASE}/api/admin/approve-request/${id}`, {}, { 
+          headers: { email: localStorage.getItem("email") || "" } 
+        });
+      } else {
+        await axios.put(`${API_BASE}/api/update-status/${id}`, { status }, { 
+          headers: { email: localStorage.getItem("email") || "" } 
+        });
       }
-
-      const res = await axios.put(
-        `${API_BASE}/api/update-status/${id}`,
-        { status },
-        { headers: { email: localStorage.getItem("email") || "" } }
-      );
-
-      console.log("Update success:", res.data);
       fetchRequests();
     } catch (err) {
       console.error("Status update failed:", err);
       alert(err.response?.data?.message || "Failed to update request status.");
-      const isCac = r.service?.toLowerCase() === "cac";
+    }
+  };
+
+  const displayedRequests = useMemo(() => {
+    let filtered = requests.filter(r => {
+      const isCac = r.pipelineSource === "cac";
       if (activeTab === "cac") return isCac;
       return !isCac && (activeSubService === "All" || r.service?.toLowerCase() === activeSubService.toLowerCase());
     });
 
     if (searchTerm) {
       const s = searchTerm.toLowerCase();
-      filtered = filtered.filter(r => r.userId?.email?.toLowerCase().includes(s) || r.nin?.toLowerCase().includes(s));
+      filtered = filtered.filter(r => 
+        (r.userId?.email?.toLowerCase().includes(s) || r.nin?.toLowerCase().includes(s))
+      );
     }
 
-    return filtered.sort((a, b) => sortOrder === "desc" ? new Date(b.createdAt) - new Date(a.createdAt) : new Date(a.createdAt) - new Date(b.createdAt));
+    return filtered.sort((a, b) => 
+      sortOrder === "desc" ? new Date(b.createdAt) - new Date(a.createdAt) : new Date(a.createdAt) - new Date(b.createdAt)
+    );
   }, [requests, activeTab, activeSubService, searchTerm, sortOrder]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Header & Main Toggles */}
       <div className="flex gap-4 mb-6">
         {["nimc", "cac"].map(tab => (
           <button key={tab} onClick={() => { setActiveTab(tab); setActiveSubService("All"); }} className={`px-6 py-3 font-bold rounded-2xl ${activeTab === tab ? "bg-black text-white" : "bg-gray-100"}`}>
@@ -95,7 +94,6 @@ const handleStatusUpdate = async (id, status) => {
         ))}
       </div>
 
-      {/* Status Filters */}
       <div className="flex gap-2 mb-6">
         {["pending", "approved", "rejected"].map(s => (
           <button key={s} onClick={() => { setActiveStatus(s); setPage(1); }} className={`px-4 py-2 rounded-xl text-xs font-bold capitalize ${activeStatus === s ? "bg-blue-600 text-white" : "bg-gray-100"}`}>
@@ -104,7 +102,6 @@ const handleStatusUpdate = async (id, status) => {
         ))}
       </div>
 
-      {/* NIMC Sub-Services */}
       {activeTab === "nimc" && (
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {nimcSubServices.map(s => (
@@ -115,7 +112,6 @@ const handleStatusUpdate = async (id, status) => {
         </div>
       )}
 
-      {/* Grid */}
       <div className="grid md:grid-cols-3 gap-6">
         {displayedRequests.map(r => (
           <div key={r._id} className="bg-white p-6 rounded-3xl border shadow-sm">
@@ -136,7 +132,6 @@ const handleStatusUpdate = async (id, status) => {
         ))}
       </div>
 
-      {/* Pagination */}
       <div className="flex justify-center items-center gap-4 mt-10">
         <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="p-2 bg-gray-100 rounded-xl"><ChevronLeft /></button>
         <span className="font-bold">Page {page} of {pages}</span>

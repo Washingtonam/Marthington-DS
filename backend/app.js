@@ -45,8 +45,8 @@ app.use("/api/cac", require("./routes/cac.routes"));
 app.use("/api/slips", require("./routes/slips.routes"));
 
 // Administrative routes (frontend calls /api/admin/*)
-app.use("/api/admin", require("./routes/admin.routes"));
-app.use("/api/admin/audit-logs", require("./routes/auditRoutes"));
+app.use("/api/admin", verifyToken, require("./routes/admin.routes"));
+app.use("/api/admin/audit-logs", verifyToken, require("./routes/auditRoutes"));
 
 // Backwards compatibility alias for legacy transaction path
 app.get("/api/transactions", verifyToken, async (req, res) => {

@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 
 export default function Personalization() {
   const navigate = useNavigate();
-  const { user, refreshBalance } = useUser();
+  const { user, setBalance } = useUser();
 
   const [trackingId, setTrackingId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,13 +37,16 @@ export default function Personalization() {
 
     setLoading(true);
     try {
-      const { data } = await api.post("/api/services/verify", {
+      const response = await api.post("/api/services/verify", {
         method: "tracking",
         tracking_id: trackingId.trim().toUpperCase(),
       });
 
-      await refreshBalance(); // Sync wallet balance
-      localStorage.setItem("nin_result", JSON.stringify(data));
+      // Instantly update wallet from API response (no extra fetch needed)
+      if (response.data?.walletBalance !== undefined) {
+        setBalance(response.data.walletBalance);
+      }
+      localStorage.setItem("nin_result", JSON.stringify(response.data));
       navigate("/verify-result");
     } catch (err) {
       alert(err.response?.data?.message || "Operation failed.");

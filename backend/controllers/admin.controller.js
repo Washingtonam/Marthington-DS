@@ -77,7 +77,7 @@ exports.getStats = async (req, res) => {
       Transaction.countDocuments(),
       Transaction.countDocuments({ type: "UNIT_ADD", status: "pending" }),
       User.aggregate([
-        { $group: { _id: null, total: { $sum: { $ifNull: ["$balance", 0] } } } }
+        { $group: { _id: null, totalKobo: { $sum: { $ifNull: ["$walletBalanceKobo", 0] } } } }
       ])
     ]);
 
@@ -86,7 +86,7 @@ exports.getStats = async (req, res) => {
       totalUsers,
       totalTransactions,
       pendingPayments,
-      totalBalance: balanceData[0]?.total || 0
+      totalBalance: (balanceData[0]?.totalKobo || 0) / 100 // Convert Kobo to Naira
     });
   } catch (err) {
     console.error("STATS ERROR:", err);

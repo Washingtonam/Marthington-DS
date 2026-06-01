@@ -10,7 +10,7 @@ import ModificationNoticeModal from "../../components/ModificationNoticeModal";
 
 export default function Modification() {
   const navigate = useNavigate();
-  const { user, refreshBalance } = useUser();
+  const { user, setBalance } = useUser();
   const [pricing, setPricing] = useState({});
   const [selectedType, setSelectedType] = useState(null);
   const [formData, setFormData] = useState({ nin: "", surname: "", firstname: "", middlename: "" });
@@ -39,14 +39,17 @@ export default function Modification() {
 
     setLoading(true);
     try {
-      await api.post("/api/services/request", {
+      const response = await api.post("/api/services/request", {
         service: "modification",
         type: selectedType,
         nin: formData.nin,
         formData
       });
 
-      await refreshBalance();
+      // Instantly update wallet from API response (no extra fetch needed)
+      if (response.data?.userWalletBalance !== undefined) {
+        setBalance(response.data.userWalletBalance);
+      }
       alert("✅ Modification request submitted successfully!");
       navigate("/my-requests");
     } catch (err) {
