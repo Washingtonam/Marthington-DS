@@ -318,6 +318,54 @@ router.put("/update-status/:id", isAdmin, async (req, res) => {
   return router.handle(req, res);
 });
 
+// ✅ UNIVERSAL ADMIN REQUEST APPROVAL ENDPOINT
+router.put("/approve-request/:id", isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const note = req.body.note || `Approved by ${req.user.email}`;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid request ID format." });
+    }
+
+    const [serviceRecord, cacRecord] = await Promise.all([
+      ServiceRequest.findById(id),
+      CACRequest.findById(id)
+    ]);
+
+    const record = serviceRecord || cacRecord;
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Request ID not found in any registered collection." });
+    }
+
+    record.status = 'approved';
+    if (!record.statusHistory || !Array.isArray(record.statusHistory)) {
+      record.statusHistory = [];
+    }
+    record.statusHistory.push({ status: 'approved', note, createdAt: new Date() });
+    record.markModified('status');
+    record.markModified('statusHistory');
+    await record.save();
+
+    try {
+      await AuditLog.create({
+        action: 'APPROVE_REQUEST',
+        performedBy: req.user.email,
+        userId: record.userId || null,
+        amount: record.amount || 0,
+        note: `Request ${id} approved. ${note}`
+      });
+    } catch (auditErr) {
+      console.warn('Audit log skipped during approval:', auditErr.message);
+    }
+
+    return res.json({ success: true, message: 'Request approved successfully.', data: record });
+  } catch (error) {
+    console.error('🔥 UNIFIED APPROVAL ROUTE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to approve request.' });
+  }
+});
+
 // 📥 PAYMENTS VERIFICATION SUB-SYSTEM
 router.get("/payments", isAdmin, async (req, res) => {
   try {

@@ -34,7 +34,7 @@ export function UserProvider({ children }) {
   const apiUnits = async (retryCount = 0) => {
     const MAX_RETRIES = 2;
     try {
-      const res = await api.get("/api/users/balance");
+      const res = await api.get("/api/users/wallet");
       
       if (res.data) {
         if (res.data.units !== undefined) {

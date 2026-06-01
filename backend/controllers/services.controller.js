@@ -25,69 +25,57 @@ exports.getPricing = async (req, res) => {
   }
 };
 
-exports.submitServiceRequest = async (req, res) => {
-  console.log('TRANSACTION TRACE START:', { body: req.body, userId: req.user?.id });
-  const { error } = validateServiceRequest.validate(req.body);
-  if (error) {
-    return res.status(400).json({ success: false, message: error.details[0].message });
+const resolveServicePrice = (pricing, service, type, slipType) => {
+  if (!pricing || !pricing.ninServices) return null;
+
+  const normalizedService = String(service || '').toLowerCase();
+  const normalizedType = String(type || '').trim();
+
+  let basePrice;
+  switch (normalizedService) {
+    case 'validation':
+      basePrice = pricing.ninServices.validation?.[normalizedType];
+      break;
+    case 'modification':
+      basePrice = pricing.ninServices.modification?.[normalizedType];
+      break;
+    case 'ipe':
+      basePrice = pricing.ninServices.ipe?.[normalizedType];
+      break;
+    case 'self-service':
+    case 'selfservice':
+    case 'self_service':
+      basePrice = pricing.ninServices.selfService?.[normalizedType];
+      break;
+    default:
+      basePrice = pricing.ninServices?.[normalizedType];
   }
 
+  const slipCost = String(service).toLowerCase() === 'validation' && slipType && slipType !== 'none'
+    ? pricing.ninServices?.slipPrice ?? 0
+    : 0;
+
+  if (typeof basePrice !== 'number') return null;
+
+  return {
+    amount: Number(basePrice) + Number(slipCost),
+    amountKobo: Math.round((Number(basePrice) + Number(slipCost)) * 100)
+  };
+};
+
+const processServiceRequest = async ({ userId, service, type, nin, slipType, proof, passport, formData }) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const userId = req.user.id;
-    const { service, type, nin, slipType, proof, passport, formData } = req.body;
-
     const pricing = await Pricing.getPricing();
-    if (!pricing || !pricing.ninServices) {
-      throw new Error('Service pricing configuration is unavailable.');
+    const resolvedPrice = resolveServicePrice(pricing, service, type, slipType);
+
+    if (!resolvedPrice) {
+      throw new Error('Unable to resolve service price from current pricing configuration.');
     }
 
-    let mappedType = type;
-    if (service === 'modification') {
-      if (type === 'name') mappedType = 'name';
-      if (type === 'phone') mappedType = 'phone';
-      if (type === 'address') mappedType = 'address';
-    }
-
-    const normalizedService = String(service || '').toLowerCase();
-    const normalizedType = String(mappedType || '').trim();
-
-    let basePrice;
-    switch (normalizedService) {
-      case 'validation':
-        basePrice = pricing.ninServices.validation?.[normalizedType];
-        break;
-      case 'modification':
-        basePrice = pricing.ninServices.modification?.[normalizedType];
-        break;
-      case 'ipe':
-        basePrice = pricing.ninServices.ipe?.[normalizedType];
-        break;
-      case 'self-service':
-      case 'selfservice':
-      case 'self_service':
-        basePrice = pricing.ninServices.selfService?.[normalizedType];
-        break;
-      default:
-        basePrice = pricing.ninServices?.[normalizedType];
-    }
-
-    console.log('Looking for price with:', { service, type, normalizedService, normalizedType, availableKeys: Object.keys(pricing.ninServices) });
-
-    if (typeof basePrice !== 'number') {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({ success: false, message: 'Unable to resolve service price from current pricing configuration.' });
-    }
-
-    const slipCost = String(service).toLowerCase() === 'validation' && slipType && slipType !== 'none'
-      ? pricing.ninServices?.slipPrice ?? 0
-      : 0;
-
-    const totalCalculatedAmount = Number(basePrice) + Number(slipCost);
-    const totalKobo = Math.round(totalCalculatedAmount * 100);
+    const { amount, amountKobo } = resolvedPrice;
 
     const user = await User.findById(userId).session(session);
     if (!user) {
@@ -99,20 +87,17 @@ exports.submitServiceRequest = async (req, res) => {
     }
 
     const isSuperAdmin = user.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim();
-    console.log('TRANSACTION TRACE WALLET CHECK:', { totalCalculatedAmount, userWalletBalance: user.walletBalance, userWalletBalanceKobo: user.walletBalanceKobo });
-
     let updatedUser = user;
-    if (!isSuperAdmin && totalKobo > 0) {
+
+    if (!isSuperAdmin && amountKobo > 0) {
       updatedUser = await User.findOneAndUpdate(
-        { _id: userId, walletBalanceKobo: { $gte: totalKobo } },
-        { $inc: { walletBalanceKobo: -totalKobo } },
+        { _id: userId, walletBalanceKobo: { $gte: amountKobo } },
+        { $inc: { walletBalanceKobo: -amountKobo } },
         { new: true, session }
       );
 
       if (!updatedUser) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({ success: false, message: 'Insufficient funds' });
+        throw new Error('Insufficient funds');
       }
     }
 
@@ -120,13 +105,13 @@ exports.submitServiceRequest = async (req, res) => {
       {
         userId,
         service: String(service),
-        type: String(mappedType),
+        type: String(type),
         serviceCategory: 'NIMC',
         nin: nin ? String(nin) : 'N/A',
         slipType: slipType ? String(slipType) : 'none',
-        amount: Number(totalCalculatedAmount),
-        amountKobo: totalKobo,
-        priceAtTimeOfRequest: Number(totalCalculatedAmount),
+        amount,
+        amountKobo,
+        priceAtTimeOfRequest: amount,
         unitsUsed: 0,
         proof: proof ? String(proof) : 'wallet',
         passport: passport ? String(passport) : 'wallet',
@@ -139,25 +124,61 @@ exports.submitServiceRequest = async (req, res) => {
     await Transaction.create([
       {
         type: 'SERVICE',
-        amount: Number(totalCalculatedAmount),
-        amountKobo: totalKobo,
+        amount,
+        amountKobo,
         status: 'success',
         userId,
         requestId: savedRequest._id
       }
-    ], { session }).catch((txErr) => {
-      console.error('TRANSACTION CREATION FAILED:', txErr);
-      throw txErr;
-    });
+    ], { session });
 
     await session.commitTransaction();
     session.endSession();
 
-    return res.status(200).json({ success: true, message: 'Submission compiled successfully.', request: savedRequest, walletBalance: updatedUser.getWalletBalanceNaira() });
+    return {
+      savedRequest,
+      walletBalance: updatedUser.getWalletBalanceNaira()
+    };
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
+    throw error;
+  }
+};
+
+exports.submitServiceRequest = async (req, res) => {
+  console.log('TRANSACTION TRACE START:', { body: req.body, userId: req.user?.id });
+  const { error } = validateServiceRequest.validate(req.body);
+  if (error) {
+    return res.status(400).json({ success: false, message: error.details[0].message });
+  }
+
+  try {
+    const userId = req.user.id;
+    const { service, type, nin, slipType, proof, passport, formData } = req.body;
+
+    const { savedRequest, walletBalance } = await processServiceRequest({
+      userId,
+      service,
+      type,
+      nin,
+      slipType,
+      proof,
+      passport,
+      formData
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Submission compiled successfully.',
+      request: savedRequest,
+      walletBalance
+    });
+  } catch (error) {
     console.error('❌ MANUAL SERVICE SUBMISSION ERROR:', error);
-    return res.status(500).json({ success: false, message: error.message });
+    if (error.message === 'Insufficient funds') {
+      return res.status(400).json({ success: false, message: 'Insufficient funds' });
+    }
+    return res.status(500).json({ success: false, message: error.message || 'Failed to submit service request.' });
   }
 };

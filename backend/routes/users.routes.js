@@ -16,25 +16,44 @@ const router = express.Router();
 // ==============================
 router.get("/balance", verifyToken, async (req, res) => {
   try {
-    // Securely pull identity straight from token string instead of loose body values
     const userId = req.user.id; 
-
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
     return res.json({
-      units: user.units || 0,     // ✅ Legacy units still available for backward compatibility
+      units: user.units || 0,
       walletBalance: user.walletBalance || 0,
       walletBalanceKobo: user.walletBalanceKobo || 0,
-      balance: user.balance || 0, // optional legacy field
+      balance: user.balance || 0,
     });
-
   } catch (error) {
     console.error("🔥 BALANCE ERROR:", error.message);
     return res.status(500).json({
       error: "Failed to api balance",
+    });
+  }
+});
+
+router.get("/wallet", verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    return res.json({
+      units: user.units || 0,
+      walletBalance: user.walletBalance || 0,
+      walletBalanceKobo: user.walletBalanceKobo || 0,
+      balance: user.balance || 0,
+    });
+  } catch (error) {
+    console.error("🔥 WALLET ERROR:", error.message);
+    return res.status(500).json({
+      error: "Failed to api wallet",
     });
   }
 });

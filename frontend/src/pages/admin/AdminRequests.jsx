@@ -49,33 +49,28 @@ const handleStatusUpdate = async (id, status) => {
     if (!window.confirm(`Confirm ${status} for this record?`)) return;
 
     try {
-      // TRY THIS PATH FIRST (Removing the '/admin' middle segment)
-      // Sometimes routes are defined as /api/update-status/:id
+      if (status === 'approved') {
+        const res = await axios.put(
+          `${API_BASE}/api/admin/approve-request/${id}`,
+          {},
+          { headers: { email: localStorage.getItem("email") || "" } }
+        );
+        console.log("Approve success:", res.data);
+        fetchRequests();
+        return;
+      }
+
       const res = await axios.put(
-        `${API_BASE}/api/update-status/${id}`, 
-        { status }, 
+        `${API_BASE}/api/update-status/${id}`,
+        { status },
         { headers: { email: localStorage.getItem("email") || "" } }
       );
-      
-      console.log("Update success:", res.data);
-      fetchRequests(); 
-    } catch (err) {
-      // IF THAT FAILS, TRY THIS PATH (The original one but without the extra /admin)
-      // Maybe the route is /api/admin/status/:id
-      console.error("Path 1 failed, trying alternative...");
-      try {
-          await axios.put(`${API_BASE}/api/admin/status/${id}`, { status }, { 
-              headers: { email: localStorage.getItem("email") || "" } 
-          });
-          fetchRequests();
-      } catch (err2) {
-          alert("404 Error: The API endpoint is not found. Please verify your backend route definition.");
-      }
-    }
-  };
 
-  const displayedRequests = useMemo(() => {
-    let filtered = requests.filter(r => {
+      console.log("Update success:", res.data);
+      fetchRequests();
+    } catch (err) {
+      console.error("Status update failed:", err);
+      alert(err.response?.data?.message || "Failed to update request status.");
       const isCac = r.service?.toLowerCase() === "cac";
       if (activeTab === "cac") return isCac;
       return !isCac && (activeSubService === "All" || r.service?.toLowerCase() === activeSubService.toLowerCase());
