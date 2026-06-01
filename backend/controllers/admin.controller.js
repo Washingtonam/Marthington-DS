@@ -168,7 +168,7 @@ exports.updateStatus = async (req, res) => {
       console.warn("Audit log background compilation bypassed cleanly:", logErr.message);
     }
 
-    res.json({ success: true, message: `Pipeline document successfully marked as ${normalizedStatus}", data: record });
+    res.json({ success: true, message: `Pipeline document successfully marked as ${normalizedStatus}`, data: record });
   } catch (err) {
     console.error("🔥 UNIFIED STATUS TRANSITION ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to transform application pipeline lifecycle state environment variables." });
