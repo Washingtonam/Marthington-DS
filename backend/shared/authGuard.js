@@ -1,5 +1,8 @@
 const jwt = require("jsonwebtoken");
-const { SUPER_ADMIN_EMAIL } = require("../config/constants");
+const { SUPER_ADMIN_EMAIL, JWT_SECRET_FALLBACK } = require("../config/constants");
+
+// JWT Secret with fallback for development/deployed environments
+const JWT_SECRET = process.env.JWT_SECRET || JWT_SECRET_FALLBACK;
 
 /**
  * Core authentication middleware to verify JWT from incoming headers
@@ -19,7 +22,7 @@ const verifyToken = (req, res, next) => {
     const token = authHeader.split(" ")[1];
 
     // Verify token using secret key
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     
     // Attach decoded user data (id, email, role) straight to request object
     req.user = decoded;

@@ -7,7 +7,7 @@ const { Resend } = require("resend");
 // Localized feature path configuration
 const User = require("../models/User.model");
 const { verifyToken } = require("../shared/authGuard");
-const { JWT_EXPIRY, SUPER_ADMIN_EMAIL } = require("../config/constants");
+const { JWT_EXPIRY, SUPER_ADMIN_EMAIL, JWT_SECRET_FALLBACK } = require(\"../config/constants\");
 
 const router = express.Router();
 
@@ -141,9 +141,10 @@ router.post("/login", async (req, res) => {
     await user.save();
 
     // Generate JWT Token for seamless frontend storage and cross-platform mobile compatibility
+    const JWT_SECRET = process.env.JWT_SECRET || JWT_SECRET_FALLBACK;
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: "7d" } // Token remains active for 7 days
     );
 
