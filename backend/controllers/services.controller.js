@@ -50,7 +50,29 @@ exports.submitServiceRequest = async (req, res) => {
       if (type === 'address') mappedType = 'address';
     }
 
-    const basePrice = pricing.ninServices?.[mappedType];
+    const normalizedService = String(service || '').toLowerCase();
+    const normalizedType = String(mappedType || '').trim();
+
+    let basePrice;
+    switch (normalizedService) {
+      case 'validation':
+        basePrice = pricing.ninServices.validation?.[normalizedType];
+        break;
+      case 'modification':
+        basePrice = pricing.ninServices.modification?.[normalizedType];
+        break;
+      case 'ipe':
+        basePrice = pricing.ninServices.ipe?.[normalizedType];
+        break;
+      case 'self-service':
+      case 'selfservice':
+      case 'self_service':
+        basePrice = pricing.ninServices.selfService?.[normalizedType];
+        break;
+      default:
+        basePrice = pricing.ninServices?.[normalizedType];
+    }
+
     if (typeof basePrice !== 'number') {
       await session.abortTransaction();
       session.endSession();

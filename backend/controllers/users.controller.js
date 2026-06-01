@@ -18,9 +18,9 @@ exports.getUserRequests = async (req, res) => {
     const page = Math.max(Number(req.query.page) || 1, 1);
     const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
     const skip = (page - 1) * limit;
-    const search = req.query.search?.trim();
-    const statusParam = req.query.status?.trim().toLowerCase();
-    const typeParam = req.query.type?.trim();
+    const search = req.query.search ? String(req.query.search).trim() : '';
+    const statusParam = req.query.status ? String(req.query.status).trim().toLowerCase() : '';
+    const typeParam = req.query.type ? String(req.query.type).trim() : '';
 
     const serviceQuery = { userId };
     const cacQuery = { userId };
@@ -49,10 +49,9 @@ exports.getUserRequests = async (req, res) => {
       }
     }
 
-    let searchRegex;
     if (search) {
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      searchRegex = new RegExp(escapedSearch, 'i');
+      const escapedSearch = search.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(escapedSearch, 'i');
       serviceQuery.$or = [
         { nin: searchRegex },
         { _id: searchRegex },
