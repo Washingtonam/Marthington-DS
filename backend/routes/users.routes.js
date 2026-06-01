@@ -1,4 +1,5 @@
 const express = require("express");
+const usersController = require("../controllers/users.controller");
 
 const User = require("../models/User.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
@@ -87,55 +88,7 @@ router.get("/transactions", verifyToken, async (req, res) => {
 // ==============================================================
 // 📥 GET COMBINED USER REQUESTS HISTORY (SECURED VIA JWT)
 // ==============================================================
-router.get("/requests/history", verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id; // Fully token authenticated
-    const page = Math.max(Number(req.query.page) || 1, 1);
-    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
-    const take = page * limit;
-
-    const [services, cacRequests, serviceCount, cacCount] = await Promise.all([
-      ServiceRequest.find({ userId }).sort({ createdAt: -1 }).limit(take).lean(),
-      CacRequest.find({ userId }).sort({ createdAt: -1 }).limit(take).lean(),
-      ServiceRequest.countDocuments({ userId }),
-      CacRequest.countDocuments({ userId })
-    ]);
-
-    const normalizedServices = services.map(s => ({
-      ...s,
-      pipelineSource: "service",
-      serviceCategory: s.serviceCategory || "NIMC"
-    }));
-
-    const normalizedCac = cacRequests.map(c => ({
-      ...c,
-      pipelineSource: "cac",
-      serviceCategory: c.serviceCategory || "CAC"
-    }));
-
-    const combinedHistory = [...normalizedServices, ...normalizedCac]
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-    const pagedData = combinedHistory.slice((page - 1) * limit, page * limit);
-    const totalCount = serviceCount + cacCount;
-
-    return res.status(200).json({
-      success: true,
-      page,
-      limit,
-      totalCount,
-      totalPages: Math.ceil(totalCount / limit),
-      data: pagedData
-    });
-
-  } catch (error) {
-    console.error("🔥 INDIVIDUAL USER REQUESTS ERROR:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: "Server error querying target user data logs."
-    });
-  }
-});
+router.get("/requests/history", verifyToken, usersController.getUserRequests);
 
 router.get("/requests/:id", verifyToken, async (req, res) => {
   try {
