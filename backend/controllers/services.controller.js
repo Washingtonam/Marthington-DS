@@ -26,35 +26,24 @@ exports.getPricing = async (req, res) => {
 };
 
 const resolveServicePrice = (pricing, service, type, slipType) => {
-  if (!pricing || !pricing.ninServices) {
-    console.error("DEBUG: Pricing or ninServices object is missing.");
-    return null;
-  }
+  if (!pricing || !pricing.ninServices) return null;
 
   const normalizedService = String(service || '').toLowerCase();
   const normalizedType = String(type || '').trim();
 
-  // DEBUG LOG: Shows exactly what the system is comparing
-  console.log(`DEBUG: Resolving price for Service='${normalizedService}', Type='${normalizedType}'`);
+  let basePrice = pricing.ninServices[normalizedService]?.[normalizedType];
 
-  let basePrice;
-  // ... keep your existing switch statement ...
-  
-  // After the switch:
-  console.log(`DEBUG: Resolved basePrice='${basePrice}'`);
-
-  const slipCost = (normalizedService === 'validation' && slipType && slipType !== 'none')
-    ? (pricing.ninServices?.slipPrice ?? 0)
-    : 0;
-
-  if (typeof basePrice !== 'number') {
-    console.error(`DEBUG: Failed to resolve price for ${normalizedService}/${normalizedType}`);
-    return null;
+  // FALLBACK: If type lookup fails, try to find a default price in that category
+  if (basePrice === undefined) {
+    console.warn(`WARNING: Price not found for ${normalizedService}/${normalizedType}. Checking for default.`);
+    basePrice = pricing.ninServices[normalizedService]?.default || pricing.ninServices.default;
   }
 
+  if (typeof basePrice !== 'number') return null;
+
   return {
-    amount: Number(basePrice) + Number(slipCost),
-    amountKobo: Math.round((Number(basePrice) + Number(slipCost)) * 100)
+    amount: Number(basePrice),
+    amountKobo: Math.round(Number(basePrice) * 100)
   };
 };
 
