@@ -240,6 +240,78 @@ router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
   }
 });
 
+// -------------------------------------------------------------------------
+// Backwards-compatible endpoints for older frontend paths
+//  - PUT /api/admin/status/:id           (used by some frontend builds)
+//  - PUT /api/update-status/:id          (older legacy path without module)
+// These will accept an optional `targetModule` in the body or query and
+// delegate to the unified handler logic above.
+// -------------------------------------------------------------------------
+router.put("/status/:id", isAdmin, async (req, res) => {
+  // Allow caller to explicitly pass module via body or query
+  const targetModule = req.body.targetModule || req.query.targetModule || "nimc";
+  req.params.targetModule = targetModule;
+  req.params.id = req.params.id;
+  // Reuse unified handler behavior by calling the same route logic
+  try {
+    // Forward to the unified implementation by invoking this file's route handler
+    // Duplicate minimal logic here to avoid circular routing
+    const { id } = req.params;
+    const { status, note } = req.body;
+    const adminEmail = req.user.email;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid system document identification signature format." });
+    }
+
+    const normalizedModule = String(targetModule).toLowerCase();
+    if (!["cac", "nimc", "service"].includes(normalizedModule)) {
+      return res.status(400).json({ success: false, message: "Invalid pipeline module tracking assignment type profile." });
+    }
+
+    const TargetModel = normalizedModule === "cac" ? CACRequest : ServiceRequest;
+    const normalizedStatus = String(status).toLowerCase();
+
+    const record = await TargetModel.findById(id);
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
+    }
+
+    record.status = normalizedStatus;
+    if (!record.statusHistory || !Array.isArray(record.statusHistory)) record.statusHistory = [];
+    record.statusHistory.push({ status: normalizedStatus, note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`, createdAt: new Date() });
+    record.markModified("status");
+    record.markModified("statusHistory");
+    await record.save();
+
+    try {
+      await AuditLog.create({
+        action: `UPDATE_${normalizedModule.toUpperCase()}_STATUS`,
+        performedBy: adminEmail,
+        userId: record.userId || null,
+        amount: record.amount || 0,
+        note: `Record ${id} shifted to ${normalizedStatus}. Comment: ${note || 'None'}`
+      });
+    } catch (logErr) {
+      console.warn("Audit log background compilation bypassed cleanly:", logErr.message);
+    }
+
+    return res.json({ success: true, message: `Pipeline document successfully marked as ${normalizedStatus}`, data: record });
+  } catch (err) {
+    console.error("🔥 BACKWARD STATUS UPDATE ERROR:", err);
+    return res.status(500).json({ success: false, message: "Failed to update status via compatibility endpoint." });
+  }
+});
+
+router.put("/update-status/:id", isAdmin, async (req, res) => {
+  // This legacy route accepts only an id; module must be provided in body/query
+  const targetModule = req.body.targetModule || req.query.targetModule || "nimc";
+  req.params.targetModule = targetModule;
+  req.params.id = req.params.id;
+  // Delegate to the compatibility handler above
+  return router.handle(req, res);
+});
+
 // 📥 PAYMENTS VERIFICATION SUB-SYSTEM
 router.get("/payments", isAdmin, async (req, res) => {
   try {
