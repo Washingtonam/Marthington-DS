@@ -187,7 +187,6 @@ exports.getPayments = async (req, res) => {
     res.status(500).json({ success: false, message: "Failed to api ledger credit payment entries" });
   }
 };
-
 exports.approvePayment = async (req, res) => {
   try {
     const adminEmail = req.user.email;
