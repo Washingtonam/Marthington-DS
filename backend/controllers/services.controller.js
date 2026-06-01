@@ -26,6 +26,7 @@ exports.getPricing = async (req, res) => {
 };
 
 exports.submitServiceRequest = async (req, res) => {
+  console.log('TRANSACTION TRACE START:', { body: req.body, userId: req.user?.id });
   const { error } = validateServiceRequest.validate(req.body);
   if (error) {
     return res.status(400).json({ success: false, message: error.details[0].message });
@@ -98,6 +99,7 @@ exports.submitServiceRequest = async (req, res) => {
     }
 
     const isSuperAdmin = user.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim();
+    console.log('TRANSACTION TRACE WALLET CHECK:', { totalCalculatedAmount, userWalletBalance: user.walletBalance, userWalletBalanceKobo: user.walletBalanceKobo });
 
     let updatedUser = user;
     if (!isSuperAdmin && totalKobo > 0) {
@@ -143,7 +145,10 @@ exports.submitServiceRequest = async (req, res) => {
         userId,
         requestId: savedRequest._id
       }
-    ], { session });
+    ], { session }).catch((txErr) => {
+      console.error('TRANSACTION CREATION FAILED:', txErr);
+      throw txErr;
+    });
 
     await session.commitTransaction();
     session.endSession();

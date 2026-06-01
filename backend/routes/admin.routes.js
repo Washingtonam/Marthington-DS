@@ -248,47 +248,27 @@ router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
 // delegate to the unified handler logic above.
 // -------------------------------------------------------------------------
 router.put("/status/:id", isAdmin, async (req, res) => {
-  // Allow caller to explicitly pass module via body or query
-  let targetModule = req.body.targetModule || req.query.targetModule;
   const id = req.params.id;
+  const { status, note } = req.body;
+  const adminEmail = req.user.email;
 
-  if (!targetModule && mongoose.Types.ObjectId.isValid(id)) {
-    const cacRecord = await CACRequest.findById(id).lean();
-    if (cacRecord) {
-      targetModule = 'cac';
-    } else {
-      const serviceRecord = await ServiceRequest.findById(id).lean();
-      if (serviceRecord) targetModule = 'nimc';
-    }
-  }
-
-  targetModule = targetModule || 'nimc';
-  req.params.targetModule = targetModule;
-  req.params.id = req.params.id;
-  // Reuse unified handler behavior by calling the same route logic
   try {
-    // Forward to the unified implementation by invoking this file's route handler
-    // Duplicate minimal logic here to avoid circular routing
-    const { id } = req.params;
-    const { status, note } = req.body;
-    const adminEmail = req.user.email;
-
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid system document identification signature format." });
     }
 
-    const normalizedModule = String(targetModule).toLowerCase();
-    if (!["cac", "nimc", "service"].includes(normalizedModule)) {
-      return res.status(400).json({ success: false, message: "Invalid pipeline module tracking assignment type profile." });
-    }
+    const [cacRecord, serviceRecord] = await Promise.all([
+      CACRequest.findById(id),
+      ServiceRequest.findById(id)
+    ]);
 
-    const TargetModel = normalizedModule === "cac" ? CACRequest : ServiceRequest;
-    const normalizedStatus = String(status).toLowerCase();
-
-    const record = await TargetModel.findById(id);
+    const record = cacRecord || serviceRecord;
     if (!record) {
       return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
     }
+
+    const normalizedModule = cacRecord ? 'cac' : 'nimc';
+    const normalizedStatus = String(status).toLowerCase();
 
     record.status = normalizedStatus;
     if (!record.statusHistory || !Array.isArray(record.statusHistory)) record.statusHistory = [];
