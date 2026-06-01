@@ -26,36 +26,31 @@ exports.getPricing = async (req, res) => {
 };
 
 const resolveServicePrice = (pricing, service, type, slipType) => {
-  if (!pricing || !pricing.ninServices) return null;
+  if (!pricing || !pricing.ninServices) {
+    console.error("DEBUG: Pricing or ninServices object is missing.");
+    return null;
+  }
 
   const normalizedService = String(service || '').toLowerCase();
   const normalizedType = String(type || '').trim();
 
-  let basePrice;
-  switch (normalizedService) {
-    case 'validation':
-      basePrice = pricing.ninServices.validation?.[normalizedType];
-      break;
-    case 'modification':
-      basePrice = pricing.ninServices.modification?.[normalizedType];
-      break;
-    case 'ipe':
-      basePrice = pricing.ninServices.ipe?.[normalizedType];
-      break;
-    case 'self-service':
-    case 'selfservice':
-    case 'self_service':
-      basePrice = pricing.ninServices.selfService?.[normalizedType];
-      break;
-    default:
-      basePrice = pricing.ninServices?.[normalizedType];
-  }
+  // DEBUG LOG: Shows exactly what the system is comparing
+  console.log(`DEBUG: Resolving price for Service='${normalizedService}', Type='${normalizedType}'`);
 
-  const slipCost = String(service).toLowerCase() === 'validation' && slipType && slipType !== 'none'
-    ? pricing.ninServices?.slipPrice ?? 0
+  let basePrice;
+  // ... keep your existing switch statement ...
+  
+  // After the switch:
+  console.log(`DEBUG: Resolved basePrice='${basePrice}'`);
+
+  const slipCost = (normalizedService === 'validation' && slipType && slipType !== 'none')
+    ? (pricing.ninServices?.slipPrice ?? 0)
     : 0;
 
-  if (typeof basePrice !== 'number') return null;
+  if (typeof basePrice !== 'number') {
+    console.error(`DEBUG: Failed to resolve price for ${normalizedService}/${normalizedType}`);
+    return null;
+  }
 
   return {
     amount: Number(basePrice) + Number(slipCost),
@@ -135,9 +130,11 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
     await session.commitTransaction();
     session.endSession();
 
+    // Change the return at the end of the success block
+    // Force it to use the Kobo value converted to Naira for the frontend
     return {
       savedRequest,
-      walletBalance: updatedUser.getWalletBalanceNaira()
+      walletBalance: Math.round(updatedUser.walletBalanceKobo) / 100 
     };
   } catch (error) {
     await session.abortTransaction();
