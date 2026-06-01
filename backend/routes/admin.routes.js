@@ -249,7 +249,20 @@ router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
 // -------------------------------------------------------------------------
 router.put("/status/:id", isAdmin, async (req, res) => {
   // Allow caller to explicitly pass module via body or query
-  const targetModule = req.body.targetModule || req.query.targetModule || "nimc";
+  let targetModule = req.body.targetModule || req.query.targetModule;
+  const id = req.params.id;
+
+  if (!targetModule && mongoose.Types.ObjectId.isValid(id)) {
+    const cacRecord = await CACRequest.findById(id).lean();
+    if (cacRecord) {
+      targetModule = 'cac';
+    } else {
+      const serviceRecord = await ServiceRequest.findById(id).lean();
+      if (serviceRecord) targetModule = 'nimc';
+    }
+  }
+
+  targetModule = targetModule || 'nimc';
   req.params.targetModule = targetModule;
   req.params.id = req.params.id;
   // Reuse unified handler behavior by calling the same route logic
@@ -304,8 +317,21 @@ router.put("/status/:id", isAdmin, async (req, res) => {
 });
 
 router.put("/update-status/:id", isAdmin, async (req, res) => {
-  // This legacy route accepts only an id; module must be provided in body/query
-  const targetModule = req.body.targetModule || req.query.targetModule || "nimc";
+  // This legacy route accepts only an id; module may or may not be provided in body/query.
+  let targetModule = req.body.targetModule || req.query.targetModule;
+  const id = req.params.id;
+
+  if (!targetModule && mongoose.Types.ObjectId.isValid(id)) {
+    const cacRecord = await CACRequest.findById(id).lean();
+    if (cacRecord) {
+      targetModule = 'cac';
+    } else {
+      const serviceRecord = await ServiceRequest.findById(id).lean();
+      if (serviceRecord) targetModule = 'nimc';
+    }
+  }
+
+  targetModule = targetModule || 'nimc';
   req.params.targetModule = targetModule;
   req.params.id = req.params.id;
   // Delegate to the compatibility handler above

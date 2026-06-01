@@ -73,6 +73,8 @@ exports.submitServiceRequest = async (req, res) => {
         basePrice = pricing.ninServices?.[normalizedType];
     }
 
+    console.log('Looking for price with:', { service, type, normalizedService, normalizedType, availableKeys: Object.keys(pricing.ninServices) });
+
     if (typeof basePrice !== 'number') {
       await session.abortTransaction();
       session.endSession();
