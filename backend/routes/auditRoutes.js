@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const AuditLog = require("../models/AuditLog.model");
+const AuditLog = require("./AuditLog.model");
 
 // POST /api/admin/audit-logs
 router.post("/", async (req, res) => {

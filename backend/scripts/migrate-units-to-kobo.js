@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const connectDB = require('../config/db');
-const User = require('../modules/users/User.model');
+const User = require('../models/User.model');
 
 // Each unit = 250 Naira
 const KOBO_PER_UNIT = 25000;

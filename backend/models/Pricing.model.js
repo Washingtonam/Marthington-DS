@@ -57,3 +57,59 @@ const pricingSchema = new mongoose.Schema({
       newEnrollment: { type: Number, default: 1000 },
       invalidTracking: { type: Number, default: 1000 },
     },
+
+    // =========================
+    // MODIFICATION
+    // =========================
+    modification: {
+      name: { type: Number, default: 12000 },
+      phone: { type: Number, default: 12000 },
+      address: { type: Number, default: 12000 },
+      dob: { type: Number, default: 50000 },
+    },
+
+    // =========================
+    // SLIP PRICE
+    // =========================
+    slipPrice: {
+      type: Number,
+      default: 150,
+    },
+  },
+
+  // ==============================
+  // 🏦 BVN PRICING
+  // ==============================
+  bvn: {
+    unitPrice: {
+      type: Number,
+      default: 200,
+      min: 1,
+    },
+  },
+
+  // ==============================
+  // 🏢 CAC SERVICES PRICING
+  // ==============================
+  cacServices: {
+    soleProprietorship: { type: Number, default: 28000, min: 0 },
+    partnership: { type: Number, default: 32000, min: 0 },
+    limited1M: { type: Number, default: 40000, min: 0 }
+  },
+
+}, {
+  timestamps: true,
+});
+
+// ==============================
+// 🔥 ENSURE SINGLE DOCUMENT ONLY
+// ==============================
+pricingSchema.statics.getPricing = async function () {
+  let pricing = await this.findOne();
+  if (!pricing) {
+    pricing = await this.create({});
+  }
+  return pricing;
+};
+
+module.exports = mongoose.models.Pricing || mongoose.model("Pricing", pricingSchema);

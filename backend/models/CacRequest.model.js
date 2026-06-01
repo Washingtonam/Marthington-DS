@@ -57,3 +57,21 @@ const CacRequestSchema = new mongoose.Schema({
     email: String,
     nin: String
   },
+
+  status: { 
+    type: String, 
+    default: "pending", 
+    enum: ["pending", "processing", "completed", "rejected", "failed"] 
+  },
+  progressNotes: { type: String, default: "Awaiting administrative document review" },
+
+  statusHistory: [
+    {
+      status: { type: String },
+      note: { type: String },
+      createdAt: { type: Date, default: Date.now }
+    }
+  ]
+}, { timestamps: true });
+
+module.exports = mongoose.models.CacRequest || mongoose.model("CacRequest", CacRequestSchema);

@@ -58,3 +58,16 @@ const ServiceRequestSchema = new mongoose.Schema({
   },
   status: {
     type: String,
+    enum: ["pending", "processing", "completed", "rejected", "failed"],
+    default: "pending"
+  },
+  statusHistory: [
+    {
+      status: { type: String },
+      note: { type: String },
+      createdAt: { type: Date, default: Date.now }
+    }
+  ]
+}, { timestamps: true });
+
+module.exports = mongoose.models.ServiceRequest || mongoose.model("ServiceRequest", ServiceRequestSchema);

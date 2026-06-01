@@ -4,8 +4,6 @@ const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
 const Pricing = require("../models/Pricing.model");
-const ServiceRequest = require("../models/ServiceRequest.model");
-const CACRequest = require("../models/CacRequest.model");
 
 // Safe schema/model resolution for ServiceRequest and CACRequest
 let ServiceRequest;

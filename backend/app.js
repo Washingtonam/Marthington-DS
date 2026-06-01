@@ -36,15 +36,17 @@ app.use(express.json({ limit: "10mb" }));
 // Match frontend expectations:
 // - /api/services/*  -> core services routes (verify, request, etc.)
 // - /api/cac/*       -> CAC service routes
-app.use("/api/auth", require("./routes/users.routes"));
+app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/finance", require("./routes/finance.routes"));
 app.use("/api/users", require("./routes/users.routes"));
 app.use("/api/user", require("./routes/users.routes"));
-app.use("/api/services", require("./routes/services.routes"));
-app.use("/api/cac", require("./routes/services.routes"));
+app.use("/api/services", require("./routes/nin.routes"));
+app.use("/api/cac", require("./routes/cac.routes"));
+app.use("/api/slips", require("./routes/slips.routes"));
 
 // Administrative routes (frontend calls /api/admin/*)
 app.use("/api/admin", require("./routes/admin.routes"));
+app.use("/api/admin/audit-logs", require("./routes/auditRoutes"));
 
 // Backwards compatibility alias for legacy transaction path
 app.get("/api/transactions", verifyToken, async (req, res) => {
