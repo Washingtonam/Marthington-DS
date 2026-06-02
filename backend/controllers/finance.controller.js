@@ -150,3 +150,101 @@ exports.approvePayment = async (req, res) => {
         res.status(500).json({ message: "Error approving payment", error: error.message });
     }
 };
+
+// Verify Paystack transaction by reference and credit wallet if successful (fallback for webhook failures)
+exports.verifyPaystackTransaction = async (req, res) => {
+    try {
+        const { reference } = req.body;
+        const userId = req.user.id || req.user._id;
+        const userEmail = req.user.email;
+        const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+
+        if (!reference) {
+            return res.status(400).json({ message: "Transaction reference is required." });
+        }
+
+        if (!paystackSecret) {
+            console.error("PAYSTACK_SECRET_KEY is not configured");
+            return res.status(500).json({ message: "Payment verification is not configured." });
+        }
+
+        // Call Paystack to verify the transaction
+        const response = await axios.get(
+            `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${paystackSecret}`,
+                },
+            }
+        );
+
+        const data = response.data;
+        if (!data || !data.status) {
+            throw new Error("Invalid response from Paystack verification.");
+        }
+
+        const transactionData = data.data;
+
+        // Only proceed if Paystack says the payment was successful
+        if (transactionData.status !== "success") {
+            return res.status(400).json({
+                success: false,
+                message: `Payment status is ${transactionData.status}. Please try again.`,
+                status: transactionData.status,
+            });
+        }
+
+        // Verify the email matches the logged-in user
+        if (transactionData.customer?.email?.toLowerCase().trim() !== userEmail?.toLowerCase().trim()) {
+            console.warn("Paystack verification email mismatch", {
+                paystackEmail: transactionData.customer?.email,
+                userEmail,
+            });
+            return res.status(403).json({
+                success: false,
+                message: "Payment email does not match your account.",
+            });
+        }
+
+        // Get the user and update wallet
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        // Calculate the amount credited
+        const amountKobo = transactionData.amount || 0;
+        const amountNaira = amountKobo / 100;
+
+        // Initialize walletBalanceKobo if null
+        if (user.walletBalanceKobo == null) {
+            user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
+        }
+
+        // Add the payment amount to wallet
+        user.walletBalanceKobo += amountKobo;
+        await user.save();
+
+        console.log("✅ Paystack verification successful", {
+            userId,
+            reference,
+            amountKobo,
+            newBalance: user.walletBalanceKobo,
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Payment verified and wallet credited successfully.",
+            walletBalance: user.walletBalance,
+            walletBalanceKobo: user.walletBalanceKobo,
+            amountKobo,
+        });
+    } catch (error) {
+        console.error("Paystack verification error:", error.response?.data || error.message || error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to verify payment.",
+            error: error.message,
+        });
+    }
+};

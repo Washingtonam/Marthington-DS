@@ -100,7 +100,22 @@ export default function Wallet() {
     }
   };
 
-  const pollForWebhookUpdate = async (initialBalance, { signal } = {}) => {
+  const verifyPaystackTransactionByReference = async (reference) => {
+    try {
+      const response = await api.post("/api/finance/verify-paystack", { reference });
+      if (response.data?.success && response.data?.walletBalance) {
+        setBalance(response.data.walletBalance);
+        setPollMessage("✅ Payment verified and wallet updated!");
+        clearPaystackQuery();
+        return true;
+      }
+    } catch (err) {
+      console.error("Paystack verification error:", err);
+    }
+    return false;
+  };
+
+  const pollForWebhookUpdate = async (initialBalance, { signal, reference } = {}) => {
     setIsPolling(true);
     setPollMessage("Waiting for payment confirmation...");
 
@@ -132,6 +147,16 @@ export default function Wallet() {
     }
 
     if (!signal?.aborted) {
+      // Fallback: Try to verify Paystack transaction directly by reference
+      if (reference) {
+        setPollMessage("Verifying payment with Paystack directly...");
+        const verified = await verifyPaystackTransactionByReference(reference);
+        if (verified) {
+          setIsPolling(false);
+          return;
+        }
+      }
+
       setPollMessage("Still waiting for Paystack confirmation. Refresh this page in a few seconds.");
       setIsPolling(false);
     }
@@ -143,11 +168,12 @@ export default function Wallet() {
 
     const controller = new AbortController();
     const currentBalance = user.walletBalance ?? 0;
+    const reference = params.get("reference");
     setPollMessage("Checking payment status...");
     setLoading(true);
 
     const initPolling = async () => {
-      await pollForWebhookUpdate(currentBalance, { signal: controller.signal });
+      await pollForWebhookUpdate(currentBalance, { signal: controller.signal, reference });
       if (!controller.signal.aborted) {
         setLoading(false);
       }
