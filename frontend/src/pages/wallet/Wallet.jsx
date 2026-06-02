@@ -80,7 +80,20 @@ export default function Wallet() {
     window.history.replaceState(null, "", url.toString());
   };
 
-  const pollForWebhookUpdate = async (initialBalance) => {
+  const fetchWalletBalance = async ({ signal } = {}) => {
+    try {
+      const response = await api.get("/api/users/wallet", {
+        signal,
+        timeout: 15000,
+      });
+      return response.data?.walletBalance;
+    } catch (err) {
+      console.error("Wallet fetch error:", err);
+      return null;
+    }
+  };
+
+  const pollForWebhookUpdate = async (initialBalance, { signal } = {}) => {
     setIsPolling(true);
     setPollMessage("Waiting for payment confirmation...");
 
@@ -88,45 +101,56 @@ export default function Wallet() {
     const POLL_DELAY_MS = 3000;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-      try {
-        const response = await api.get("/api/users/wallet");
-        const latestBalance = response.data?.walletBalance;
-
-        if (typeof latestBalance === "number") {
-          setBalance(latestBalance);
-          if (latestBalance !== initialBalance) {
-            setPollMessage("Payment confirmed — wallet balance updated.");
-            clearPaystackQuery();
-            setIsPolling(false);
-            return;
-          }
-        }
-      } catch (err) {
-        console.error("Wallet polling error:", err);
+      if (signal?.aborted) {
+        break;
       }
 
-      setPollMessage(`Waiting for payment confirmation... (${attempt}/${MAX_ATTEMPTS})`);
-      await new Promise((resolve) => setTimeout(resolve, POLL_DELAY_MS));
+      const latestBalance = await fetchWalletBalance({ signal });
+
+      if (typeof latestBalance === "number") {
+        setBalance(latestBalance);
+        if (latestBalance !== initialBalance) {
+          setPollMessage("Payment confirmed — wallet balance updated.");
+          clearPaystackQuery();
+          setIsPolling(false);
+          return;
+        }
+      } else {
+        setPollMessage(`Network issue, retrying... (${attempt}/${MAX_ATTEMPTS})`);
+      }
+
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_DELAY_MS));
+      }
     }
 
-    setPollMessage("Still waiting for Paystack confirmation. Refresh this page in a few seconds.");
-    setIsPolling(false);
+    if (!signal?.aborted) {
+      setPollMessage("Still waiting for Paystack confirmation. Refresh this page in a few seconds.");
+      setIsPolling(false);
+    }
   };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("paystack") !== "success" || !user) return;
 
+    const controller = new AbortController();
     const currentBalance = user.walletBalance ?? 0;
     setPollMessage("Checking payment status...");
     setLoading(true);
 
     const initPolling = async () => {
-      await pollForWebhookUpdate(currentBalance);
-      setLoading(false);
+      await pollForWebhookUpdate(currentBalance, { signal: controller.signal });
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     };
 
     initPolling();
+
+    return () => {
+      controller.abort();
+    };
   }, [user]);
 
   return (
