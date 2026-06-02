@@ -1,0 +1,15 @@
+# Railway Nixpacks Configuration for Node.js with Puppeteer
+# This ensures all necessary system dependencies are installed in the container
+
+[build.nix]
+# System packages required for Puppeteer (Chromium) to run successfully
+packages = [
+  "chromium",      # Chromium browser engine (required by Puppeteer)
+  "nss",           # Network Security Services (for SSL/TLS)
+  "freetype",      # Font rendering library
+  "harfbuzz",      # Text shaping engine (for proper font rendering)
+  "ca-certificates" # Certificate Authority certificates for HTTPS
+]
+
+[start]
+runImage = "node:18-alpine"

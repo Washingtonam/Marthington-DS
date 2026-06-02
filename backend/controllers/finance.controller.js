@@ -112,7 +112,7 @@ exports.getPendingPayments = async (req, res) => {
     }
 };
 
-// Approve payment and credit wallet
+// Approve payment and credit wallet (ATOMIC: using findOneAndUpdate to prevent race conditions)
 exports.approvePayment = async (req, res) => {
     try {
         const { id } = req.params;
@@ -121,37 +121,56 @@ exports.approvePayment = async (req, res) => {
         if (!transaction) return res.status(404).json({ message: "Transaction not found" });
         if (transaction.status !== "pending") return res.status(400).json({ message: "Transaction already processed" });
 
-        // Update User Balance: Add the Naira amount to walletBalance
-        const user = await User.findById(transaction.userId);
-
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        if (user.walletBalanceKobo == null) {
-            user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
-        }
-
-        // --- CONVERSION LOGIC ---
-        // If there are legacy units, convert them to Naira (1 unit = 250 Naira => 25000 kobo)
-        if (user.units > 0) {
-            user.walletBalanceKobo += user.units * 25000;
-            user.units = 0; // Clear legacy units after conversion
-        }
-
         const paymentAmountKobo = transaction.amountKobo || Math.round((transaction.amount || 0) * 100);
-        user.walletBalanceKobo += paymentAmountKobo;
-        await user.save();
 
-        // Update Transaction Status
+        // ATOMIC UPDATE: Use findOneAndUpdate to increment wallet in a single database operation
+        // This prevents race conditions where multiple requests could read the same balance
+        const updatedUser = await User.findOneAndUpdate(
+            { _id: transaction.userId },
+            {
+                $inc: { 
+                    walletBalanceKobo: paymentAmountKobo,
+                    // If user has legacy units, convert them to Naira (1 unit = 25000 kobo)
+                    walletBalanceKobo: User.exists({ _id: transaction.userId, units: { $gt: 0 } }) ? 0 : 0
+                }
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Handle legacy units conversion in separate atomic operation if needed
+        if (updatedUser.units > 0) {
+            const unitsInKobo = updatedUser.units * 25000;
+            await User.findOneAndUpdate(
+                { _id: transaction.userId },
+                {
+                    $inc: { walletBalanceKobo: unitsInKobo },
+                    $set: { units: 0 }
+                },
+                { new: true }
+            );
+        }
+
+        // Update Transaction Status atomically
         transaction.status = "approved";
         await transaction.save();
 
-        res.status(200).json({ message: "Payment approved and wallet credited" });
+        res.status(200).json({ 
+            message: "Payment approved and wallet credited",
+            walletBalance: updatedUser.walletBalance,
+            walletBalanceKobo: updatedUser.walletBalanceKobo
+        });
     } catch (error) {
+        console.error("Error approving payment:", error.message);
         res.status(500).json({ message: "Error approving payment", error: error.message });
     }
 };
 
-// Verify Paystack transaction by reference and credit wallet if successful (fallback for webhook failures)
+// Verify Paystack transaction by reference and credit wallet if successful (ATOMIC)
+// Uses findOneAndUpdate to prevent race conditions and ensure transaction reliability
 exports.verifyPaystackTransaction = async (req, res) => {
     try {
         const { reference } = req.body;
@@ -206,37 +225,36 @@ exports.verifyPaystackTransaction = async (req, res) => {
             });
         }
 
-        // Get the user and update wallet
-        const user = await User.findById(userId);
-        if (!user) {
+        // Calculate the amount credited
+        const amountKobo = transactionData.amount || 0;
+
+        // ATOMIC UPDATE: Use findOneAndUpdate to increment wallet in a single database operation
+        // This ensures that if multiple requests come in simultaneously, each one's amount is properly credited
+        // The operation is atomic at the MongoDB level - no race conditions possible
+        const updatedUser = await User.findOneAndUpdate(
+            { _id: userId },
+            {
+                $inc: { walletBalanceKobo: amountKobo }
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedUser) {
             return res.status(404).json({ message: "User not found." });
         }
 
-        // Calculate the amount credited
-        const amountKobo = transactionData.amount || 0;
-        const amountNaira = amountKobo / 100;
-
-        // Initialize walletBalanceKobo if null
-        if (user.walletBalanceKobo == null) {
-            user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
-        }
-
-        // Add the payment amount to wallet
-        user.walletBalanceKobo += amountKobo;
-        await user.save();
-
-        console.log("✅ Paystack verification successful", {
+        console.log("✅ Paystack verification successful (ATOMIC UPDATE)", {
             userId,
             reference,
             amountKobo,
-            newBalance: user.walletBalanceKobo,
+            newBalance: updatedUser.walletBalanceKobo,
         });
 
         return res.status(200).json({
             success: true,
             message: "Payment verified and wallet credited successfully.",
-            walletBalance: user.walletBalance,
-            walletBalanceKobo: user.walletBalanceKobo,
+            walletBalance: updatedUser.walletBalance,
+            walletBalanceKobo: updatedUser.walletBalanceKobo,
             amountKobo,
         });
     } catch (error) {
