@@ -1,9 +1,5 @@
 {
   "name": "nin-portal",
   "version": "1.0.0",
-  "private": true,
-  "workspaces": [
-    "backend",
-    "frontend"
-  ]
+  "private": true
 }
