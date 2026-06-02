@@ -81,6 +81,10 @@ export default function Wallet() {
   };
 
   const fetchWalletBalance = async ({ signal } = {}) => {
+    if (signal?.aborted) {
+      return null;
+    }
+
     try {
       const response = await api.get("/api/users/wallet", {
         signal,
@@ -88,7 +92,10 @@ export default function Wallet() {
       });
       return response.data?.walletBalance;
     } catch (err) {
-      console.error("Wallet fetch error:", err);
+      const canceled = err?.name === "CanceledError" || err?.code === "ERR_CANCELED";
+      if (!canceled) {
+        console.error("Wallet fetch error:", err);
+      }
       return null;
     }
   };
