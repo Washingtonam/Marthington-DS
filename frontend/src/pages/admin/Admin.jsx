@@ -26,9 +26,11 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
 
   const user = JSON.parse(localStorage.getItem("user"));
+  const token = localStorage.getItem("token")?.replace(/['"]+/g, "") || "";
 
   const headers = {
     email: user?.email,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
   // =========================

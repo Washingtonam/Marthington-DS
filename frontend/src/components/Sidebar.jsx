@@ -42,8 +42,10 @@ export default function Sidebar() {
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
   const isSuperAdmin = user?.role === "super_admin";
 
+  const token = localStorage.getItem("token")?.replace(/['"]+/g, "") || "";
   const headers = {
     email: user?.email || "",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
   // 🔥 Track state globally to notify Layout.jsx instantly

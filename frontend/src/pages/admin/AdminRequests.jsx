@@ -28,10 +28,16 @@ export default function AdminRequests() {
     "Self-Service": "bg-pink-100 text-pink-800"
   };
 
+  const token = localStorage.getItem("token")?.replace(/['"]+/g, "") || "";
+  const authHeaders = {
+    email: localStorage.getItem("email") || "",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
   const fetchRequests = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/admin/requests?page=${page}&limit=12&status=${activeStatus}`, {
-        headers: { email: localStorage.getItem("email") || "" }
+        headers: authHeaders
       });
       const data = res.data?.data || res.data?.requests || [];
       setRequests(data);
@@ -51,11 +57,11 @@ export default function AdminRequests() {
     try {
       if (status === 'approved') {
         await axios.put(`${API_BASE}/api/admin/approve-request/${id}`, {}, { 
-          headers: { email: localStorage.getItem("email") || "" } 
+          headers: authHeaders 
         });
       } else {
         await axios.put(`${API_BASE}/api/update-status/${id}`, { status }, { 
-          headers: { email: localStorage.getItem("email") || "" } 
+          headers: authHeaders 
         });
       }
       fetchRequests();
