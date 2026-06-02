@@ -11,6 +11,7 @@ export default function Wallet() {
   const [proof, setProof] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
   const [pollMessage, setPollMessage] = useState("");
 
   const copyAccount = () => {
