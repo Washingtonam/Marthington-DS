@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
@@ -22,7 +22,7 @@ export default function Wallet() {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) return alert("Image too large. Max 2MB.");
-    
+
     const reader = new FileReader();
     reader.onloadend = () => setProof(reader.result);
     reader.readAsDataURL(file);
@@ -37,7 +37,7 @@ export default function Wallet() {
       await api.post("/api/finance/submit-payment", {
         amount: Number(amount),
         paymentMethod: "bank_transfer",
-        proof
+        proof,
       });
 
       alert("✅ Request submitted! Awaiting manual approval.");
@@ -45,6 +45,28 @@ export default function Wallet() {
       setProof(null);
     } catch (err) {
       alert(err.response?.data?.message || "Payment submission failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startPaystackTopup = async () => {
+    if (!amount || Number(amount) < 100) return alert(`Minimum deposit is ₦100`);
+
+    setLoading(true);
+    try {
+      const { data } = await api.post("/api/finance/initiate-paystack", {
+        amount: Number(amount),
+      });
+
+      if (!data?.authorizationUrl) {
+        throw new Error("Unable to initialize Paystack checkout.");
+      }
+
+      window.location.href = data.authorizationUrl;
+    } catch (err) {
+      console.error("Paystack checkout error:", err);
+      alert(err.response?.data?.message || err.message || "Unable to start Paystack checkout.");
     } finally {
       setLoading(false);
     }
@@ -75,12 +97,24 @@ export default function Wallet() {
             <p className="mt-4 font-semibold">WASHINGTON AMEDU (OPAY)</p>
           </div>
 
-          <input 
-            type="number" 
-            placeholder="Enter amount (₦)" 
-            value={amount} 
-            onChange={(e) => setAmount(e.target.value)} 
-            className="w-full p-4 rounded-2xl border mb-4 bg-gray-50 dark:bg-gray-800" 
+          <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white p-6 rounded-2xl mb-6 shadow-lg">
+            <p className="text-sm uppercase tracking-widest text-emerald-100">Instant Top-up</p>
+            <p className="mt-2 text-sm text-white/90">Use Paystack to fund your wallet instantly. Your balance will update automatically after payment confirmation.</p>
+            <button
+              onClick={startPaystackTopup}
+              disabled={loading}
+              className="mt-6 w-full bg-white text-slate-900 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100"
+            >
+              {loading ? <Loader2 className="animate-spin" /> : "Pay with Paystack"}
+            </button>
+          </div>
+
+          <input
+            type="number"
+            placeholder="Enter amount (₦)"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full p-4 rounded-2xl border mb-4 bg-gray-50 dark:bg-gray-800"
           />
           
           <label className="border-2 border-dashed p-8 rounded-2xl flex flex-col items-center cursor-pointer hover:bg-gray-50 transition">
