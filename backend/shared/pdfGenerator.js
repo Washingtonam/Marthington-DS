@@ -1,66 +1,18 @@
-const puppeteer = require("puppeteer");
+/**
+ * DEPRECATED: This file uses Puppeteer which is heavy and slow on deployment.
+ * 
+ * NEW APPROACH: All PDF generation now uses PDFKit in pdfGeneratorKit.js
+ * This is faster, lighter, and more reliable for deployment.
+ * 
+ * For backward compatibility, this file exports a wrapper that uses PDFKit instead.
+ */
 
-async function generateNINSlip(data) {
-  const browser = await puppeteer.launch({
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage"
-    ],
-  });
+const { generateNINSlip } = require("./pdfGeneratorKit");
 
-  const page = await browser.newPage();
-
-  const photo = data.photo?.startsWith("data:")
-    ? data.photo
-    : `data:image/jpeg;base64,${data.photo}`;
-
-  const html = `
-  <html>
-    <body style="font-family: Arial; padding: 30px;">
-      
-      <h2 style="text-align:center;">NATIONAL IDENTITY SLIP</h2>
-
-      <div style="display:flex; gap:20px; margin-top:20px;">
-        <img src="${photo}" style="width:120px; height:120px; border-radius:10px;" />
-
-        <div>
-          <p><b>First Name:</b> ${data.firstname}</p>
-          <p><b>Middle Name:</b> ${data.middlename}</p>
-          <p><b>Last Name:</b> ${data.surname}</p>
-          <p><b>NIN:</b> ${data.nin}</p>
-          <p><b>Gender:</b> ${data.gender}</p>
-          <p><b>Date of Birth:</b> ${data.birthdate}</p>
-          <p><b>Phone:</b> ${data.telephoneno}</p>
-        </div>
-      </div>
-
-      <div style="margin-top:20px;">
-        <p><b>Address:</b> ${data.residence_address}</p>
-        <p><b>State:</b> ${data.residence_state}</p>
-        <p><b>LGA:</b> ${data.residence_lga}</p>
-      </div>
-
-      <hr style="margin-top:30px;" />
-
-      <p style="text-align:center; font-size:12px;">
-        Generated via Xcombinator Verification System
-      </p>
-
-    </body>
-  </html>
-  `;
-
-  await page.setContent(html);
-
-  const pdf = await page.pdf({
-    format: "A4",
-    printBackground: true,
-  });
-
-  await browser.close();
-
-  return pdf;
+async function generateNINSlip_Deprecated(data) {
+  console.warn("⚠️ Using deprecated generateNINSlip from pdfGenerator.js");
+  console.warn("   Please update to use pdfGeneratorKit.js instead");
+  return await generateNINSlip(data);
 }
 
-module.exports = { generateNINSlip };
+module.exports = { generateNINSlip: generateNINSlip_Deprecated };
