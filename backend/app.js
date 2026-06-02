@@ -2,6 +2,7 @@
 const express = require("express");
 const cors = require("cors");
 const { verifyToken } = require("./shared/authGuard");
+const { handlePaystackWebhook } = require("./controllers/webhook.controller");
 const app = express();
 
 // Allowed frontend origins for production (explicit - do not use '*')
@@ -22,13 +23,21 @@ const corsOptions = {
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "email"],
+    allowedHeaders: ["Content-Type", "Authorization", "email", "x-paystack-signature"],
     preflightContinue: false,
 };
 
 // Middleware - apply CORS and handle preflight
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
+
+// Paystack webhook must verify raw payload signature before JSON parsing
+app.post(
+  "/api/webhooks/paystack",
+  express.raw({ type: "application/json" }),
+  handlePaystackWebhook
+);
+
 app.use(express.json({ limit: "10mb" }));
 
 // Routes
