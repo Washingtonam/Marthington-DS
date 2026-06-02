@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
@@ -6,11 +6,12 @@ import { Wallet2, Upload, ArrowRight, Copy, CheckCircle2, Loader2 } from "lucide
 import { motion } from "framer-motion";
 
 export default function Wallet() {
-  const { user } = useUser();
+  const { user, setBalance } = useUser();
   const [amount, setAmount] = useState("");
   const [proof, setProof] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [pollMessage, setPollMessage] = useState("");
 
   const copyAccount = () => {
     navigator.clipboard.writeText("6104102697");
@@ -72,6 +73,61 @@ export default function Wallet() {
     }
   };
 
+  const clearPaystackQuery = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("paystack");
+    window.history.replaceState(null, "", url.toString());
+  };
+
+  const pollForWebhookUpdate = async (initialBalance) => {
+    setIsPolling(true);
+    setPollMessage("Waiting for payment confirmation...");
+
+    const MAX_ATTEMPTS = 10;
+    const POLL_DELAY_MS = 3000;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await api.get("/api/users/wallet");
+        const latestBalance = response.data?.walletBalance;
+
+        if (typeof latestBalance === "number") {
+          setBalance(latestBalance);
+          if (latestBalance !== initialBalance) {
+            setPollMessage("Payment confirmed — wallet balance updated.");
+            clearPaystackQuery();
+            setIsPolling(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Wallet polling error:", err);
+      }
+
+      setPollMessage(`Waiting for payment confirmation... (${attempt}/${MAX_ATTEMPTS})`);
+      await new Promise((resolve) => setTimeout(resolve, POLL_DELAY_MS));
+    }
+
+    setPollMessage("Still waiting for Paystack confirmation. Refresh this page in a few seconds.");
+    setIsPolling(false);
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("paystack") !== "success" || !user) return;
+
+    const currentBalance = user.walletBalance ?? 0;
+    setPollMessage("Checking payment status...");
+    setLoading(true);
+
+    const initPolling = async () => {
+      await pollForWebhookUpdate(currentBalance);
+      setLoading(false);
+    };
+
+    initPolling();
+  }, [user]);
+
   return (
     <div className="max-w-6xl mx-auto p-4">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-blue-700 to-indigo-900 text-white p-8 rounded-[2rem] shadow-2xl mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
@@ -107,6 +163,11 @@ export default function Wallet() {
             >
               {loading ? <Loader2 className="animate-spin" /> : "Pay with Paystack"}
             </button>
+            {pollMessage && (
+              <div className="mt-4 rounded-2xl bg-white/10 border border-white/20 p-4 text-sm text-white">
+                {pollMessage}
+              </div>
+            )}
           </div>
 
           <input
