@@ -2,7 +2,7 @@
 const express = require("express");
 const cors = require("cors");
 const { verifyToken } = require("./shared/authGuard");
-const { handlePaystackWebhook } = require("./controllers/webhook.controller");
+const { handlePaystackWebhook } = require("./controllers/payment.controller");
 const app = express();
 
 // Allowed frontend origins for production (explicit - do not use '*')
@@ -47,6 +47,7 @@ app.use(express.json({ limit: "10mb" }));
 // - /api/cac/*       -> CAC service routes
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/finance", require("./routes/finance.routes"));
+app.use("/api/payments", require("./routes/payment.routes"));
 app.use("/api/users", require("./routes/users.routes"));
 app.use("/api/user", require("./routes/users.routes"));
 app.use("/api/services", require("./routes/nin.routes"));
