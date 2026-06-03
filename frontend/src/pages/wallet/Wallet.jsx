@@ -10,7 +10,7 @@ export default function Wallet() {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handlePayClick = async () => {
+  const handlePaystackPayment = async () => {
     const numAmount = Number(amount);
 
     if (!numAmount || numAmount < 100) {
@@ -38,28 +38,28 @@ export default function Wallet() {
         throw new Error("Backend did not return a payment reference");
       }
 
-      console.log("✅ Backend returned reference:", data.reference);
-
-      const handler = new window.PaystackPop();
-      handler.newTransaction({
+      const paymentConfig = {
         key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
         email: user.email,
         amount: numAmount * 100,
         reference: data.reference,
-        onSuccess: (transaction) => {
-          console.log("✅ Paystack transaction successful:", transaction);
-          setLoading(false);
-          alert("✅ Payment successful! Your wallet will update automatically.");
+        onSuccess: () => {
+          alert("✅ Payment successful!");
           api.get("/api/users/wallet").then((res) => setBalance(res.data.walletBalance));
+          setLoading(false);
         },
         onCancel: () => {
-          console.log("Paystack payment canceled by user.");
           setLoading(false);
         },
-      });
+      };
+
+      console.log("DEBUG: Sending to Paystack SDK:", paymentConfig);
+
+      const popup = new window.PaystackPop();
+      popup.newTransaction(paymentConfig);
     } catch (err) {
       console.error("❌ Payment initialization failed:", err);
-      alert(`Error: ${err.response?.data?.message || err.message || "Payment initialization failed"}`);
+      alert(err.response?.data?.message || "Payment initialization failed");
       setLoading(false);
     }
   };
@@ -91,7 +91,7 @@ export default function Wallet() {
           />
 
           <button
-            onClick={handlePayClick}
+            onClick={handlePaystackPayment}
             disabled={loading || !amount}
             className="mt-6 w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
