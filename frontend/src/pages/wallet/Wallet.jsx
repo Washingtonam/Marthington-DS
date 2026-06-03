@@ -1,47 +1,15 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
 import { Wallet2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { usePaystackPayment } from "react-paystack";
 
 export default function Wallet() {
   const { user, setBalance } = useUser();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Paystack config (updated dynamically)
-  const [paystackConfig, setPaystackConfig] = useState({
-    email: user?.email || "",
-    amount: 0,
-    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
-    reference: "",
-  });
-
-  // Initialize Paystack hook with config
-  const initializePayment = usePaystackPayment(paystackConfig);
-
-  // Success callback: wallet updated by webhook, refresh and close
-  const onPaymentSuccess = useCallback((reference) => {
-    console.log("✅ Payment successful:", reference);
-    setLoading(false);
-    alert("✅ Payment successful! Your wallet will update automatically.");
-    
-    // Refresh balance (webhook has already credited)
-    api.get("/api/users/wallet").then(res => {
-      setBalance(res.data.walletBalance);
-      setAmount("");
-    });
-  }, [setBalance]);
-
-  // Close callback: reset loading state
-  const onPaymentClose = useCallback(() => {
-    console.log("User closed Paystack modal");
-    setLoading(false);
-  }, []);
-
-  // Handle "Pay" button click
   const handlePayClick = async () => {
     const numAmount = Number(amount);
 
@@ -55,33 +23,40 @@ export default function Wallet() {
       return;
     }
 
+    if (!window?.PaystackPop) {
+      alert("Paystack SDK is not loaded. Please refresh the page.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       console.log("📤 Initiating payment with backend...");
-      // Step 1: Call backend to create transaction
       const { data } = await api.post("/api/payments/init", { amount: numAmount });
-      
+
       if (!data.reference) {
-        throw new Error("Backend did not return payment reference");
+        throw new Error("Backend did not return a payment reference");
       }
 
       console.log("✅ Backend returned reference:", data.reference);
 
-      // Step 2: Update Paystack config with backend reference
-      setPaystackConfig({
+      const handler = new window.PaystackPop();
+      handler.newTransaction({
+        key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
         email: user.email,
-        amount: numAmount * 100, // Paystack uses kobo
-        publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+        amount: numAmount * 100,
         reference: data.reference,
+        onSuccess: (transaction) => {
+          console.log("✅ Paystack transaction successful:", transaction);
+          setLoading(false);
+          alert("✅ Payment successful! Your wallet will update automatically.");
+          api.get("/api/users/wallet").then((res) => setBalance(res.data.walletBalance));
+        },
+        onCancel: () => {
+          console.log("Paystack payment canceled by user.");
+          setLoading(false);
+        },
       });
-
-      // Step 3: Trigger Paystack modal (happens on next render via useEffect-like mechanism)
-      // The hook will use the updated config
-      setTimeout(() => {
-        initializePayment(onPaymentSuccess, onPaymentClose);
-      }, 100);
-
     } catch (err) {
       console.error("❌ Payment initialization failed:", err);
       alert(`Error: ${err.response?.data?.message || err.message || "Payment initialization failed"}`);
