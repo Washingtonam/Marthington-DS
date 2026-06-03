@@ -1,18 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
 import { Wallet2, Upload, ArrowRight, Copy, CheckCircle2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { usePaystackPayment } from "react-paystack"; // Added
 
 export default function Wallet() {
   const { user, setBalance } = useUser();
   const [amount, setAmount] = useState("");
-  const [proof, setProof] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [isPolling, setIsPolling] = useState(false);
-  const [pollMessage, setPollMessage] = useState("");
 
   const copyAccount = () => {
     navigator.clipboard.writeText("6104102697");
@@ -20,171 +18,54 @@ export default function Wallet() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) return alert("Image too large. Max 2MB.");
-
-    const reader = new FileReader();
-    reader.onloadend = () => setProof(reader.result);
-    reader.readAsDataURL(file);
-  };
-
-  const submitPayment = async () => {
+  // Paystack Configuration
+  const initializePayment = async () => {
     if (!amount || Number(amount) < 100) return alert(`Minimum deposit is ₦100`);
-    if (!proof) return alert("Please upload your payment screenshot");
-
+    
     setLoading(true);
     try {
-      await api.post("/api/finance/submit-payment", {
-        amount: Number(amount),
-        paymentMethod: "bank_transfer",
-        proof,
-      });
-
-      alert("✅ Request submitted! Awaiting manual approval.");
-      setAmount("");
-      setProof(null);
+      const { data } = await api.post("/api/payments/init", { amount: Number(amount) });
+      return {
+        reference: data.reference,
+        amount: Number(amount) * 100, // Paystack uses Kobo
+        email: user.email,
+        publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+      };
     } catch (err) {
-      alert(err.response?.data?.message || "Payment submission failed");
-    } finally {
+      alert("Failed to initialize payment");
       setLoading(false);
-    }
-  };
-
-  const startPaystackTopup = async () => {
-    if (!amount || Number(amount) < 100) return alert(`Minimum deposit is ₦100`);
-
-    setLoading(true);
-    try {
-      const { data } = await api.post("/api/finance/initiate-paystack", {
-        amount: Number(amount),
-      });
-
-      if (!data?.authorizationUrl) {
-        throw new Error("Unable to initialize Paystack checkout.");
-      }
-
-      window.location.href = data.authorizationUrl;
-    } catch (err) {
-      console.error("Paystack checkout error:", err);
-      alert(err.response?.data?.message || err.message || "Unable to start Paystack checkout.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const clearPaystackQuery = () => {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("paystack");
-    window.history.replaceState(null, "", url.toString());
-  };
-
-  const fetchWalletBalance = async ({ signal } = {}) => {
-    if (signal?.aborted) {
-      return null;
-    }
-
-    try {
-      const response = await api.get("/api/users/wallet", {
-        signal,
-        timeout: 15000,
-      });
-      return response.data?.walletBalance;
-    } catch (err) {
-      const canceled = err?.name === "CanceledError" || err?.code === "ERR_CANCELED";
-      if (!canceled) {
-        console.error("Wallet fetch error:", err);
-      }
       return null;
     }
   };
 
-  const verifyPaystackTransactionByReference = async (reference) => {
-    try {
-      const response = await api.post("/api/finance/verify-paystack", { reference });
-      if (response.data?.success && response.data?.walletBalance) {
-        setBalance(response.data.walletBalance);
-        setPollMessage("✅ Payment verified and wallet updated!");
-        clearPaystackQuery();
-        return true;
-      }
-    } catch (err) {
-      console.error("Paystack verification error:", err);
-    }
-    return false;
+  const onSuccess = (reference) => {
+    setLoading(false);
+    alert("✅ Payment successful! Your wallet will update automatically.");
+    // Force a balance refresh
+    api.get("/api/users/wallet").then(res => setBalance(res.data.walletBalance));
   };
 
-  const pollForWebhookUpdate = async (initialBalance, { signal, reference } = {}) => {
-    setIsPolling(true);
-    setPollMessage("Waiting for payment confirmation...");
+  const onClose = () => setLoading(false);
 
-    const MAX_ATTEMPTS = 10;
-    const POLL_DELAY_MS = 3000;
+  const PaystackHook = () => {
+    const [config, setConfig] = useState(null);
+    const initializePaystack = usePaystackPayment(config || {});
 
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-      if (signal?.aborted) {
-        break;
-      }
-
-      const latestBalance = await fetchWalletBalance({ signal });
-
-      if (typeof latestBalance === "number") {
-        setBalance(latestBalance);
-        if (latestBalance !== initialBalance) {
-          setPollMessage("Payment confirmed — wallet balance updated.");
-          clearPaystackQuery();
-          setIsPolling(false);
-          return;
-        }
-      } else {
-        setPollMessage(`Network issue, retrying... (${attempt}/${MAX_ATTEMPTS})`);
-      }
-
-      if (attempt < MAX_ATTEMPTS) {
-        await new Promise((resolve) => setTimeout(resolve, POLL_DELAY_MS));
-      }
-    }
-
-    if (!signal?.aborted) {
-      // Fallback: Try to verify Paystack transaction directly by reference
-      if (reference) {
-        setPollMessage("Verifying payment with Paystack directly...");
-        const verified = await verifyPaystackTransactionByReference(reference);
-        if (verified) {
-          setIsPolling(false);
-          return;
-        }
-      }
-
-      setPollMessage("Still waiting for Paystack confirmation. Refresh this page in a few seconds.");
-      setIsPolling(false);
-    }
-  };
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("paystack") !== "success" || !user) return;
-
-    const controller = new AbortController();
-    const currentBalance = user.walletBalance ?? 0;
-    const reference = params.get("reference");
-    setPollMessage("Checking payment status...");
-    setLoading(true);
-
-    const initPolling = async () => {
-      await pollForWebhookUpdate(currentBalance, { signal: controller.signal, reference });
-      if (!controller.signal.aborted) {
-        setLoading(false);
+    const trigger = async () => {
+      const paymentData = await initializePayment();
+      if (paymentData) {
+        setConfig(paymentData);
+        // Small delay to ensure config is set before triggering
+        setTimeout(() => initializePaystack({ onSuccess, onClose }), 100);
       }
     };
 
-    initPolling();
-
-    return () => {
-      controller.abort();
-    };
-  }, [user]);
+    return (
+      <button onClick={trigger} disabled={loading} className="mt-6 w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-700">
+        {loading ? <Loader2 className="animate-spin" /> : "Pay with Paystack"}
+      </button>
+    );
+  };
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -201,60 +82,35 @@ export default function Wallet() {
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-xl border">
-          <h2 className="text-2xl font-bold mb-6">Manual Bank Transfer</h2>
-          <div className="bg-slate-900 text-white p-6 rounded-2xl mb-6 shadow-lg">
-            <p className="text-slate-400 text-sm">Account Details</p>
-            <div className="flex justify-between items-center mt-2">
-              <h3 className="text-2xl font-bold tracking-widest">6104102697</h3>
-              <button onClick={copyAccount} className="p-2 bg-white/10 rounded-lg">{copied ? <CheckCircle2 size={18} /> : <Copy size={18} />}</button>
-            </div>
-            <p className="mt-4 font-semibold">WASHINGTON AMEDU (OPAY)</p>
-          </div>
-
-          <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white p-6 rounded-2xl mb-6 shadow-lg">
-            <p className="text-sm uppercase tracking-widest text-emerald-100">Instant Top-up</p>
-            <p className="mt-2 text-sm text-white/90">Use Paystack to fund your wallet instantly. Your balance will update automatically after payment confirmation.</p>
-            <button
-              onClick={startPaystackTopup}
-              disabled={loading}
-              className="mt-6 w-full bg-white text-slate-900 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100"
-            >
-              {loading ? <Loader2 className="animate-spin" /> : "Pay with Paystack"}
-            </button>
-            {pollMessage && (
-              <div className="mt-4 rounded-2xl bg-white/10 border border-white/20 p-4 text-sm text-white">
-                {pollMessage}
-              </div>
-            )}
-          </div>
-
+          <h2 className="text-2xl font-bold mb-6">Fund Wallet</h2>
+          
           <input
             type="number"
             placeholder="Enter amount (₦)"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full p-4 rounded-2xl border mb-4 bg-gray-50 dark:bg-gray-800"
+            className="w-full p-4 rounded-2xl border mb-6 bg-gray-50 dark:bg-gray-800"
           />
-          
-          <label className="border-2 border-dashed p-8 rounded-2xl flex flex-col items-center cursor-pointer hover:bg-gray-50 transition">
-            <Upload className="text-blue-500 mb-2" />
-            <span className="font-semibold">{proof ? "Proof Selected" : "Upload Payment Screenshot"}</span>
-            <input type="file" onChange={handleFile} className="hidden" />
-          </label>
 
-          <button onClick={submitPayment} disabled={loading} className="w-full mt-6 bg-blue-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700">
-            {loading ? <Loader2 className="animate-spin" /> : <>Submit Payment <ArrowRight size={18} /></>}
-          </button>
+          <PaystackHook />
+
+          <div className="mt-8 pt-8 border-t">
+            <h3 className="font-bold mb-4">Manual Bank Transfer</h3>
+            <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg">
+              <p className="text-slate-400 text-sm">Account Details</p>
+              <div className="flex justify-between items-center mt-2">
+                <h3 className="text-2xl font-bold tracking-widest">6104102697</h3>
+                <button onClick={copyAccount} className="p-2 bg-white/10 rounded-lg">{copied ? <CheckCircle2 size={18} /> : <Copy size={18} />}</button>
+              </div>
+              <p className="mt-4 font-semibold">WASHINGTON AMEDU (OPAY)</p>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">
           <div className="bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
-            <h3 className="font-bold">Important Notice</h3>
-            <ul className="text-gray-500 space-y-2">
-              <li>• Payments require manual review.</li>
-              <li>• Only upload clear transfer receipts.</li>
-              <li>• Balance reflects once approved.</li>
-            </ul>
+            <h3 className="font-bold">Automated Funding</h3>
+            <p className="text-gray-500">Payments via Paystack are credited to your balance instantly upon confirmation.</p>
           </div>
         </div>
       </div>
