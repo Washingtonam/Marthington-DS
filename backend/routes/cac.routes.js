@@ -44,7 +44,7 @@ router.post("/submit", verifyToken, async (req, res) => {
       const updatedUser = await User.findOneAndUpdate(
         { _id: userId, walletBalanceKobo: { $gte: costKobo } },
         { $inc: { walletBalanceKobo: -costKobo } },
-        { new: true, session }
+        { returnDocument: 'after', session }
       );
       if (!updatedUser) {
         await session.abortTransaction();

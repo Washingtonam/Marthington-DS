@@ -60,7 +60,7 @@ const handlePaystackWebhook = async (req, res) => {
           walletBalance: nairaAmount,
         },
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) {

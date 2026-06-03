@@ -134,7 +134,7 @@ exports.approvePayment = async (req, res) => {
                     walletBalanceKobo: User.exists({ _id: transaction.userId, units: { $gt: 0 } }) ? 0 : 0
                 }
             },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!updatedUser) {
@@ -150,7 +150,7 @@ exports.approvePayment = async (req, res) => {
                     $inc: { walletBalanceKobo: unitsInKobo },
                     $set: { units: 0 }
                 },
-                { new: true }
+                { returnDocument: 'after' }
             );
         }
 
@@ -236,7 +236,7 @@ exports.verifyPaystackTransaction = async (req, res) => {
             {
                 $inc: { walletBalanceKobo: amountKobo }
             },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!updatedUser) {

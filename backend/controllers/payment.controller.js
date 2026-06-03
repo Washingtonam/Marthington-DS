@@ -193,7 +193,7 @@ const handlePaystackWebhook = async (req, res) => {
           walletBalanceKobo: amountKobo,
         },
       },
-      { new: true }
+      { returnDocument: 'after' }
     ).exec();
 
     if (!updatedUser) {

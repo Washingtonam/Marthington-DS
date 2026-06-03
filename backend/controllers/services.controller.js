@@ -92,7 +92,7 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
         updatedUser = await User.findOneAndUpdate(
           { _id: userId, walletBalanceKobo: { $gte: amountKobo } },
           { $inc: { walletBalanceKobo: -amountKobo } },
-          { new: true, session }
+          { returnDocument: 'after', session }
         );
 
         if (!updatedUser) {
