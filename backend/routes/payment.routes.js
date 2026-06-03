@@ -26,10 +26,10 @@ const {
  * - No authentication required (Paystack calls this server-to-server)
  * - Secret key must be in PAYSTACK_SECRET_KEY env var
  * 
- * ⚠️  IMPORTANT: This route MUST receive the raw body, not JSON-parsed
- * Express middleware `express.raw()` is applied below
+ * ⚠️  IMPORTANT: This route must preserve the exact raw request payload for signature validation.
+ * The global JSON parser now captures raw bytes via verify(), so this route can rely on req.rawBody.
  */
-router.post("/webhook", express.raw({ type: "application/json" }), handlePaystackWebhook);
+router.post("/webhook", handlePaystackWebhook);
 
 /**
  * ========================================

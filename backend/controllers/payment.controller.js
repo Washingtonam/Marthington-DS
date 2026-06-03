@@ -55,7 +55,7 @@ const handlePaystackWebhook = async (req, res) => {
       });
     }
 
-    const rawBody = req.body;
+    const rawBody = req.rawBody || req.body;
     if (!rawBody || !Buffer.isBuffer(rawBody)) {
       console.warn("❌ Webhook received with invalid raw body");
       return res.status(400).json({

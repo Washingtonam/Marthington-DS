@@ -32,7 +32,15 @@ app.options("*", cors(corsOptions));
 
 // Paystack webhook is handled under the payments router at POST /api/payments/webhook
 
-app.use(express.json({ limit: "10mb" }));
+// Capture raw request body for Paystack signature verification
+app.use(express.json({
+    limit: "10mb",
+    verify: (req, res, buf) => {
+        if (buf && buf.length) {
+            req.rawBody = buf;
+        }
+    },
+}));
 
 // Routes
 // We group these by service. The controller logic is now hidden inside these routes.
