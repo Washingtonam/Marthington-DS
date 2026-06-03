@@ -128,11 +128,7 @@ exports.approvePayment = async (req, res) => {
         const updatedUser = await User.findOneAndUpdate(
             { _id: transaction.userId },
             {
-                $inc: { 
-                    walletBalanceKobo: paymentAmountKobo,
-                    // If user has legacy units, convert them to Naira (1 unit = 25000 kobo)
-                    walletBalanceKobo: User.exists({ _id: transaction.userId, units: { $gt: 0 } }) ? 0 : 0
-                }
+                $inc: { walletBalanceKobo: paymentAmountKobo }
             },
             { returnDocument: 'after', runValidators: true }
         );

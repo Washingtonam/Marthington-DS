@@ -15,7 +15,6 @@ export default function AdminPayments() {
   const [filter, setFilter] = useState("all");
   const [unitPrice, setUnitPrice] = useState(215);
   const [loading, setLoading] = useState(true);
-  const [loadingId, setLoadingId] = useState(null);
   const [preview, setPreview] = useState(null);
 
   const [page, setPage] = useState(1);
@@ -62,40 +61,7 @@ export default function AdminPayments() {
     }
   };
 
-  // =========================
-  // APPROVE REQUEST
-  // =========================
-  const approve = async (id) => {
-    if (!window.confirm("Are you sure you want to APPROVE this payment request?")) return;
-    try {
-      setLoadingId(id);
-      await axios.post(`${API_BASE}/api/finance/payments/${id}/approve`, {}, { headers });
-      alert("Approved successfully");
-      fetchPayments();
-    } catch (err) {
-      alert(err.response?.data?.message || "Approval failed");
-    } finally {
-      setLoadingId(null);
-    }
-  };
-
-  // =========================
-  // REJECT REQUEST
-  // =========================
-  const reject = async (id) => {
-    if (!window.confirm("Are you sure you want to REJECT this payment request?")) return;
-    try {
-      setLoadingId(id);
-      // Ensure this endpoint exists in your routes if you use it
-      await axios.post(`${API_BASE}/api/finance/payments/${id}/reject`, {}, { headers });
-      alert("Rejected successfully");
-      fetchPayments();
-    } catch (err) {
-      alert("Rejection failed");
-    } finally {
-      setLoadingId(null);
-    }
-  };
+  // Manual approve/reject removed — admin panel is now a read-only ledger for automated payments.
 
   useEffect(() => {
     fetchPayments();
@@ -146,7 +112,7 @@ export default function AdminPayments() {
       ) : (
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
           {paginatedPayments.map((p) => (
-            <PaymentCard key={p._id} p={p} statusStyle={statusStyle} approve={approve} reject={reject} loadingId={loadingId} setPreview={setPreview} />
+            <PaymentCard key={p._id} p={p} statusStyle={statusStyle} setPreview={setPreview} />
           ))}
         </div>
       )}
@@ -170,7 +136,7 @@ function MetricCard({ title, value, icon, bgColor }) {
   );
 }
 
-function PaymentCard({ p, statusStyle, approve, reject, loadingId, setPreview }) {
+function PaymentCard({ p, statusStyle, setPreview }) {
   return (
     <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
@@ -183,10 +149,9 @@ function PaymentCard({ p, statusStyle, approve, reject, loadingId, setPreview })
             <span className="font-bold">₦{p.amount?.toLocaleString()}</span>
         </div>
       </div>
-      {p.status === "pending" && (
-        <div className="p-5 pt-0 grid grid-cols-2 gap-3">
-          <button onClick={() => approve(p._id)} disabled={loadingId === p._id} className="bg-green-600 py-3 rounded-2xl text-white font-semibold">Approve</button>
-          <button onClick={() => reject(p._id)} disabled={loadingId === p._id} className="bg-red-600 py-3 rounded-2xl text-white font-semibold">Reject</button>
+      {p.status === "pending" && p.reference && String(p.reference).startsWith("PAY_") && (
+        <div className="p-5 pt-0">
+          <p className="text-sm text-gray-600">This payment was initiated via Paystack and is processed automatically. No manual approval required.</p>
         </div>
       )}
     </div>

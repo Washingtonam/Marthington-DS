@@ -217,6 +217,41 @@ exports.approvePayment = async (req, res) => {
       return res.status(400).json({ message: "Inbound capital allocation insufficient to generate minimal unit allocation thresholds" });
     }
 
+    // If this is a simple wallet credit (type 'credit'), credit the wallet directly
+    if (String(payment.type).toLowerCase() === 'credit') {
+      const paymentAmountKobo = payment.amountKobo || Math.round((payment.amount || 0) * 100);
+
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: user._id },
+        { $inc: { walletBalanceKobo: paymentAmountKobo } },
+        { returnDocument: 'after' }
+      );
+
+      if (!updatedUser) return res.status(404).json({ message: "User not found during approval" });
+
+      payment.status = "approved";
+      await payment.save();
+
+      try {
+        await AuditLog.create({
+          action: "APPROVE_PAYMENT",
+          performedBy: adminEmail,
+          userId: user._id,
+          amount: payment.amount,
+          note: `Admin approved credit transaction: ${payment._id}`
+        });
+      } catch (aud) {
+        console.warn("Telemetry entry dropped during core transaction settlement execution:", aud.message);
+      }
+
+      return res.json({
+        message: "Payment approved and wallet credited",
+        walletBalance: updatedUser.walletBalance,
+        walletBalanceKobo: updatedUser.walletBalanceKobo
+      });
+    }
+
+    // Otherwise treat as UNIT_ADD (legacy unit allocation)
     const beforeUnits = user.units || 0;
 
     user.units = (user.units || 0) + unitsToAdd;
