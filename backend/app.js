@@ -2,7 +2,6 @@
 const express = require("express");
 const cors = require("cors");
 const { verifyToken } = require("./shared/authGuard");
-const { handlePaystackWebhook } = require("./controllers/payment.controller");
 const app = express();
 
 // Allowed frontend origins for production (explicit - do not use '*')
@@ -31,12 +30,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-// Paystack webhook must verify raw payload signature before JSON parsing
-app.post(
-  "/api/webhooks/paystack",
-  express.raw({ type: "application/json" }),
-  handlePaystackWebhook
-);
+// Paystack webhook is handled under the payments router at POST /api/payments/webhook
 
 app.use(express.json({ limit: "10mb" }));
 

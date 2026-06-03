@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
@@ -12,11 +12,7 @@ export default function Wallet() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const copyAccount = () => {
-    navigator.clipboard.writeText("6104102697");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  // manual bank transfer removed — payments handled via Paystack webhook
 
   // Paystack Configuration
   const initializePayment = async () => {
@@ -51,12 +47,17 @@ export default function Wallet() {
     const [config, setConfig] = useState(null);
     const initializePaystack = usePaystackPayment(config || {});
 
+    // When `config` is set, the hook returns a new `initializePaystack` bound to it.
+    useEffect(() => {
+      if (config) {
+        initializePaystack(onSuccess, onClose);
+      }
+    }, [config]);
+
     const trigger = async () => {
       const paymentData = await initializePayment();
       if (paymentData) {
         setConfig(paymentData);
-        // Small delay to ensure config is set before triggering
-        setTimeout(() => initializePaystack({ onSuccess, onClose }), 100);
       }
     };
 
@@ -95,15 +96,8 @@ export default function Wallet() {
           <PaystackHook />
 
           <div className="mt-8 pt-8 border-t">
-            <h3 className="font-bold mb-4">Manual Bank Transfer</h3>
-            <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg">
-              <p className="text-slate-400 text-sm">Account Details</p>
-              <div className="flex justify-between items-center mt-2">
-                <h3 className="text-2xl font-bold tracking-widest">6104102697</h3>
-                <button onClick={copyAccount} className="p-2 bg-white/10 rounded-lg">{copied ? <CheckCircle2 size={18} /> : <Copy size={18} />}</button>
-              </div>
-              <p className="mt-4 font-semibold">WASHINGTON AMEDU (OPAY)</p>
-            </div>
+            <h3 className="font-bold mb-4">Funding Details</h3>
+            <p className="text-sm text-gray-500">All automated funding is handled via Paystack and credited automatically after confirmation.</p>
           </div>
         </div>
 

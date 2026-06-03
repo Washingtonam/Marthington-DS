@@ -122,7 +122,7 @@ export default function FundWallet({ isOpen, onClose }) {
   };
 
   // Initialize usePaystackPayment hook
-  const { initializePayment } = usePaystackPayment(config);
+  const initializePayment = usePaystackPayment(config);
 
   // ========================================
   // HANDLE PAYMENT INITIALIZATION
@@ -159,9 +159,9 @@ export default function FundWallet({ isOpen, onClose }) {
       // Step 2: Update config with reference
       config.reference = reference;
 
-      // Step 3: Open Paystack modal
+      // Step 3: Open Paystack modal (onSuccess, onClose)
       setPaymentInitiated(true);
-      initializePayment(onPaymentSuccess, onPaymentError, onPaymentClose);
+      initializePayment(onPaymentSuccess, onPaymentClose);
 
     } catch (err) {
       console.error("Payment initialization error:", err);
