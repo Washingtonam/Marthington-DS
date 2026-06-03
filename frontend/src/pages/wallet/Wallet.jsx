@@ -1,71 +1,92 @@
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
-import { Wallet2, Upload, ArrowRight, Copy, CheckCircle2, Loader2 } from "lucide-react";
+import { Wallet2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { usePaystackPayment } from "react-paystack"; // Added
+import { usePaystackPayment } from "react-paystack";
 
 export default function Wallet() {
   const { user, setBalance } = useUser();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
 
-  // manual bank transfer removed — payments handled via Paystack webhook
+  // Paystack config (updated dynamically)
+  const [paystackConfig, setPaystackConfig] = useState({
+    email: user?.email || "",
+    amount: 0,
+    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+    reference: "",
+  });
 
-  // Paystack Configuration
-  const initializePayment = async () => {
-    if (!amount || Number(amount) < 100) return alert(`Minimum deposit is ₦100`);
-    
-    setLoading(true);
-    try {
-      const { data } = await api.post("/api/payments/init", { amount: Number(amount) });
-      return {
-        reference: data.reference,
-        amount: Number(amount) * 100, // Paystack uses Kobo
-        email: user.email,
-        publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
-      };
-    } catch (err) {
-      alert("Failed to initialize payment");
-      setLoading(false);
-      return null;
-    }
-  };
+  // Initialize Paystack hook with config
+  const initializePayment = usePaystackPayment(paystackConfig);
 
-  const onSuccess = (reference) => {
+  // Success callback: wallet updated by webhook, refresh and close
+  const onPaymentSuccess = useCallback((reference) => {
+    console.log("✅ Payment successful:", reference);
     setLoading(false);
     alert("✅ Payment successful! Your wallet will update automatically.");
-    // Force a balance refresh
-    api.get("/api/users/wallet").then(res => setBalance(res.data.walletBalance));
-  };
+    
+    // Refresh balance (webhook has already credited)
+    api.get("/api/users/wallet").then(res => {
+      setBalance(res.data.walletBalance);
+      setAmount("");
+    });
+  }, [setBalance]);
 
-  const onClose = () => setLoading(false);
+  // Close callback: reset loading state
+  const onPaymentClose = useCallback(() => {
+    console.log("User closed Paystack modal");
+    setLoading(false);
+  }, []);
 
-  const PaystackHook = () => {
-    const [config, setConfig] = useState(null);
-    const initializePaystack = usePaystackPayment(config || {});
+  // Handle "Pay" button click
+  const handlePayClick = async () => {
+    const numAmount = Number(amount);
 
-    // When `config` is set, the hook returns a new `initializePaystack` bound to it.
-    useEffect(() => {
-      if (config) {
-        initializePaystack(onSuccess, onClose);
+    if (!numAmount || numAmount < 100) {
+      alert("Minimum deposit is ₦100");
+      return;
+    }
+
+    if (!user?.email) {
+      alert("Please log in to fund your wallet");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      console.log("📤 Initiating payment with backend...");
+      // Step 1: Call backend to create transaction
+      const { data } = await api.post("/api/payments/init", { amount: numAmount });
+      
+      if (!data.reference) {
+        throw new Error("Backend did not return payment reference");
       }
-    }, [config]);
 
-    const trigger = async () => {
-      const paymentData = await initializePayment();
-      if (paymentData) {
-        setConfig(paymentData);
-      }
-    };
+      console.log("✅ Backend returned reference:", data.reference);
 
-    return (
-      <button onClick={trigger} disabled={loading} className="mt-6 w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-700">
-        {loading ? <Loader2 className="animate-spin" /> : "Pay with Paystack"}
-      </button>
-    );
+      // Step 2: Update Paystack config with backend reference
+      setPaystackConfig({
+        email: user.email,
+        amount: numAmount * 100, // Paystack uses kobo
+        publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+        reference: data.reference,
+      });
+
+      // Step 3: Trigger Paystack modal (happens on next render via useEffect-like mechanism)
+      // The hook will use the updated config
+      setTimeout(() => {
+        initializePayment(onPaymentSuccess, onPaymentClose);
+      }, 100);
+
+    } catch (err) {
+      console.error("❌ Payment initialization failed:", err);
+      alert(`Error: ${err.response?.data?.message || err.message || "Payment initialization failed"}`);
+      setLoading(false);
+    }
   };
 
   return (
@@ -90,21 +111,44 @@ export default function Wallet() {
             placeholder="Enter amount (₦)"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full p-4 rounded-2xl border mb-6 bg-gray-50 dark:bg-gray-800"
+            disabled={loading}
+            className="w-full p-4 rounded-2xl border mb-6 bg-gray-50 dark:bg-gray-800 disabled:opacity-50"
           />
 
-          <PaystackHook />
+          <button
+            onClick={handlePayClick}
+            disabled={loading || !amount}
+            className="mt-6 w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin" size={20} />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Wallet2 size={20} />
+                Pay with Paystack
+              </>
+            )}
+          </button>
 
           <div className="mt-8 pt-8 border-t">
-            <h3 className="font-bold mb-4">Funding Details</h3>
-            <p className="text-sm text-gray-500">All automated funding is handled via Paystack and credited automatically after confirmation.</p>
+            <h3 className="font-bold mb-4">How It Works</h3>
+            <ul className="text-sm text-gray-600 space-y-2">
+              <li>✓ Enter amount and click "Pay with Paystack"</li>
+              <li>✓ Complete payment in the Paystack modal</li>
+              <li>✓ Your wallet updates automatically upon confirmation</li>
+            </ul>
           </div>
         </div>
 
         <div className="space-y-6">
           <div className="bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
-            <h3 className="font-bold">Automated Funding</h3>
-            <p className="text-gray-500">Payments via Paystack are credited to your balance instantly upon confirmation.</p>
+            <h3 className="font-bold">💡 Automated Funding</h3>
+            <p className="text-gray-500">
+              All payments via Paystack are processed securely and credited to your wallet instantly after confirmation. No additional steps required.
+            </p>
           </div>
         </div>
       </div>
