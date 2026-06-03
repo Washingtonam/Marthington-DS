@@ -22,10 +22,13 @@ router.get("/balance", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    const walletBalanceKobo = user.walletBalanceKobo || 0;
+    const walletBalance = Number((walletBalanceKobo / 100).toFixed(2));
+
     return res.json({
       units: user.units || 0,
-      walletBalance: user.walletBalance || 0,
-      walletBalanceKobo: user.walletBalanceKobo || 0,
+      walletBalance,
+      walletBalanceKobo,
       balance: user.balance || 0,
     });
   } catch (error) {
@@ -44,10 +47,13 @@ router.get("/wallet", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    const walletBalanceKobo = user.walletBalanceKobo || 0;
+    const walletBalance = Number((walletBalanceKobo / 100).toFixed(2));
+
     return res.json({
       units: user.units || 0,
-      walletBalance: user.walletBalance || 0,
-      walletBalanceKobo: user.walletBalanceKobo || 0,
+      walletBalance,
+      walletBalanceKobo,
       balance: user.balance || 0,
     });
   } catch (error) {

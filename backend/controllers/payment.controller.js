@@ -191,6 +191,7 @@ const handlePaystackWebhook = async (req, res) => {
       {
         $inc: {
           walletBalanceKobo: amountKobo,
+          walletBalance: amountKobo / 100,
         },
       },
       { returnDocument: 'after' }
