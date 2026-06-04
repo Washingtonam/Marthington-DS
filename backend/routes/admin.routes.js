@@ -818,11 +818,7 @@ router.post("/adjust-funds", isAdmin, async (req, res) => {
   }
 });
 
-router.post("/user/:id/adjust-balance", isAdmin, async (req, res) => {
-    console.error("UNITS ERROR:", err);
-    res.status(500).json({ message: "Error mutating targeted allocation balance value arrays" });
-  }
-});
+// Note: previously there was a malformed /user/:id/adjust-balance route here. Removed stray block.
 
 // =========================================================================
 // 💰 UNIFIED CORE PRICING MATRIX CONFIGURATION MANAGEMENT
