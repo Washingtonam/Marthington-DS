@@ -491,6 +491,109 @@ exports.updateUnits = async (req, res) => {
   }
 };
 
+// Admin fund adjustment: atomically updates wallet balance and creates transaction ledger entry
+exports.adjustWalletBalance = async (req, res) => {
+  try {
+    const { userId, amount, action, note } = req.body;
+    const adminEmail = req.user.email;
+    
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID format." });
+    }
+
+    const amountKobo = Math.round((Number(amount) || 0) * 100);
+    if (amountKobo <= 0) {
+      return res.status(400).json({ message: "Amount must be greater than zero." });
+    }
+
+    if (!["add", "deduct"].includes(action)) {
+      return res.status(400).json({ message: "Action must be 'add' or 'deduct'." });
+    }
+
+    // Fetch user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (user.role === "super_admin") {
+      return res.status(400).json({ message: "Cannot adjust super admin balance." });
+    }
+
+    // Check balance for deduction
+    if (action === "deduct" && (user.walletBalanceKobo || 0) < amountKobo) {
+      return res.status(400).json({ message: "Insufficient balance to deduct." });
+    }
+
+    const balanceBefore = user.walletBalanceKobo || 0;
+    const incrementAmount = action === "add" ? amountKobo : -amountKobo;
+
+    // ATOMIC: Update wallet balance
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $inc: {
+          walletBalanceKobo: incrementAmount,
+          walletBalance: incrementAmount / 100,
+        },
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!updatedUser) {
+      return res.status(500).json({ message: "Failed to update user wallet." });
+    }
+
+    const balanceAfter = updatedUser.walletBalanceKobo;
+
+    // Create transaction ledger entry
+    const transactionType = action === "add" ? "credit" : "debit";
+    const transaction = new Transaction({
+      userId,
+      type: `admin_${transactionType}`,
+      amount: amount,
+      amountKobo,
+      status: "success",
+      description: `Admin ${action} by ${adminEmail}: ${note || "Manual adjustment"}`,
+      reference: `ADMIN_${action.toUpperCase()}_${Date.now()}`,
+    });
+
+    await transaction.save();
+
+    // Create audit log
+    try {
+      await AuditLog.create({
+        action: `ADJUST_WALLET_${action.toUpperCase()}`,
+        performedBy: adminEmail,
+        userId,
+        amount,
+        balanceBefore: balanceBefore / 100,
+        balanceAfter: balanceAfter / 100,
+        note: `Admin wallet adjustment: ${action} ₦${amount} | ${note || "No note"}`,
+      });
+    } catch (auditErr) {
+      console.warn("Audit log creation failed:", auditErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: `Wallet ${action === "add" ? "credited" : "debited"} successfully.`,
+      data: {
+        userId,
+        email: updatedUser.email,
+        balanceBefore: balanceBefore / 100,
+        balanceAfter: balanceAfter / 100,
+        adjustedAmount: amount,
+        action,
+        transactionId: transaction._id,
+      },
+    });
+  } catch (error) {
+    console.error("🔥 ADJUST WALLET BALANCE ERROR:", error);
+    res.status(500).json({ message: "Failed to adjust wallet balance.", error: error.message });
+  }
+};
+
 exports.updatePricing = async (req, res) => {
   try {
     let pricing = await Pricing.findOne();

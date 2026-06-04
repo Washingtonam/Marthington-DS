@@ -1,422 +1,562 @@
-import { useEffect, useState } from "react";
-import api from "../../lib/axios"; // Ensure this path points correctly to your axios instance
+import { useState, useEffect } from "react";
+import { useUser } from "../../context/UserContext";
+import api from "../../lib/axios";
 import {
-  Search,
-  Users,
-  Shield,
-  ShieldCheck,
-  Coins,
   Trash2,
-  UserX,
-  UserCheck,
-  Eye,
-  Activity,
-  X,
+  Shield,
+  ShieldOff,
+  Plus,
+  Minus,
+  Search,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react";
 
 export default function AdminUsers() {
+  const { user: currentUser } = useUser();
+  const isSuperAdmin = currentUser?.role === "super_admin";
+
+  // State management
   const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState("");
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalBalance: 0,
+  });
+  const [searchEmail, setSearchEmail] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUserCount, setTotalUserCount] = useState(0);
+
+  // Modal states
   const [selectedUser, setSelectedUser] = useState(null);
-  const [userActivity, setUserActivity] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [showFundModal, setShowFundModal] = useState(false);
+  const [fundAmount, setFundAmount] = useState("");
+  const [fundAction, setFundAction] = useState("add");
+  const [fundNote, setFundNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState({ type: "", text: "" });
 
-  // Fallback string directly prevents empty string/null header drops
-  const currentUserEmail = localStorage.getItem("email") || (import.meta.env.VITE_SUPER_ADMIN_EMAIL || "admin@xcombinator.com");
-
-  const headers = {
-    email: currentUserEmail,
-  };
-
-  // =========================
-  // API USERS
-  // =========================
-  const fetchUsers = async () => {
+  // Fetch users with pagination and search
+  const fetchUsers = async (pageNum = 1, email = "") => {
     setLoading(true);
     try {
-      const res = await api.get("/api/admin/users", { headers });
-      const data = res.data?.data || res.data || [];
-      setUsers(data);
-    } catch (err) {
-      console.error("🔥 FETCH USERS ERROR:", err.response?.data || err.message);
+      const params = {
+        page: pageNum,
+        limit: pageSize,
+      };
+      if (email.trim()) {
+        params.search = email.trim();
+      }
+
+      const response = await api.get("/api/admin/users", { params });
+      setUsers(response.data.data || []);
+      setTotalUserCount(response.data.pagination.total);
+      setTotalPages(response.data.pagination.pages);
+      setPage(pageNum);
+    } catch (error) {
+      console.error("❌ Fetch users error:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || "Failed to fetch users",
+      });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  // =========================
-  // SEARCH
-  // =========================
-  const handleSearch = async () => {
-    if (!search) return fetchUsers();
-
+  // Fetch admin stats
+  const fetchStats = async () => {
     try {
-      const res = await api.get(`/api/admin/users?search=${search}`, { headers });
-      setUsers(res.data?.data || []);
-    } catch (err) {
-      console.error("🔥 SEARCH ERROR:", err.response?.data || err.message);
+      const response = await api.get("/api/admin/stats");
+      setStats({
+        totalUsers: response.data.totalUsers || 0,
+        activeUsers: response.data.activeUsers || 0,
+        totalBalance: response.data.totalBalance || 0,
+      });
+    } catch (error) {
+      console.error("❌ Fetch stats error:", error);
     }
   };
 
-  // =========================
-  // USER ACTIVITY
-  // =========================
-  const fetchUserActivity = async (id) => {
-    try {
-      const res = await api.get(`/api/admin/user/${id}`, { headers });
-      setSelectedUser(res.data.user);
-      setUserActivity(res.data.transactions);
-    } catch (err) {
-      console.error("🔥 ACTIVITY FETCH ERROR:", err.response?.data || err.message);
-    }
-  };
-
-  // =========================
-  // ROLE CONTROL
-  // =========================
-  const makeAdmin = async (id) => {
-    try {
-      await api.put(`/api/admin/user/${id}/make-admin`, {}, { headers });
-      fetchUsers();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const removeAdmin = async (id) => {
-    try {
-      await api.put(`/api/admin/user/${id}/remove-admin`, {}, { headers });
-      fetchUsers();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // =========================
-  // STATUS
-  // =========================
-  const suspendUser = async (id) => {
-    try {
-      await api.put(`/api/admin/user/${id}/suspend`, {}, { headers });
-      fetchUsers();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const activateUser = async (id) => {
-    try {
-      await api.put(`/api/admin/user/${id}/activate`, {}, { headers });
-      fetchUsers();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // =========================
-  // DELETE
-  // =========================
-  const deleteUser = async (id) => {
-    if (!window.confirm("Delete this user?")) return;
-    try {
-      await api.delete(`/api/admin/user/${id}`, { headers });
-      fetchUsers();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // =========================
-  // UNITS
-  // =========================
-  const addUnits = async (id) => {
-    const units = prompt("Units to add:");
-    if (!units) return;
-
-    try {
-      await api.post(`/api/admin/user/${id}/units`, {
-        units: Number(units),
-        action: "add",
-      }, { headers });
-      fetchUsers();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const deductUnits = async (id) => {
-    const units = prompt("Units to deduct:");
-    if (!units) return;
-
-    try {
-      await api.post(`/api/admin/user/${id}/units`, {
-        units: Number(units),
-        action: "deduct",
-      }, { headers });
-      fetchUsers();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
+  // Initial load
   useEffect(() => {
-    fetchUsers();
+    fetchUsers(1, "");
+    fetchStats();
   }, []);
 
-  const isSuperAdmin = currentUserEmail === "washingtonamedu@gmail.com";
+  // Handle search
+  const handleSearch = () => {
+    setPage(1);
+    fetchUsers(1, searchEmail);
+  };
+
+  // Handle fund adjustment
+  const handleAdjustFunds = async () => {
+    if (!selectedUser || !fundAmount || parseFloat(fundAmount) <= 0) {
+      setMessage({ type: "error", text: "Please enter a valid amount." });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await api.post("/api/admin/adjust-funds", {
+        userId: selectedUser._id,
+        amount: parseFloat(fundAmount),
+        action: fundAction,
+        note: fundNote || "Manual adjustment",
+      });
+
+      setMessage({ type: "success", text: response.data.message });
+      setShowFundModal(false);
+      setFundAmount("");
+      setFundNote("");
+
+      // Refresh user list and stats
+      await fetchUsers(page, searchEmail);
+      await fetchStats();
+    } catch (error) {
+      console.error("❌ Fund adjustment error:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || "Failed to adjust funds",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle suspend user
+  const handleSuspend = async (userId) => {
+    if (!window.confirm("Are you sure you want to suspend this user?")) return;
+
+    try {
+      await api.put(`/api/admin/user/${userId}/suspend`);
+      setMessage({ type: "success", text: "User suspended successfully" });
+      await fetchUsers(page, searchEmail);
+    } catch (error) {
+      console.error("❌ Suspend error:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || "Failed to suspend user",
+      });
+    }
+  };
+
+  // Handle activate user
+  const handleActivate = async (userId) => {
+    try {
+      await api.put(`/api/admin/user/${userId}/activate`);
+      setMessage({ type: "success", text: "User activated successfully" });
+      await fetchUsers(page, searchEmail);
+    } catch (error) {
+      console.error("❌ Activate error:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || "Failed to activate user",
+      });
+    }
+  };
+
+  // Handle promote to admin
+  const handlePromote = async (userId) => {
+    if (!isSuperAdmin) {
+      setMessage({ type: "error", text: "Only super admins can promote users" });
+      return;
+    }
+
+    try {
+      await api.put(`/api/admin/user/${userId}/make-admin`);
+      setMessage({ type: "success", text: "User promoted to admin" });
+      await fetchUsers(page, searchEmail);
+    } catch (error) {
+      console.error("❌ Promote error:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || "Failed to promote user",
+      });
+    }
+  };
+
+  // Handle demote from admin
+  const handleDemote = async (userId) => {
+    if (!isSuperAdmin) {
+      setMessage({ type: "error", text: "Only super admins can demote users" });
+      return;
+    }
+
+    try {
+      await api.put(`/api/admin/user/${userId}/remove-admin`);
+      setMessage({ type: "success", text: "User demoted to regular user" });
+      await fetchUsers(page, searchEmail);
+    } catch (error) {
+      console.error("❌ Demote error:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || "Failed to demote user",
+      });
+    }
+  };
+
+  // Handle delete user
+  const handleDelete = async (userId) => {
+    if (!isSuperAdmin) {
+      setMessage({ type: "error", text: "Only super admins can delete users" });
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Are you sure? This action cannot be undone. All user data will be deleted."
+      )
+    )
+      return;
+
+    try {
+      await api.delete(`/api/admin/user/${userId}`);
+      setMessage({ type: "success", text: "User deleted successfully" });
+      await fetchUsers(page, searchEmail);
+      await fetchStats();
+    } catch (error) {
+      console.error("❌ Delete error:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || "Failed to delete user",
+      });
+    }
+  };
+
+  const openFundModal = (user) => {
+    setSelectedUser(user);
+    setShowFundModal(true);
+    setFundAmount("");
+    setFundAction("add");
+    setFundNote("");
+  };
+
 
   return (
-    <div className="max-w-7xl mx-auto px-4 pb-20">
-      {/* HERO */}
-      <div className="bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 rounded-3xl p-8 text-white shadow-2xl mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <ShieldCheck size={20} />
-              <span className="uppercase tracking-widest text-sm opacity-80">
-                USER MANAGEMENT
-              </span>
-            </div>
-            <h1 className="text-3xl md:text-5xl font-bold mb-3">
-              Control Platform Users
-            </h1>
-            <p className="text-blue-100 max-w-2xl">
-              Manage access, roles, units, account status, and user activity from one centralized dashboard.
-            </p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 border border-white/10 min-w-[250px]">
-            <p className="text-sm text-blue-100 mb-2">Total Registered Users</p>
-            <h2 className="text-5xl font-bold">{users.length}</h2>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-white mb-2">User Management</h1>
+        <p className="text-slate-400">Manage users, adjust balances, and control access</p>
+      </div>
+
+      {/* Message Alert */}
+      {message.text && (
+        <div
+          className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
+            message.type === "success"
+              ? "bg-green-900/30 border border-green-600 text-green-200"
+              : "bg-red-900/30 border border-red-600 text-red-200"
+          }`}
+        >
+          {message.type === "success" ? (
+            <CheckCircle size={20} />
+          ) : (
+            <AlertCircle size={20} />
+          )}
+          {message.text}
+        </div>
+      )}
+
+      {/* Stats Header */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+          <p className="text-slate-400 text-sm mb-1">Total Users</p>
+          <p className="text-3xl font-bold text-white">{stats.totalUsers}</p>
+        </div>
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+          <p className="text-slate-400 text-sm mb-1">Active Users</p>
+          <p className="text-3xl font-bold text-green-400">{stats.activeUsers}</p>
+        </div>
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+          <p className="text-slate-400 text-sm mb-1">Total Platform Balance</p>
+          <p className="text-3xl font-bold text-blue-400">
+            ₦{stats.totalBalance.toLocaleString("en-NG", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </p>
         </div>
       </div>
 
-      {/* SEARCH */}
-      <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-5 mb-8">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full border dark:border-gray-700 bg-transparent pl-12 pr-4 py-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
-            />
-          </div>
+      {/* Search Bar */}
+      <div className="mb-8 flex gap-3">
+        <div className="flex-1 flex gap-3">
+          <input
+            type="email"
+            placeholder="Search by email..."
+            value={searchEmail}
+            onChange={(e) => setSearchEmail(e.target.value)}
+            onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+            className="flex-1 px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+          />
           <button
             onClick={handleSearch}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 rounded-2xl font-semibold transition"
+            disabled={loading}
+            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 rounded-lg text-white font-medium flex items-center gap-2 transition"
           >
+            <Search size={18} />
             Search
           </button>
         </div>
       </div>
 
-      {/* LOADING */}
-      {loading && (
-        <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl p-10 text-center">
-          <p className="text-gray-500 dark:text-gray-400">Loading users...</p>
+      {/* Users Grid */}
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="text-slate-400">Loading users...</div>
         </div>
+      ) : users.length === 0 ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="text-slate-400">No users found</div>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+            {users.map((u) => (
+              <div
+                key={u._id}
+                className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition"
+              >
+                {/* User Header */}
+                <div className="mb-4">
+                  <p className="text-sm text-slate-400 mb-1">Email</p>
+                  <p className="text-white font-semibold break-words">{u.email}</p>
+                </div>
+
+                {/* Role and Status Badges */}
+                <div className="flex gap-2 mb-4">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      u.role === "super_admin"
+                        ? "bg-red-600/30 text-red-200"
+                        : u.role === "admin"
+                        ? "bg-purple-600/30 text-purple-200"
+                        : "bg-blue-600/30 text-blue-200"
+                    }`}
+                  >
+                    {u.role || "user"}
+                  </span>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      u.status === "active"
+                        ? "bg-green-600/30 text-green-200"
+                        : "bg-orange-600/30 text-orange-200"
+                    }`}
+                  >
+                    {u.status || "active"}
+                  </span>
+                </div>
+
+                {/* Balance */}
+                <div className="mb-6 p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-xs text-slate-400 mb-1">Wallet Balance</p>
+                  <p className="text-xl font-bold text-green-400">
+                    ₦{(u.walletBalanceKobo / 100 || 0).toLocaleString("en-NG", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-2">
+                  {/* Fund Adjustment */}
+                  <button
+                    onClick={() => openFundModal(u)}
+                    className="w-full px-3 py-2 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+                  >
+                    <Plus size={16} />
+                    Add/Remove Funds
+                  </button>
+
+                  {/* Suspend/Activate */}
+                  {u.status === "active" ? (
+                    <button
+                      onClick={() => handleSuspend(u._id)}
+                      className="w-full px-3 py-2 bg-orange-600/30 hover:bg-orange-600/50 text-orange-200 rounded-lg text-sm font-medium transition"
+                    >
+                      Suspend
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleActivate(u._id)}
+                      className="w-full px-3 py-2 bg-green-600/30 hover:bg-green-600/50 text-green-200 rounded-lg text-sm font-medium transition"
+                    >
+                      Activate
+                    </button>
+                  )}
+
+                  {/* Role Management (Super Admin Only) */}
+                  {isSuperAdmin && u.role !== "super_admin" && (
+                    <>
+                      {u.role !== "admin" ? (
+                        <button
+                          onClick={() => handlePromote(u._id)}
+                          className="w-full px-3 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+                        >
+                          <Shield size={16} />
+                          Make Admin
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleDemote(u._id)}
+                          className="w-full px-3 py-2 bg-slate-600/30 hover:bg-slate-600/50 text-slate-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+                        >
+                          <ShieldOff size={16} />
+                          Remove Admin
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {/* Delete User (Super Admin Only) */}
+                  {isSuperAdmin && u.role !== "super_admin" && (
+                    <button
+                      onClick={() => handleDelete(u._id)}
+                      className="w-full px-3 py-2 bg-red-600/30 hover:bg-red-600/50 text-red-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+                    >
+                      <Trash2 size={16} />
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between">
+            <div className="text-slate-400 text-sm">
+              Showing {users.length} of {totalUserCount} users (Page {page} of {totalPages})
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => fetchUsers(page - 1, searchEmail)}
+                disabled={page <= 1 || loading}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg transition"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => fetchUsers(page + 1, searchEmail)}
+                disabled={page >= totalPages || loading}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg transition"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* GRID */}
-      {!loading && (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {users.map((u) => (
-            <div
-              key={u._id}
-              className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden"
-            >
-              {/* TOP */}
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="bg-white/20 p-2 rounded-xl">
-                        <Users size={18} />
-                      </div>
-                      <span className={`text-xs px-3 py-1 rounded-full ${
-                        u.role === "super_admin"
-                          ? "bg-black text-white"
-                          : u.role === "admin"
-                          ? "bg-white text-blue-700"
-                          : "bg-white/20"
-                      }`}>
-                        {u.role}
-                      </span>
-                    </div>
-                    <h2
-                      onClick={() => fetchUserActivity(u._id)}
-                      className="font-semibold text-sm break-all cursor-pointer hover:underline"
-                    >
-                      {u.email}
-                    </h2>
-                  </div>
+      {/* Fund Adjustment Modal */}
+      {showFundModal && selectedUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-8 max-w-md w-full border border-slate-700">
+            <h3 className="text-2xl font-bold text-white mb-6">
+              Adjust {selectedUser.email}'s Wallet
+            </h3>
+
+            <div className="space-y-4 mb-6">
+              {/* Current Balance */}
+              <div className="p-3 bg-slate-900/50 rounded-lg">
+                <p className="text-xs text-slate-400">Current Balance</p>
+                <p className="text-xl font-bold text-blue-400">
+                  ₦{(selectedUser.walletBalanceKobo / 100 || 0).toLocaleString("en-NG", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </p>
+              </div>
+
+              {/* Action Toggle */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Action
+                </label>
+                <div className="flex gap-2">
                   <button
-                    onClick={() => fetchUserActivity(u._id)}
-                    className="bg-white/20 hover:bg-white/30 p-2 rounded-xl transition"
+                    onClick={() => setFundAction("add")}
+                    className={`flex-1 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
+                      fundAction === "add"
+                        ? "bg-green-600 text-white"
+                        : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                    }`}
                   >
-                    <Eye size={18} />
+                    <Plus size={18} />
+                    Add
+                  </button>
+                  <button
+                    onClick={() => setFundAction("deduct")}
+                    className={`flex-1 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
+                      fundAction === "deduct"
+                        ? "bg-red-600 text-white"
+                        : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                    }`}
+                  >
+                    <Minus size={18} />
+                    Remove
                   </button>
                 </div>
               </div>
 
-              {/* BODY */}
-              <div className="p-5">
-                <div className="space-y-3 mb-5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Units</span>
-                    <span className="font-bold dark:text-white">{u.units || 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
-                    <span className={`text-xs px-3 py-1 rounded-full ${
-                      u.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                    }`}>
-                      {u.status}
-                    </span>
-                  </div>
-                </div>
-
-                {/* ACTIONS */}
-                {u.role !== "super_admin" && (
-                  <div className="grid grid-cols-2 gap-3">
-                    {u.status === "active" ? (
-                      <button
-                        onClick={() => suspendUser(u._id)}
-                        className="bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-2xl text-sm font-medium transition flex items-center justify-center gap-2"
-                      >
-                        <UserX size={16} /> Suspend
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => activateUser(u._id)}
-                        className="bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl text-sm font-medium transition flex items-center justify-center gap-2"
-                      >
-                        <UserCheck size={16} /> Activate
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => addUnits(u._id)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl text-sm font-medium transition flex items-center justify-center gap-2"
-                    >
-                      <Coins size={16} /> Add
-                    </button>
-
-                    <button
-                      onClick={() => deductUnits(u._id)}
-                      className="bg-gray-900 hover:bg-black text-white py-3 rounded-2xl text-sm font-medium transition flex items-center justify-center gap-2"
-                    >
-                      <Coins size={16} /> Deduct
-                    </button>
-
-                    {isSuperAdmin && (
-                      <>
-                        {u.role === "user" ? (
-                          <button
-                            onClick={() => makeAdmin(u._id)}
-                            className="bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-2xl text-sm font-medium transition flex items-center justify-center gap-2"
-                          >
-                            <Shield size={16} /> Admin
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => removeAdmin(u._id)}
-                            className="bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-2xl text-sm font-medium transition flex items-center justify-center gap-2"
-                          >
-                            <Shield size={16} /> Remove
-                          </button>
-                        )}
-                      </>
-                    )}
-
-                    {isSuperAdmin && (
-                      <button
-                        onClick={() => deleteUser(u._id)}
-                        className="bg-red-600 hover:bg-red-700 text-white py-3 rounded-2xl text-sm font-medium transition flex items-center justify-center gap-2 col-span-2"
-                      >
-                        <Trash2 size={16} /> Delete User
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* MODAL */}
-      {selectedUser && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
-          <div className="bg-white dark:bg-[#161616] rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white flex justify-between items-center">
+              {/* Amount Input */}
               <div>
-                <h2 className="text-2xl font-bold break-all">{selectedUser.email}</h2>
-                <p className="text-blue-100 text-sm mt-1">User activity & transactions</p>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Amount (₦)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={fundAmount}
+                  onChange={(e) => setFundAmount(e.target.value)}
+                  placeholder="Enter amount in Naira"
+                  className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                />
               </div>
-              <button
-                onClick={() => setSelectedUser(null)}
-                className="bg-white/20 hover:bg-white/30 p-3 rounded-2xl transition"
-              >
-                <X size={20} />
-              </button>
+
+              {/* Note Input */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Reason (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={fundNote}
+                  onChange={(e) => setFundNote(e.target.value)}
+                  placeholder="e.g., Promotional credit, Refund"
+                  className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                />
+              </div>
             </div>
 
-            <div className="p-6">
-              <div className="grid md:grid-cols-3 gap-4 mb-6">
-                <div className="bg-gray-100 dark:bg-[#202020] p-5 rounded-2xl">
-                  <p className="text-sm text-gray-500 mb-2">Role</p>
-                  <h3 className="font-bold dark:text-white">{selectedUser.role}</h3>
-                </div>
-                <div className="bg-gray-100 dark:bg-[#202020] p-5 rounded-2xl">
-                  <p className="text-sm text-gray-500 mb-2">Units</p>
-                  <h3 className="font-bold dark:text-white">{selectedUser.units || 0}</h3>
-                </div>
-                <div className="bg-gray-100 dark:bg-[#202020] p-5 rounded-2xl">
-                  <p className="text-sm text-gray-500 mb-2">Status</p>
-                  <h3 className="font-bold dark:text-white">{selectedUser.status}</h3>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 mb-5">
-                <Activity size={18} className="text-blue-600" />
-                <h3 className="font-bold text-lg dark:text-white">Recent Activity</h3>
-              </div>
-
-              <div className="space-y-4">
-                {userActivity.length === 0 && (
-                  <div className="bg-gray-100 dark:bg-[#202020] rounded-2xl p-6 text-center text-gray-500">
-                    No activity found
-                  </div>
-                )}
-
-                {userActivity.map((tx) => (
-                  <div key={tx._id} className="bg-gray-100 dark:bg-[#202020] rounded-2xl p-5">
-                    <div className="flex justify-between items-start gap-4">
-                      <div>
-                        <h4 className="font-bold dark:text-white">{tx.type}</h4>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {new Date(tx.createdAt).toLocaleString()}
-                        </p>
-                      </div>
-                      <span className={`text-xs px-3 py-1 rounded-full ${
-                        tx.status === "success" || tx.status === "approved"
-                          ? "bg-green-100 text-green-700"
-                          : tx.status === "pending"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-red-100 text-red-700"
-                      }`}>
-                        {tx.status}
-                      </span>
-                    </div>
-                    <div className="mt-4 text-sm text-gray-600 dark:text-gray-300">
-                      <p>Units: <b>{tx.units || 0}</b></p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {/* Modal Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowFundModal(false)}
+                disabled={submitting}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 text-white rounded-lg font-medium transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAdjustFunds}
+                disabled={submitting}
+                className={`flex-1 px-4 py-2 rounded-lg font-medium transition text-white ${
+                  fundAction === "add"
+                    ? "bg-green-600 hover:bg-green-700 disabled:bg-slate-700"
+                    : "bg-red-600 hover:bg-red-700 disabled:bg-slate-700"
+                }`}
+              >
+                {submitting ? "Processing..." : fundAction === "add" ? "Add Funds" : "Remove Funds"}
+              </button>
             </div>
           </div>
         </div>
