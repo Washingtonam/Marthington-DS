@@ -13,6 +13,8 @@ export default function AdminRequests() {
   const [activeStatus, setActiveStatus] = useState("pending");
   const [requests, setRequests] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [modalStatus, setModalStatus] = useState("");
+  const [modalComment, setModalComment] = useState("");
   const [requesterRole, setRequesterRole] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("desc");
@@ -50,6 +52,13 @@ export default function AdminRequests() {
   };
 
   useEffect(() => { fetchRequests(); }, [page, activeStatus]);
+
+  useEffect(() => {
+    if (selected) {
+      setModalStatus(selected.status || "pending");
+      setModalComment("");
+    }
+  }, [selected]);
 
   const handleStatusUpdate = async (id, status) => {
     if (!id) return;
@@ -194,7 +203,6 @@ export default function AdminRequests() {
                 <p className="font-semibold">{selected.pipelineSource}</p>
               </div>
             </div>
-
             <div>
               <h3 className="font-bold mb-2">Form Data</h3>
               {selected.formData && Object.keys(selected.formData).length > 0 ? (
@@ -202,13 +210,63 @@ export default function AdminRequests() {
                   {Object.entries(selected.formData).map(([k, v]) => (
                     <div key={k} className="flex gap-4 items-start">
                       <div className="w-40 text-sm text-slate-500">{k}</div>
-                      <div className="flex-1 text-sm break-words">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</div>
+                      <div className="flex-1 text-sm break-words">{typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}</div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <p className="text-sm text-slate-500">No form data attached.</p>
               )}
+
+              <div className="mt-6">
+                <h3 className="font-bold mb-2">Admin Actions</h3>
+                <label className="text-sm">Status</label>
+                <select value={modalStatus} onChange={(e) => setModalStatus(e.target.value)} className="w-full p-3 rounded-xl border mt-2">
+                  <option value="pending">Pending</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="processing">Processing</option>
+                  <option value="approved">Approved</option>
+                  <option value="completed">Completed</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+
+                <label className="text-sm mt-4 block">Comment</label>
+                <textarea value={modalComment} onChange={(e) => setModalComment(e.target.value)} placeholder="Add internal or user-facing comment" className="w-full p-3 rounded-xl border mt-2 h-28" />
+
+                <div className="flex gap-2 mt-4">
+                  <button onClick={async () => {
+                    if (modalStatus === 'rejected' && (!modalComment || modalComment.trim().length < 3)) {
+                      return alert('Please provide a comment when rejecting a request.');
+                    }
+                    try {
+                      const { data } = await axios.put(`${API_BASE}/api/admin/status/${selected._id}`, { status: modalStatus, note: modalComment }, { headers: authHeaders });
+                      alert(data.message || 'Status updated');
+                      setSelected(data.data || data);
+                      fetchRequests();
+                    } catch (err) {
+                      console.error('Status update error:', err);
+                      alert(err.response?.data?.message || 'Failed to update status');
+                    }
+                  }} className="px-4 py-2 rounded-xl bg-blue-600 text-white">Update Status</button>
+                  <button onClick={() => setModalComment('')} className="px-4 py-2 rounded-xl bg-gray-100">Clear</button>
+                </div>
+
+                <div className="mt-6">
+                  <h4 className="font-semibold mb-2">Comment Thread</h4>
+                  {Array.isArray(selected.adminComments) && selected.adminComments.length > 0 ? (
+                    <div className="space-y-3 max-h-40 overflow-auto">
+                      {selected.adminComments.map((c, idx) => (
+                        <div key={idx} className="p-3 rounded-xl bg-slate-50">
+                          <div className="text-xs text-slate-500">{c.author} — {new Date(c.createdAt).toLocaleString()}</div>
+                          <div className="mt-1 text-sm">{c.comment}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">No comments yet.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

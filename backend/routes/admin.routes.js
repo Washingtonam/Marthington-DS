@@ -56,10 +56,10 @@ router.get("/requests", isAdmin, async (req, res) => {
     // Execute safe structural operations concurrently
     const [nimcRequests, cacRequests] = await Promise.all([
       ServiceRequest.find(filterQuery)
-        .populate("userId", "email firstName lastName phoneNumber")
+        .populate("userId", "email firstName lastName phoneNumber role")
         .lean(),
       CACRequest.find(filterQuery)
-        .populate("userId", "email firstName lastName phoneNumber")
+        .populate("userId", "email firstName lastName phoneNumber role")
         .lean()
     ]);
 
@@ -123,7 +123,7 @@ router.get("/stats", isAdmin, async (req, res) => {
 router.get("/nimc-requests", isAdmin, async (req, res) => {
   try {
     const requests = await ServiceRequest.find()
-      .populate("userId", "email firstName lastName phoneNumber")
+      .populate("userId", "email firstName lastName phoneNumber role")
       .sort({ createdAt: -1 })
       .lean();
     
@@ -138,7 +138,7 @@ router.get("/nimc-requests", isAdmin, async (req, res) => {
 router.get("/cac-requests", isAdmin, async (req, res) => {
   try {
     const requests = await CACRequest.find()
-      .populate("userId", "email firstName lastName phoneNumber")
+      .populate("userId", "email firstName lastName phoneNumber role")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -161,9 +161,9 @@ router.post("/requests/:id/status", isAdmin, async (req, res) => {
     }
 
     const normalizedAction = String(action || "").toLowerCase();
-    const allowedActions = ["approve", "reject", "flag"];
+    const allowedActions = ["approve", "reject", "flag", "in-progress", "complete"];
     if (!allowedActions.includes(normalizedAction)) {
-      return res.status(400).json({ success: false, message: "Invalid action. Allowed values are approve, reject, flag." });
+      return res.status(400).json({ success: false, message: "Invalid action. Allowed values are approve, reject, flag, in-progress, complete." });
     }
 
     const [serviceRecord, cacRecord] = await Promise.all([
@@ -192,6 +192,13 @@ router.post("/requests/:id/status", isAdmin, async (req, res) => {
       note: comment || `${adminEmail} set request status to ${newStatus}`,
       createdAt: new Date()
     });
+
+    // Push admin comment thread entry when a comment exists
+    if (comment && String(comment).trim().length > 0) {
+      if (!Array.isArray(record.adminComments)) record.adminComments = [];
+      record.adminComments.push({ comment, author: adminEmail, createdAt: new Date() });
+      record.markModified('adminComments');
+    }
 
     record.markModified("status");
     record.markModified("statusHistory");
@@ -257,6 +264,13 @@ router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
       createdAt: new Date()
     });
 
+    // attach admin comment when provided
+    if (note && String(note).trim().length > 0) {
+      if (!Array.isArray(record.adminComments)) record.adminComments = [];
+      record.adminComments.push({ comment: note, author: adminEmail, createdAt: new Date() });
+      record.markModified('adminComments');
+    }
+
     // Enforce modification flags for raw schemaless properties
     record.markModified("status");
     record.markModified("statusHistory");
@@ -316,6 +330,12 @@ router.put("/status/:id", isAdmin, async (req, res) => {
     record.status = normalizedStatus;
     if (!record.statusHistory || !Array.isArray(record.statusHistory)) record.statusHistory = [];
     record.statusHistory.push({ status: normalizedStatus, note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`, createdAt: new Date() });
+    // attach admin comment when provided
+    if (note && String(note).trim().length > 0) {
+      if (!Array.isArray(record.adminComments)) record.adminComments = [];
+      record.adminComments.push({ comment: note, author: adminEmail, createdAt: new Date() });
+      record.markModified('adminComments');
+    }
     record.markModified("status");
     record.markModified("statusHistory");
     await record.save();

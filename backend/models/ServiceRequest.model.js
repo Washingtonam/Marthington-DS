@@ -63,13 +63,21 @@ const ServiceRequestSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["pending", "processing", "approved", "completed", "rejected", "failed"],
+    enum: ["pending", "in-progress", "processing", "approved", "completed", "rejected", "failed"],
     default: "pending"
   },
   statusHistory: [
     {
       status: { type: String },
       note: { type: String },
+      createdAt: { type: Date, default: Date.now }
+    }
+  ]
+  ,
+  adminComments: [
+    {
+      comment: { type: String },
+      author: { type: String },
       createdAt: { type: Date, default: Date.now }
     }
   ]
