@@ -13,6 +13,7 @@ export default function AdminRequests() {
   const [activeStatus, setActiveStatus] = useState("pending");
   const [requests, setRequests] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [requesterRole, setRequesterRole] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("desc");
   const [page, setPage] = useState(1);
@@ -78,6 +79,10 @@ export default function AdminRequests() {
       return !isCac && (activeSubService === "All" || r.service?.toLowerCase() === activeSubService.toLowerCase());
     });
 
+    if (requesterRole && requesterRole !== "all") {
+      filtered = filtered.filter(r => (r.userId?.role || "user") === requesterRole);
+    }
+
     if (searchTerm) {
       const s = searchTerm.toLowerCase();
       filtered = filtered.filter(r => 
@@ -108,6 +113,20 @@ export default function AdminRequests() {
         ))}
       </div>
 
+      <div className="flex gap-3 items-center mb-6">
+        <label className="text-sm font-semibold">Requester:</label>
+        <select value={requesterRole} onChange={(e) => setRequesterRole(e.target.value)} className="px-3 py-2 rounded-xl border bg-white text-sm">
+          <option value="all">All</option>
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+          <option value="super_admin">Super Admin</option>
+        </select>
+        <div className="ml-4 flex-1 flex items-center bg-white rounded-xl p-2 border">
+          <Search className="mr-2" />
+          <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by email or NIN" className="w-full outline-none" />
+        </div>
+      </div>
+
       {activeTab === "nimc" && (
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {nimcSubServices.map(s => (
@@ -125,6 +144,7 @@ export default function AdminRequests() {
             <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${serviceColors[r.service] || "bg-gray-100"}`}>
               {r.service || "General"}
             </span>
+            <div className="mt-2 text-xs text-slate-500">Requested by: <span className="font-semibold">{r.userId?.role || 'user'}</span></div>
             <div className="mt-4 flex gap-2">
               <button onClick={() => setSelected(r)} className="bg-gray-900 text-white px-3 py-2 rounded-xl text-xs flex-1">Inspect</button>
               {activeStatus === "pending" && (
@@ -143,6 +163,56 @@ export default function AdminRequests() {
         <span className="font-bold">Page {page} of {pages}</span>
         <button disabled={page === pages} onClick={() => setPage(p => p + 1)} className="p-2 bg-gray-100 rounded-xl"><ChevronRight /></button>
       </div>
+      {selected && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-6">
+          <div className="w-full max-w-3xl bg-white dark:bg-[#0B1220] rounded-2xl p-6 shadow-lg overflow-auto max-h-[90vh]">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="text-xl font-bold">Request Details</h2>
+                <p className="text-sm text-slate-500">{selected.service} — {selected.pipelineSource?.toUpperCase() || ''}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setSelected(null)} className="px-3 py-2 rounded-xl bg-gray-100">Close</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div>
+                <p className="text-xs text-slate-500">Requester</p>
+                <p className="font-semibold">{selected.userId?.email} <span className="text-sm font-normal">({selected.userId?.role || 'user'})</span></p>
+                <p className="text-xs text-slate-500 mt-2">Status</p>
+                <p className="font-semibold">{selected.status}</p>
+                <p className="text-xs text-slate-500 mt-2">Submitted</p>
+                <p className="font-semibold">{new Date(selected.createdAt).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">NIN</p>
+                <p className="font-semibold">{selected.nin || 'N/A'}</p>
+                <p className="text-xs text-slate-500 mt-2">Amount</p>
+                <p className="font-semibold">{selected.amount ? `${selected.amount}` : '0'}</p>
+                <p className="text-xs text-slate-500 mt-2">Pipeline</p>
+                <p className="font-semibold">{selected.pipelineSource}</p>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-bold mb-2">Form Data</h3>
+              {selected.formData && Object.keys(selected.formData).length > 0 ? (
+                <div className="grid gap-2">
+                  {Object.entries(selected.formData).map(([k, v]) => (
+                    <div key={k} className="flex gap-4 items-start">
+                      <div className="w-40 text-sm text-slate-500">{k}</div>
+                      <div className="flex-1 text-sm break-words">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No form data attached.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

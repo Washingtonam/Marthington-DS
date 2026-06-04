@@ -36,10 +36,10 @@ exports.getRequests = async (req, res) => {
 
     const [nimcRequests, cacRequests] = await Promise.all([
       ServiceRequest.find(filterQuery)
-        .populate("userId", "email firstName lastName phoneNumber")
+        .populate("userId", "email firstName lastName phoneNumber role")
         .lean(),
       CACRequest.find(filterQuery)
-        .populate("userId", "email firstName lastName phoneNumber")
+        .populate("userId", "email firstName lastName phoneNumber role")
         .lean()
     ]);
 
