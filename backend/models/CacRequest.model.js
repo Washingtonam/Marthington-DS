@@ -61,9 +61,16 @@ const CacRequestSchema = new mongoose.Schema({
   status: { 
     type: String, 
     default: "pending", 
-    enum: ["pending", "processing", "completed", "rejected", "failed"] 
+    enum: ["pending", "in-progress", "processing", "approved", "completed", "rejected", "failed"] 
   },
   progressNotes: { type: String, default: "Awaiting administrative document review" },
+  adminComments: [
+    {
+      comment: { type: String },
+      author: { type: String },
+      createdAt: { type: Date, default: Date.now }
+    }
+  ],
 
   statusHistory: [
     {

@@ -22,13 +22,18 @@ export default function AdminRequests() {
   const [pages, setPages] = useState(1);
 
   const nimcSubServices = ["All", "Validation", "IP Clearance", "Modification", "Personalization", "Self-Service"];
+  const cacSubServices = ["All", "sole_proprietorship", "partnership", "limited_1m", "custom_ngo"];
 
   const serviceColors = {
     "Validation": "bg-blue-100 text-blue-800",
     "IP Clearance": "bg-purple-100 text-purple-800",
     "Modification": "bg-orange-100 text-orange-800",
     "Personalization": "bg-teal-100 text-teal-800",
-    "Self-Service": "bg-pink-100 text-pink-800"
+    "Self-Service": "bg-pink-100 text-pink-800",
+    "sole_proprietorship": "bg-slate-100 text-slate-800",
+    "partnership": "bg-amber-100 text-amber-800",
+    "limited_1m": "bg-lime-100 text-lime-800",
+    "custom_ngo": "bg-cyan-100 text-cyan-800"
   };
 
   const token = localStorage.getItem("token")?.replace(/['"]+/g, "") || "";
@@ -84,7 +89,9 @@ export default function AdminRequests() {
   const displayedRequests = useMemo(() => {
     let filtered = requests.filter(r => {
       const isCac = r.pipelineSource === "cac";
-      if (activeTab === "cac") return isCac;
+      if (activeTab === "cac") {
+        return isCac && (activeSubService === "All" || r.serviceType?.toLowerCase() === activeSubService.toLowerCase());
+      }
       return !isCac && (activeSubService === "All" || r.service?.toLowerCase() === activeSubService.toLowerCase());
     });
 
@@ -95,7 +102,11 @@ export default function AdminRequests() {
     if (searchTerm) {
       const s = searchTerm.toLowerCase();
       filtered = filtered.filter(r => 
-        (r.userId?.email?.toLowerCase().includes(s) || r.nin?.toLowerCase().includes(s))
+        r.userId?.email?.toLowerCase().includes(s) ||
+        r.nin?.toLowerCase().includes(s) ||
+        r.businessName1?.toLowerCase().includes(s) ||
+        r.serviceType?.toLowerCase().includes(s) ||
+        r.service?.toLowerCase().includes(s)
       );
     }
 
@@ -103,6 +114,28 @@ export default function AdminRequests() {
       sortOrder === "desc" ? new Date(b.createdAt) - new Date(a.createdAt) : new Date(a.createdAt) - new Date(b.createdAt)
     );
   }, [requests, activeTab, activeSubService, searchTerm, sortOrder]);
+
+  const getRequestTitle = (request) => {
+    if (request.pipelineSource === "cac") {
+      return request.serviceType ? request.serviceType.replace(/_/g, " ") : "CAC";
+    }
+    return request.service || "General";
+  };
+
+  const getRequestDetails = (request) => {
+    const hiddenKeys = ["_id", "__v", "userId", "createdAt", "updatedAt", "statusHistory", "adminComments", "formData", "pipelineSource"];
+    if (request.pipelineSource === "cac") {
+      return Object.entries(request)
+        .filter(([key]) => !hiddenKeys.includes(key))
+        .map(([key, value]) => ({ key, value }));
+    }
+    if (request.formData && Object.keys(request.formData).length > 0) {
+      return Object.entries(request.formData).map(([key, value]) => ({ key, value }));
+    }
+    return Object.entries(request)
+      .filter(([key]) => !hiddenKeys.includes(key))
+      .map(([key, value]) => ({ key, value }));
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -136,9 +169,9 @@ export default function AdminRequests() {
         </div>
       </div>
 
-      {activeTab === "nimc" && (
+      {(activeTab === "nimc" || activeTab === "cac") && (
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          {nimcSubServices.map(s => (
+          {(activeTab === "nimc" ? nimcSubServices : cacSubServices).map(s => (
             <button key={s} onClick={() => setActiveSubService(s)} className={`px-4 py-2 rounded-xl text-xs font-bold ${activeSubService === s ? "bg-gray-800 text-white" : "bg-white border"}`}>
               {s}
             </button>
@@ -150,10 +183,11 @@ export default function AdminRequests() {
         {displayedRequests.map(r => (
           <div key={r._id} className="bg-white p-6 rounded-3xl border shadow-sm">
             <h3 className="font-bold text-sm truncate">{r.userId?.email}</h3>
-            <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${serviceColors[r.service] || "bg-gray-100"}`}>
-              {r.service || "General"}
+            <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${serviceColors[r.service || r.serviceType] || "bg-gray-100"}`}>
+              {r.pipelineSource === "cac" ? (r.serviceType || "CAC") : (r.service || "General")}
             </span>
             <div className="mt-2 text-xs text-slate-500">Requested by: <span className="font-semibold">{r.userId?.role || 'user'}</span></div>
+            <div className="mt-2 text-xs text-slate-500">Category: <span className="font-semibold">{r.pipelineSource === "cac" ? "CAC" : "NIMC"}</span></div>
             <div className="mt-4 flex gap-2">
               <button onClick={() => setSelected(r)} className="bg-gray-900 text-white px-3 py-2 rounded-xl text-xs flex-1">Inspect</button>
               {activeStatus === "pending" && (
@@ -178,7 +212,7 @@ export default function AdminRequests() {
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h2 className="text-xl font-bold">Request Details</h2>
-                <p className="text-sm text-slate-500">{selected.service} — {selected.pipelineSource?.toUpperCase() || ''}</p>
+                <p className="text-sm text-slate-500">{getRequestTitle(selected)} — {selected.pipelineSource?.toUpperCase() || ''}</p>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setSelected(null)} className="px-3 py-2 rounded-xl bg-gray-100">Close</button>
@@ -195,27 +229,41 @@ export default function AdminRequests() {
                 <p className="font-semibold">{new Date(selected.createdAt).toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">NIN</p>
-                <p className="font-semibold">{selected.nin || 'N/A'}</p>
+                <p className="text-xs text-slate-500">Reference</p>
+                <p className="font-semibold">{selected.nin || selected.businessName1 || selected.serviceType || 'N/A'}</p>
                 <p className="text-xs text-slate-500 mt-2">Amount</p>
-                <p className="font-semibold">{selected.amount ? `${selected.amount}` : '0'}</p>
+                <p className="font-semibold">{selected.amount || selected.amountCharged || 0}</p>
                 <p className="text-xs text-slate-500 mt-2">Pipeline</p>
                 <p className="font-semibold">{selected.pipelineSource}</p>
               </div>
             </div>
             <div>
-              <h3 className="font-bold mb-2">Form Data</h3>
-              {selected.formData && Object.keys(selected.formData).length > 0 ? (
+              <h3 className="font-bold mb-2">Request Data</h3>
+              {getRequestDetails(selected).length > 0 ? (
                 <div className="grid gap-2">
-                  {Object.entries(selected.formData).map(([k, v]) => (
-                    <div key={k} className="flex gap-4 items-start">
-                      <div className="w-40 text-sm text-slate-500">{k}</div>
-                      <div className="flex-1 text-sm break-words">{typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}</div>
+                  {getRequestDetails(selected).map(({ key, value }) => (
+                    <div key={key} className="flex gap-4 items-start">
+                      <div className="w-40 text-sm text-slate-500">{key}</div>
+                      <div className="flex-1 text-sm break-words">{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}</div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">No form data attached.</p>
+                <p className="text-sm text-slate-500">No request data available.</p>
+              )}
+
+              {selected.formData && Object.keys(selected.formData).length > 0 && (
+                <div className="mt-6">
+                  <h4 className="font-semibold mb-2">Form Data</h4>
+                  <div className="grid gap-2">
+                    {Object.entries(selected.formData).map(([k, v]) => (
+                      <div key={k} className="flex gap-4 items-start">
+                        <div className="w-40 text-sm text-slate-500">{k}</div>
+                        <div className="flex-1 text-sm break-words">{typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
 
               <div className="mt-6">
