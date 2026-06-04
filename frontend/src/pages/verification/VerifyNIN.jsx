@@ -18,7 +18,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { formatNaira } from "../../lib/currency";
 
 export default function VerifyNIN() {
-  const { user, units, setUnits, walletBalance } = useUser();
+  const { user, walletBalance, setBalance } = useUser();
   const { error, success } = useToast();
   const navigate = useNavigate();
   
@@ -29,13 +29,13 @@ export default function VerifyNIN() {
   const [form, setForm] = useState({ firstname: "", surname: "", gender: "", birthdate: "" });
   const [touched, setTouched] = useState({ nin: false, phone: false, firstname: false, surname: false, gender: false, birthdate: false });
 
-  const unitsRequired = useMemo(() => 
-    ["phone", "demographic"].includes(method) ? 2 : 1, 
+  const unitsRequired = useMemo(() =>
+    ["phone", "demographic"].includes(method) ? 2 : 1,
   [method]);
 
-  const unitPrice = 250;
+  const unitPrice = 250; // Naira per unit
   const costInNaira = unitsRequired * unitPrice;
-  const hasEnoughUnits = user?.isAdmin || units >= unitsRequired;
+  const hasEnoughFunds = user?.isAdmin || (walletBalance ?? 0) >= costInNaira;
   const priceLabel = `Cost: ${unitsRequired} Unit${unitsRequired > 1 ? "s" : ""} (${formatNaira(costInNaira)})`;
   const walletLabel = `Wallet: ${formatNaira(walletBalance ?? 0)}`;
 
@@ -68,8 +68,8 @@ export default function VerifyNIN() {
     }
 
     const isAdmin = user?.isAdmin;
-    if (!isAdmin && !hasEnoughUnits) {
-      return showError(`Insufficient units. Need ${unitsRequired} unit${unitsRequired > 1 ? "s" : ""}`);
+    if (!isAdmin && !hasEnoughFunds) {
+      return showError(`Insufficient balance. Need ${formatNaira(costInNaira)}`);
     }
 
     setLoading(true);
@@ -80,6 +80,7 @@ export default function VerifyNIN() {
       const payload = {
         userId: user.id,
         method,
+        amount: costInNaira,
         ...(method === "nin" ? { nin } : method === "phone" ? { phone } : form),
       };
 
@@ -90,8 +91,14 @@ export default function VerifyNIN() {
       const data = res.data;
       if (!res || data.error) throw new Error(data?.error || "Verification failed");
 
-      setUnits(data.units);
-      success("Verification started. Your units have been updated.");
+      // Deduct cost locally (backend should perform atomic deduction and ledger logging)
+      try {
+        setBalance((prev) => Number(prev || 0) - Number(costInNaira));
+      } catch (e) {
+        console.warn("Failed to update local balance", e);
+      }
+
+      success("Verification successful.");
       localStorage.setItem("nin_result", JSON.stringify(data));
       navigate("/verify-result");
     } catch (err) {
@@ -112,10 +119,10 @@ export default function VerifyNIN() {
             <p className="text-white/70 mt-1">Fast, secure identity verification services</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 sm:min-w-[320px]">
-            <div className="bg-white/10 backdrop-blur rounded-3xl p-6">
-              <p className="text-white/70 text-sm">Available Units</p>
-              <h2 className="text-4xl font-black">{units}</h2>
-            </div>
+              <div className="bg-white/10 backdrop-blur rounded-3xl p-6">
+                <p className="text-white/70 text-sm">Available Units</p>
+                <h2 className="text-4xl font-black">{user?.units ?? 0}</h2>
+              </div>
             <div className="bg-white/10 backdrop-blur rounded-3xl p-6">
               <p className="text-white/70 text-sm">Wallet Balance</p>
               <h2 className="text-4xl font-black">{formatNaira(walletBalance ?? 0)}</h2>
@@ -253,12 +260,18 @@ export default function VerifyNIN() {
 
         <motion.button
           onClick={handleVerify}
-          disabled={loading || !hasEnoughUnits}
+          disabled={loading || !hasEnoughFunds}
           whileHover={loading ? {} : { scale: 1.02 }}
           whileTap={loading ? {} : { scale: 0.98 }}
-          className={`w-full mt-6 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition ${hasEnoughUnits ? "bg-blue-600 hover:bg-blue-700 shadow-xl text-white" : "bg-slate-400 text-slate-100 cursor-not-allowed"} ${hasEnoughUnits && !loading ? "animate-pulse/80" : ""}`}
+          className={`w-full mt-6 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition ${hasEnoughFunds ? "bg-blue-600 hover:bg-blue-700 shadow-xl text-white" : "bg-slate-400 text-slate-100 cursor-not-allowed"} ${hasEnoughFunds && !loading ? "animate-pulse/80" : ""}`}
         >
-          {loading ? <Loader2 className="animate-spin" /> : <>Verify Identity ({unitsRequired} units) <ArrowRight size={18} /></>}
+          {loading ? (
+            <Loader2 className="animate-spin" />
+          ) : (
+            <>
+              Verify Identity — {formatNaira(costInNaira)} <ArrowRight size={18} />
+            </>
+          )}
         </motion.button>
       </div>
     </div>
