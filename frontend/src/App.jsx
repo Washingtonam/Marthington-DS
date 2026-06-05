@@ -12,6 +12,7 @@ import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
+import Legal from "./pages/Legal";
 
 // Dashboard & User
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -79,49 +80,6 @@ const SuperAdminRoute = ({ children }) => {
 };
 
 // ==============================
-// INTERNAL PLATFORM WORKSPACE
-// ==============================
-function DashboardRoutes() {
-  return (
-    <ProtectedRoute>
-      <Layout>
-        <Routes>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/profile" element={<Profile />} />
-          
-          {/* Verification */}
-          <Route path="/verify-nin" element={<VerifyNIN />} />
-          <Route path="/verify-bvn" element={<VerifyBVN />} />
-          <Route path="/verify-result" element={<VerifyResult />} />
-
-          {/* User History */}
-          <Route path="/my-requests" element={<UserRequests />} />
-          <Route path="/wallet" element={<Wallet />} />
-          <Route path="/transactions" element={<Transactions />} />
-
-          {/* Services */}
-          <Route path="/nin-services" element={<NINServices />} />
-          <Route path="/nin-services/validation" element={<Validation />} />
-          <Route path="/nin-services/ipe-clearance" element={<IPEClearance />} />
-          <Route path="/nin-services/modification" element={<Modification />} />
-          <Route path="/nin-services/personalization" element={<Personalization />} />
-          <Route path="/nin-services/selfservice" element={<SelfServiceForm />} />
-          <Route path="/cac-services" element={<CacServices />} />
-
-          {/* Admin */}
-          <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
-          <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
-          <Route path="/admin/payments" element={<AdminRoute><AdminPayments /></AdminRoute>} />
-          <Route path="/admin/requests" element={<AdminRoute><AdminRequests /></AdminRoute>} />
-          <Route path="/admin/pricing" element={<SuperAdminRoute><AdminPricing /></SuperAdminRoute>} />
-
-          <Route path="*" element={<Navigate to="/dashboard" />} />
-        </Routes>
-      </Layout>
-    </ProtectedRoute>
-  );
-}
-
 // ==============================
 // APP ROUTER CONTROLLER
 // ==============================
@@ -129,13 +87,53 @@ function AppRoutes() {
   const location = useLocation();
   const loggedIn = isAuthenticated();
 
-  if (location.pathname === "/") return loggedIn ? <Navigate to="/dashboard" /> : <Home />;
-  if (location.pathname === "/login") return loggedIn ? <Navigate to="/dashboard" /> : <Login />;
-  if (location.pathname === "/register") return loggedIn ? <Navigate to="/dashboard" /> : <Register />;
-  if (location.pathname === "/forgot-password") return <ForgotPassword />;
-  if (location.pathname === "/reset-password") return <ResetPassword />;
+  return (
+    <Routes>
+      {/* Public Routes */}
+      <Route path="/" element={loggedIn ? <Navigate to="/dashboard" /> : <Home />} />
+      <Route path="/login" element={loggedIn ? <Navigate to="/dashboard" /> : <Login />} />
+      <Route path="/register" element={loggedIn ? <Navigate to="/dashboard" /> : <Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      
+      {/* Legal Pages (Public) */}
+      <Route path="/legal" element={<Legal />} />
+      <Route path="/legal/:docType" element={<Legal />} />
 
-  return <DashboardRoutes />;
+      {/* Dashboard & Protected Routes */}
+      <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
+      
+      {/* Verification Routes */}
+      <Route path="/verify-nin" element={<ProtectedRoute><Layout><VerifyNIN /></Layout></ProtectedRoute>} />
+      <Route path="/verify-bvn" element={<ProtectedRoute><Layout><VerifyBVN /></Layout></ProtectedRoute>} />
+      <Route path="/verify-result" element={<ProtectedRoute><Layout><VerifyResult /></Layout></ProtectedRoute>} />
+
+      {/* User History Routes */}
+      <Route path="/my-requests" element={<ProtectedRoute><Layout><UserRequests /></Layout></ProtectedRoute>} />
+      <Route path="/wallet" element={<ProtectedRoute><Layout><Wallet /></Layout></ProtectedRoute>} />
+      <Route path="/transactions" element={<ProtectedRoute><Layout><Transactions /></Layout></ProtectedRoute>} />
+
+      {/* Services Routes */}
+      <Route path="/nin-services" element={<ProtectedRoute><Layout><NINServices /></Layout></ProtectedRoute>} />
+      <Route path="/nin-services/validation" element={<ProtectedRoute><Layout><Validation /></Layout></ProtectedRoute>} />
+      <Route path="/nin-services/ipe-clearance" element={<ProtectedRoute><Layout><IPEClearance /></Layout></ProtectedRoute>} />
+      <Route path="/nin-services/modification" element={<ProtectedRoute><Layout><Modification /></Layout></ProtectedRoute>} />
+      <Route path="/nin-services/personalization" element={<ProtectedRoute><Layout><Personalization /></Layout></ProtectedRoute>} />
+      <Route path="/nin-services/selfservice" element={<ProtectedRoute><Layout><SelfServiceForm /></Layout></ProtectedRoute>} />
+      <Route path="/cac-services" element={<ProtectedRoute><Layout><CacServices /></Layout></ProtectedRoute>} />
+
+      {/* Admin Routes */}
+      <Route path="/admin" element={<AdminRoute><Layout><Admin /></Layout></AdminRoute>} />
+      <Route path="/admin/users" element={<AdminRoute><Layout><AdminUsers /></Layout></AdminRoute>} />
+      <Route path="/admin/payments" element={<AdminRoute><Layout><AdminPayments /></Layout></AdminRoute>} />
+      <Route path="/admin/requests" element={<AdminRoute><Layout><AdminRequests /></Layout></AdminRoute>} />
+      <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
+
+      {/* Catch all */}
+      <Route path="*" element={<Navigate to="/" />} />
+    </Routes>
+  );
 }
 
 export default function App() {

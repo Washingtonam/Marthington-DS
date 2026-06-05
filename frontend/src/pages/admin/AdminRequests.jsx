@@ -2,10 +2,45 @@ import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import {
   Search, ArrowUpDown, Eye, CheckCircle2, XCircle, Clock3,
-  ChevronLeft, ChevronRight, Fingerprint, Building2
+  ChevronLeft, ChevronRight, Fingerprint, Building2, AlertCircle,
+  MessageSquare, Shield, Calendar
 } from "lucide-react";
 
 const API_BASE = "https://xcombinator.onrender.com";
+
+// 🔒 Data Masking Utility for Sensitive Fields
+const maskNIN = (nin) => {
+  if (!nin || nin === "N/A") return nin;
+  return `${String(nin).slice(0, 4)}*****${String(nin).slice(-2)}`;
+};
+
+// 🎨 Status Badge Color Mapping
+const statusColors = {
+  "pending": "bg-yellow-100 text-yellow-800 border border-yellow-300",
+  "in-progress": "bg-blue-100 text-blue-800 border border-blue-300",
+  "processing": "bg-purple-100 text-purple-800 border border-purple-300",
+  "approved": "bg-green-100 text-green-800 border border-green-300",
+  "completed": "bg-emerald-100 text-emerald-800 border border-emerald-300",
+  "rejected": "bg-red-100 text-red-800 border border-red-300",
+  "failed": "bg-orange-100 text-orange-800 border border-orange-300"
+};
+
+// 📊 Status Icons
+const getStatusIcon = (status) => {
+  switch(status?.toLowerCase()) {
+    case "approved":
+    case "completed":
+      return <CheckCircle2 className="w-4 h-4" />;
+    case "rejected":
+    case "failed":
+      return <XCircle className="w-4 h-4" />;
+    case "in-progress":
+    case "processing":
+      return <Clock3 className="w-4 h-4" />;
+    default:
+      return <AlertCircle className="w-4 h-4" />;
+  }
+};
 
 export default function AdminRequests() {
   const [activeTab, setActiveTab] = useState("nimc");
@@ -181,19 +216,44 @@ export default function AdminRequests() {
 
       <div className="grid md:grid-cols-3 gap-6">
         {displayedRequests.map(r => (
-          <div key={r._id} className="bg-white p-6 rounded-3xl border shadow-sm">
-            <h3 className="font-bold text-sm truncate">{r.userId?.email}</h3>
+          <div key={r._id} className="bg-white p-6 rounded-3xl border shadow-sm hover:shadow-md transition">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex-1">
+                <h3 className="font-bold text-sm truncate text-slate-900">{r.userId?.email}</h3>
+                <p className="text-xs text-slate-500 mt-1">ID: {r._id.slice(-6)}</p>
+              </div>
+              <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${statusColors[r.status] || 'bg-gray-100'}`}>
+                {r.status?.replace('-', ' ') || 'pending'}
+              </span>
+            </div>
+            
             <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${serviceColors[r.service || r.serviceType] || "bg-gray-100"}`}>
               {r.pipelineSource === "cac" ? (r.serviceType || "CAC") : (r.service || "General")}
             </span>
-            <div className="mt-2 text-xs text-slate-500">Requested by: <span className="font-semibold">{r.userId?.role || 'user'}</span></div>
-            <div className="mt-2 text-xs text-slate-500">Category: <span className="font-semibold">{r.pipelineSource === "cac" ? "CAC" : "NIMC"}</span></div>
+            
+            <div className="mt-3 space-y-2 text-xs text-slate-600">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Requested by:</span>
+                <span className="font-semibold">{r.userId?.role || 'user'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Category:</span>
+                <span className="font-semibold">{r.pipelineSource === "cac" ? "CAC" : "NIMC"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Amount:</span>
+                <span className="font-semibold">₦{r.amount || 0}</span>
+              </div>
+            </div>
+            
             <div className="mt-4 flex gap-2">
-              <button onClick={() => setSelected(r)} className="bg-gray-900 text-white px-3 py-2 rounded-xl text-xs flex-1">Inspect</button>
+              <button onClick={() => setSelected(r)} className="bg-gray-900 text-white px-3 py-2 rounded-xl text-xs flex-1 hover:bg-black transition">
+                {/* Inspect */}
+              </button>
               {activeStatus === "pending" && (
                 <>
-                  <button onClick={() => handleStatusUpdate(r._id, "approved")} className="bg-green-600 text-white px-3 py-2 rounded-xl text-xs">Approve</button>
-                  <button onClick={() => handleStatusUpdate(r._id, "rejected")} className="bg-red-600 text-white px-3 py-2 rounded-xl text-xs">Reject</button>
+                  <button onClick={() => handleStatusUpdate(r._id, "approved")} className="bg-green-600 text-white px-3 py-2 rounded-xl text-xs hover:bg-green-700 transition">✓</button>
+                  <button onClick={() => handleStatusUpdate(r._id, "rejected")} className="bg-red-600 text-white px-3 py-2 rounded-xl text-xs hover:bg-red-700 transition">✕</button>
                 </>
               )}
             </div>
@@ -266,53 +326,119 @@ export default function AdminRequests() {
                 </div>
               )}
 
+              {/* Status History Timeline */}
               <div className="mt-6">
-                <h3 className="font-bold mb-2">Admin Actions</h3>
-                <label className="text-sm">Status</label>
-                <select value={modalStatus} onChange={(e) => setModalStatus(e.target.value)} className="w-full p-3 rounded-xl border mt-2">
-                  <option value="pending">Pending</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="processing">Processing</option>
-                  <option value="approved">Approved</option>
-                  <option value="completed">Completed</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-
-                <label className="text-sm mt-4 block">Comment</label>
-                <textarea value={modalComment} onChange={(e) => setModalComment(e.target.value)} placeholder="Add internal or user-facing comment" className="w-full p-3 rounded-xl border mt-2 h-28" />
-
-                <div className="flex gap-2 mt-4">
-                  <button onClick={async () => {
-                    if (modalStatus === 'rejected' && (!modalComment || modalComment.trim().length < 3)) {
-                      return alert('Please provide a comment when rejecting a request.');
-                    }
-                    try {
-                      const { data } = await axios.put(`${API_BASE}/api/admin/status/${selected._id}`, { status: modalStatus, note: modalComment }, { headers: authHeaders });
-                      alert(data.message || 'Status updated');
-                      setSelected(data.data || data);
-                      fetchRequests();
-                    } catch (err) {
-                      console.error('Status update error:', err);
-                      alert(err.response?.data?.message || 'Failed to update status');
-                    }
-                  }} className="px-4 py-2 rounded-xl bg-blue-600 text-white">Update Status</button>
-                  <button onClick={() => setModalComment('')} className="px-4 py-2 rounded-xl bg-gray-100">Clear</button>
-                </div>
-
-                <div className="mt-6">
-                  <h4 className="font-semibold mb-2">Comment Thread</h4>
-                  {Array.isArray(selected.adminComments) && selected.adminComments.length > 0 ? (
-                    <div className="space-y-3 max-h-40 overflow-auto">
-                      {selected.adminComments.map((c, idx) => (
-                        <div key={idx} className="p-3 rounded-xl bg-slate-50">
-                          <div className="text-xs text-slate-500">{c.author} — {new Date(c.createdAt).toLocaleString()}</div>
-                          <div className="mt-1 text-sm">{c.comment}</div>
+                <h3 className="font-bold mb-3 flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Status Timeline
+                </h3>
+                {Array.isArray(selected.statusHistory) && selected.statusHistory.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-auto">
+                    {[...selected.statusHistory].reverse().map((item, idx) => (
+                      <div key={idx} className={`p-3 rounded-xl border-l-4 ${statusColors[item.status] || 'bg-gray-50'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          {getStatusIcon(item.status)}
+                          <span className="font-semibold capitalize text-sm">{item.status}</span>
+                          <span className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</span>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-500">No comments yet.</p>
-                  )}
+                        {item.note && <div className="text-sm text-slate-700 ml-6">{item.note}</div>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">No status history.</p>
+                )}
+              </div>
+
+              {/* Admin Comments Timeline */}
+              <div className="mt-6">
+                <h3 className="font-bold mb-3 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  Admin Comments
+                </h3>
+                {Array.isArray(selected.adminComments) && selected.adminComments.length > 0 ? (
+                  <div className="space-y-3 max-h-48 overflow-auto">
+                    {[...selected.adminComments].reverse().map((c, idx) => (
+                      <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <div className="text-xs text-slate-500 font-semibold">{c.author}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{new Date(c.createdAt).toLocaleString()}</div>
+                        <div className="mt-2 text-sm text-slate-700">{c.comment}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">No comments yet.</p>
+                )}
+              </div>
+
+              {/* Status Update Section */}
+              <div className="mt-6 p-4 rounded-xl bg-blue-50 border border-blue-200">
+                <h3 className="font-bold mb-4 flex items-center gap-2 text-blue-900">
+                  <Shield className="w-4 h-4" />
+                  Resolution Actions
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700">New Status</label>
+                    <select 
+                      value={modalStatus} 
+                      onChange={(e) => setModalStatus(e.target.value)} 
+                      className="w-full p-3 rounded-xl border border-blue-300 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="pending">📋 Pending</option>
+                      <option value="in-progress">⏳ In Progress</option>
+                      <option value="processing">🔄 Processing</option>
+                      <option value="approved">✅ Approved</option>
+                      <option value="completed">🎉 Completed</option>
+                      <option value="rejected">❌ Rejected</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700">
+                      Comment/Resolution Note
+                      {modalStatus === 'rejected' && <span className="text-red-600 ml-1">*Required for rejection</span>}
+                    </label>
+                    <textarea 
+                      value={modalComment} 
+                      onChange={(e) => setModalComment(e.target.value)} 
+                      placeholder={
+                        modalStatus === 'rejected' 
+                          ? "Explain why this request was rejected..." 
+                          : "Add a resolution note or comment..."
+                      }
+                      className="w-full p-3 rounded-xl border border-blue-300 mt-2 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" 
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button 
+                      onClick={async () => {
+                        if (modalStatus === 'rejected' && (!modalComment || modalComment.trim().length < 5)) {
+                          return alert('Please provide a detailed rejection reason (at least 5 characters).');
+                        }
+                        try {
+                          await axios.put(`${API_BASE}/api/admin/status/${selected._id}`, { status: modalStatus, note: modalComment }, { headers: authHeaders });
+                          alert('✅ Status updated successfully');
+                          setSelected(null);
+                          fetchRequests();
+                        } catch (err) {
+                          console.error('Status update error:', err);
+                          alert(err.response?.data?.message || '❌ Failed to update status');
+                        }
+                      }} 
+                      className="flex-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
+                    >
+                      Update Status
+                    </button>
+                    <button 
+                      onClick={() => { setModalStatus(selected.status || "pending"); setModalComment(""); }} 
+                      className="px-4 py-2 rounded-xl bg-gray-200 text-gray-800 hover:bg-gray-300 transition"
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

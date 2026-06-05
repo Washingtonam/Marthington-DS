@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useUser } from "../../context/UserContext";
 import { useToast } from "../../context/ToastContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import api from "../../lib/axios";
 import {
   ShieldCheck,
@@ -255,6 +255,20 @@ export default function VerifyNIN() {
           </div>
           <div className="rounded-2xl bg-slate-50/90 px-4 py-3 border border-slate-200 shadow-sm">
             <p className="text-slate-500">{walletLabel}</p>
+          </div>
+        </div>
+
+        {/* Security Assurance Note */}
+        <div className="mt-6 p-4 rounded-2xl bg-blue-50 border border-blue-200">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-blue-900">
+              <p className="font-semibold mb-1">Your data is secure</p>
+              <p className="text-xs text-blue-800">
+                Your information is encrypted in transit using TLS 1.3 and handled in compliance with NDPR. 
+                <Link to="/legal/privacy" className="text-blue-600 hover:underline ml-1">Learn more</Link>
+              </p>
+            </div>
           </div>
         </div>
 

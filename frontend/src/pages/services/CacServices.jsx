@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import api from "../../lib/axios";
 import { useUser } from "../../context/UserContext"
 import {
@@ -8,7 +9,8 @@ import {
   Globe,
   Loader2,
   HelpCircle,
-  ChevronDown
+  ChevronDown,
+  ShieldCheck
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatNaira } from "../../lib/currency";
@@ -201,6 +203,19 @@ export default function CacServices() {
             </section>
 
             <section className="rounded-3xl bg-white p-8 shadow-sm dark:bg-slate-950">
+              <div className="mb-6 p-4 rounded-2xl bg-blue-50 border border-blue-200">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-blue-900">
+                    <p className="font-semibold mb-1">Your data is secure</p>
+                    <p className="text-xs text-blue-800">
+                      All business and proprietor information is encrypted and handled in full compliance with NDPR regulations.
+                      <Link to="/legal/security" className="text-blue-600 hover:underline ml-1">Security details</Link>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <label className="flex items-center gap-3">
                 <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="h-5 w-5" />
                 I authorize the wallet charge for this filing.

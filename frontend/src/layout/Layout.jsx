@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
+import Footer from "../components/Footer";
 
 export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
@@ -51,6 +52,9 @@ export default function Layout({ children }) {
         <div className="p-4 md:p-6 lg:p-8 animate-fadeIn">
           {children}
         </div>
+
+        {/* FOOTER */}
+        <Footer />
       </main>
 
     </div>
