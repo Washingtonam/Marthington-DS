@@ -38,7 +38,8 @@ const validateVerification = Joi.object({
     .messages({
       'any.only': 'Gender must be male, female, or other'
     }),
-  birthdate: Joi.string().when('method', { is: 'demographic', then: Joi.required() })
+  birthdate: Joi.string().when('method', { is: 'demographic', then: Joi.required() }),
+  consent: Joi.boolean().valid(true).required().messages({ 'any.only': 'Consent is required and must be true' })
 });
 
 /**

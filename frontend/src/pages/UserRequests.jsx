@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../lib/axios";
 import { useUser } from "../context/UserContext";
 
@@ -153,6 +154,15 @@ export default function UserRequests() {
                 <span className={`inline-block mt-2 text-xs px-3 py-1 rounded-full ${statusStyle(r.status)}`}>
                   {statusText(r.status)}
                 </span>
+                <div className="mt-3 text-right">
+                  <Link
+                    to={`/verify-result/${r._id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-sm font-semibold text-blue-600 hover:underline"
+                  >
+                    View Result
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

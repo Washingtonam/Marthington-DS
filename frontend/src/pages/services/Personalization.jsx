@@ -40,6 +40,7 @@ export default function Personalization() {
       const response = await api.post("/api/services/verify", {
         method: "tracking",
         tracking_id: trackingId.trim().toUpperCase(),
+        consent: true,
       });
 
       // Instantly update wallet from API response (no extra fetch needed)
@@ -47,7 +48,7 @@ export default function Personalization() {
         setBalance(response.data.walletBalance);
       }
       localStorage.setItem("nin_result", JSON.stringify(response.data));
-      navigate("/verify-result");
+      navigate(`/verify-result/${response.data.requestId || ""}`);
     } catch (err) {
       alert(err.response?.data?.message || "Operation failed.");
     } finally {

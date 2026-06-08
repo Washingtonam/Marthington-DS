@@ -73,10 +73,23 @@ router.post("/verify", verifyToken, async (req, res) => {
       }
 
       const mockData = { firstname: "JOHN", surname: "TEST", nin: "00000000000", birthdate: "1995-01-01", gender: "Male" };
-      await Transaction.create([{ type: "NIN", amount: mockCostKobo / 100, amountKobo: mockCostKobo, unitsUsed: isSuperAdmin ? 0 : 1, status: "success", userId: user._id }], { session });
+      const [mockRequest] = await ServiceRequest.create([{
+        userId: user._id,
+        service: "automated_lookup",
+        type: "nin",
+        nin: "00000000000",
+        unitsUsed: isSuperAdmin ? 0 : 1,
+        amount: mockCostKobo / 100,
+        amountKobo: mockCostKobo,
+        status: "completed",
+        apiResponseData: mockData,
+        statusHistory: [{ status: "completed", note: "Mock verification completed." }]
+      }], { session });
+
+      await Transaction.create([{ type: "NIN", amount: mockCostKobo / 100, amountKobo: mockCostKobo, unitsUsed: isSuperAdmin ? 0 : 1, status: "success", userId: user._id, requestId: mockRequest._id }], { session });
       await session.commitTransaction();
       session.endSession();
-      return res.json({ status: "success", data: mockData, walletBalance: user.getWalletBalanceNaira() });
+      return res.json({ status: "success", data: mockData, walletBalance: user.getWalletBalanceNaira(), requestId: mockRequest._id });
     }
 
     let unitsRequired = UNITS_REQUIRED[method] || UNITS_REQUIRED.standard;
@@ -117,7 +130,7 @@ router.post("/verify", verifyToken, async (req, res) => {
     const cleanData = response.data?.data?.data || response.data?.data || response.data;
 
     // Persist service request and transaction under the same transaction session
-    await ServiceRequest.create([{
+    const [savedRequest] = await ServiceRequest.create([{
       userId: user._id,
       service: "automated_lookup",
       type: method,
@@ -136,13 +149,14 @@ router.post("/verify", verifyToken, async (req, res) => {
       amount: costKobo / 100,
       amountKobo: costKobo,
       userId: user._id,
+      requestId: savedRequest._id,
       status: "success"
     }], { session });
 
     await session.commitTransaction();
     session.endSession();
 
-    return res.json({ status: "success", data: cleanData, unitsUsed: unitsRequired, walletBalance: user.getWalletBalanceNaira() });
+    return res.json({ status: "success", data: cleanData, unitsUsed: unitsRequired, walletBalance: user.getWalletBalanceNaira(), requestId: savedRequest._id });
   } catch (error) {
     console.error("VERIFY ERROR - Request:", { method, url: error.config?.url });
     console.error("VERIFY ERROR - Response:", error.response?.status, error.response?.data);
@@ -161,7 +175,31 @@ router.post("/verify", verifyToken, async (req, res) => {
 });
 
 // ==============================================================
-// 🛠️ ROUTE 3: ADMIN CORE OVERVIEW
+// 🛠️ ROUTE 3: FETCH A SINGLE SERVICE REQUEST BY ID
+// ==============================================================
+router.get("/request/:id", verifyToken, async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const request = await ServiceRequest.findById(requestId).lean();
+    if (!request) {
+      return res.status(404).json({ success: false, message: "Request not found." });
+    }
+
+    const isAdminRole = req.user && ["admin", "super_admin"].includes(req.user.role);
+    const isOwner = req.user && String(request.userId) === String(req.user.id);
+    if (!isOwner && !isAdminRole) {
+      return res.status(403).json({ success: false, message: "Forbidden: insufficient privileges" });
+    }
+
+    return res.status(200).json({ success: true, data: request });
+  } catch (error) {
+    console.error("FETCH REQUEST ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to load service request." });
+  }
+});
+
+// ==============================================================
+// 🛠️ ROUTE 4: ADMIN CORE OVERVIEW
 // ==============================================================
 router.get("/admin/requests", verifyToken, isAdmin, async (req, res) => {
   try {

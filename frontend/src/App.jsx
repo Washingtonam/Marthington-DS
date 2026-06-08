@@ -108,6 +108,7 @@ function AppRoutes() {
       <Route path="/verify-nin" element={<ProtectedRoute><Layout><VerifyNIN /></Layout></ProtectedRoute>} />
       <Route path="/verify-bvn" element={<ProtectedRoute><Layout><VerifyBVN /></Layout></ProtectedRoute>} />
       <Route path="/verify-result" element={<ProtectedRoute><Layout><VerifyResult /></Layout></ProtectedRoute>} />
+      <Route path="/verify-result/:requestId" element={<ProtectedRoute><Layout><VerifyResult /></Layout></ProtectedRoute>} />
 
       {/* User History Routes */}
       <Route path="/my-requests" element={<ProtectedRoute><Layout><UserRequests /></Layout></ProtectedRoute>} />

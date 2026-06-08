@@ -43,6 +43,7 @@ export default function VerifyNIN() {
   const isPhoneValid = method !== "phone" || phone.length >= 10;
   const isDemographicValid =
     method !== "demographic" || Object.values(form).every((value) => value.trim().length > 0);
+  const isFormValid = method === "nin" ? isNinValid : method === "phone" ? isPhoneValid : isDemographicValid;
 
   const showError = (message) => {
     error(message, 5000);
@@ -78,15 +79,14 @@ export default function VerifyNIN() {
 
     try {
       const payload = {
-        userId: user.id,
-        method,
-        amount: costInNaira,
-        ...(method === "nin" ? { nin } : method === "phone" ? { phone } : form),
-      };
+          method,
+          consent: true,
+          ...(method === "nin" ? { nin } : method === "phone" ? { phone } : { firstname: form.firstname, surname: form.surname, gender: form.gender, birthdate: form.birthdate }),
+        };
 
-      const res = await api.post("/api/services/verify", payload, {
-        signal: controller.signal,
-      });
+        const res = await api.post("/api/services/verify", payload, {
+          signal: controller.signal,
+        });
 
       const data = res.data;
       if (!res || data.error) throw new Error(data?.error || "Verification failed");
@@ -100,7 +100,7 @@ export default function VerifyNIN() {
 
       success("Verification successful.");
       localStorage.setItem("nin_result", JSON.stringify(data));
-      navigate("/verify-result");
+      navigate(`/verify-result/${data.requestId || ""}`);
     } catch (err) {
       showError(err.name === "AbortError" ? "Request timed out. Please try again." : err.message);
     } finally {
@@ -151,10 +151,12 @@ export default function VerifyNIN() {
           {method === "nin" && (
             <div className="relative mb-4">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="Enter 11-digit NIN"
                 value={nin}
-                onChange={(e) => setNin(e.target.value.slice(0, 11))}
+                onChange={(e) => setNin(e.target.value.replace(/\D/g, "").slice(0, 11))}
                 onBlur={() => setTouched((prev) => ({ ...prev, nin: true }))}
                 className={`w-full bg-gray-50 p-4 rounded-2xl border transition ${touched.nin && !isNinValid ? "border-red-400 ring-1 ring-red-300 bg-red-50" : "border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"}`}
               />
@@ -170,10 +172,12 @@ export default function VerifyNIN() {
           {method === "phone" && (
             <div className="relative mb-4">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="Enter Phone Number"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value.slice(0, 11))}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 11))}
                 onBlur={() => setTouched((prev) => ({ ...prev, phone: true }))}
                 className={`w-full bg-gray-50 p-4 rounded-2xl border transition ${touched.phone && !isPhoneValid ? "border-red-400 ring-1 ring-red-300 bg-red-50" : "border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"}`}
               />
@@ -274,10 +278,10 @@ export default function VerifyNIN() {
 
         <motion.button
           onClick={handleVerify}
-          disabled={loading || !hasEnoughFunds}
+          disabled={loading || !hasEnoughFunds || !isFormValid}
           whileHover={loading ? {} : { scale: 1.02 }}
           whileTap={loading ? {} : { scale: 0.98 }}
-          className={`w-full mt-6 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition ${hasEnoughFunds ? "bg-blue-600 hover:bg-blue-700 shadow-xl text-white" : "bg-slate-400 text-slate-100 cursor-not-allowed"} ${hasEnoughFunds && !loading ? "animate-pulse/80" : ""}`}
+          className={`w-full mt-6 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition ${hasEnoughFunds ? "bg-blue-600 hover:bg-blue-700 shadow-xl text-white" : "bg-slate-400 text-slate-100 cursor-not-allowed"} ${loading ? "animate-pulse/80" : ""}`}
         >
           {loading ? (
             <Loader2 className="animate-spin" />
