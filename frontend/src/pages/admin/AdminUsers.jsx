@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import {
@@ -11,10 +11,12 @@ import {
   AlertCircle,
   CheckCircle,
 } from "lucide-react";
+import { useToast } from "../../context/ToastContext";
 
 export default function AdminUsers() {
   const { user: currentUser } = useUser();
   const isSuperAdmin = currentUser?.role === "super_admin";
+  const { success, error: toastError } = useToast();
 
   // State management
   const [users, setUsers] = useState([]);
@@ -24,6 +26,8 @@ export default function AdminUsers() {
     totalBalance: 0,
   });
   const [searchEmail, setSearchEmail] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("newest"); // 'balance' | 'alphabetical' | 'newest'
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
   const [loading, setLoading] = useState(false);
@@ -90,8 +94,35 @@ export default function AdminUsers() {
   // Handle search
   const handleSearch = () => {
     setPage(1);
-    fetchUsers(1, searchEmail);
+    // store the server search term and fetch
+    setSearchEmail(searchQuery);
+    fetchUsers(1, searchQuery);
   };
+
+  // Instant client-side filtering of the currently-loaded users
+  const filteredUsers = useMemo(() => {
+    const q = (searchQuery || searchEmail || "").toLowerCase().trim();
+    if (!q) return users;
+    return users.filter((user) => {
+      return (
+        (user.email || "").toLowerCase().includes(q) ||
+        (user.firstname || "").toLowerCase().includes(q) ||
+        (user.lastname || "").toLowerCase().includes(q)
+      );
+    });
+  }, [users, searchQuery, searchEmail]);
+
+  const sortedAndFilteredUsers = useMemo(() => {
+    const result = [...filteredUsers];
+    if (sortBy === "balance") {
+      result.sort((a, b) => (b.walletBalanceKobo || 0) - (a.walletBalanceKobo || 0));
+    } else if (sortBy === "alphabetical") {
+      result.sort((a, b) => (a.firstname || "").localeCompare(b.firstname || ""));
+    } else {
+      result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+    return result;
+  }, [filteredUsers, sortBy]);
 
   // Handle fund adjustment
   const handleAdjustFunds = async () => {
@@ -109,20 +140,42 @@ export default function AdminUsers() {
         note: fundNote || "Manual adjustment",
       });
 
-      setMessage({ type: "success", text: response.data.message });
-      setShowFundModal(false);
-      setFundAmount("");
-      setFundNote("");
+      if (response.status === 200 || response.data?.success) {
+        if (success) success("User account funded successfully!");
 
-      // Refresh user list and stats
-      await fetchUsers(page, searchEmail);
-      await fetchStats();
-    } catch (error) {
-      console.error("❌ Fund adjustment error:", error);
-      setMessage({
-        type: "error",
-        text: error.response?.data?.message || "Failed to adjust funds",
-      });
+        const newBalanceNaira = response.data?.data?.balanceAfter ?? null;
+        const newBalanceKobo =
+          newBalanceNaira !== null && newBalanceNaira !== undefined
+            ? Math.round(Number(newBalanceNaira) * 100)
+            : null;
+
+        setUsers((prevUsers) =>
+          prevUsers.map((u) =>
+            u._id === selectedUser._id
+              ? {
+                  ...u,
+                  walletBalanceKobo:
+                    newBalanceKobo !== null
+                      ? newBalanceKobo
+                      : (u.walletBalanceKobo || 0) + (fundAction === "add" ? Math.round(Number(fundAmount) * 100) : -Math.round(Number(fundAmount) * 100)),
+                }
+              : u
+          )
+        );
+
+        setShowFundModal(false);
+        setFundAmount("");
+        setFundNote("");
+
+        await fetchStats();
+      } else {
+        setMessage({ type: "error", text: response.data?.message || "Failed to adjust funds" });
+      }
+    } catch (err) {
+      console.error("❌ Fund adjustment error:", err);
+      const errMsg = err.response?.data?.message || "Failed to adjust funds";
+      if (toastError) toastError(errMsg);
+      setMessage({ type: "error", text: errMsg });
     } finally {
       setSubmitting(false);
     }
@@ -288,10 +341,10 @@ export default function AdminUsers() {
       <div className="mb-8 flex gap-3">
         <div className="flex-1 flex gap-3">
           <input
-            type="email"
-            placeholder="Search by email..."
-            value={searchEmail}
-            onChange={(e) => setSearchEmail(e.target.value)}
+            type="text"
+            placeholder="Search by email or name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             onKeyPress={(e) => e.key === "Enter" && handleSearch()}
             className="flex-1 px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
           />
@@ -303,6 +356,15 @@ export default function AdminUsers() {
             <Search size={18} />
             Search
           </button>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="ml-3 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white text-sm"
+          >
+            <option value="newest">Newest Registration</option>
+            <option value="balance">Highest Balance</option>
+            <option value="alphabetical">Name</option>
+          </select>
         </div>
       </div>
 
@@ -311,14 +373,14 @@ export default function AdminUsers() {
         <div className="flex justify-center items-center py-12">
           <div className="text-slate-400">Loading users...</div>
         </div>
-      ) : users.length === 0 ? (
+      ) : sortedAndFilteredUsers.length === 0 ? (
         <div className="flex justify-center items-center py-12">
           <div className="text-slate-400">No users found</div>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
-            {users.map((u) => (
+            {sortedAndFilteredUsers.map((u) => (
               <div
                 key={u._id}
                 className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition"

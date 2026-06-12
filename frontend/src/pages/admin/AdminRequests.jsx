@@ -77,21 +77,22 @@ export default function AdminRequests() {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  const fetchRequests = async () => {
+  const fetchRequests = async (pageNum = page) => {
     try {
-      const res = await axios.get(`${API_BASE}/api/admin/requests?page=${page}&limit=12&status=${activeStatus}`, {
+      const res = await axios.get(`${API_BASE}/api/admin/requests?page=${pageNum}&limit=12&status=${activeStatus}`, {
         headers: authHeaders
       });
       const data = res.data?.data || res.data?.requests || [];
       setRequests(data);
       setPages(res.data?.pagination?.pages || 1);
+      setPage(pageNum);
     } catch (err) {
       console.error("Fetch Error:", err);
       setRequests([]);
     }
   };
 
-  useEffect(() => { fetchRequests(); }, [page, activeStatus]);
+  useEffect(() => { fetchRequests(page); }, [page, activeStatus]);
 
   useEffect(() => {
     if (selected) {
@@ -262,9 +263,9 @@ export default function AdminRequests() {
       </div>
 
       <div className="flex justify-center items-center gap-4 mt-10">
-        <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="p-2 bg-gray-100 rounded-xl"><ChevronLeft /></button>
+        <button disabled={page === 1} onClick={() => fetchRequests(page - 1)} className="p-2 bg-gray-100 rounded-xl"><ChevronLeft /></button>
         <span className="font-bold">Page {page} of {pages}</span>
-        <button disabled={page === pages} onClick={() => setPage(p => p + 1)} className="p-2 bg-gray-100 rounded-xl"><ChevronRight /></button>
+        <button disabled={page === pages} onClick={() => fetchRequests(page + 1)} className="p-2 bg-gray-100 rounded-xl"><ChevronRight /></button>
       </div>
       {selected && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-6">
