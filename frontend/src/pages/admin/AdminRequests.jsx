@@ -183,8 +183,8 @@ export default function AdminRequests() {
         ))}
       </div>
 
-      <div className="flex gap-2 mb-6">
-        {["pending", "approved", "rejected"].map(s => (
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {["pending", "in-progress", "processing", "approved", "completed", "rejected", "failed"].map(s => (
           <button key={s} onClick={() => { setActiveStatus(s); setPage(1); }} className={`px-4 py-2 rounded-xl text-xs font-bold capitalize ${activeStatus === s ? "bg-blue-600 text-white" : "bg-gray-100"}`}>
             {s}
           </button>
