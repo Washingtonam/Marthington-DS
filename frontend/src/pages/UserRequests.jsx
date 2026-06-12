@@ -223,16 +223,20 @@ export default function UserRequests() {
                 <div>
                   <h3 className="font-bold text-lg mb-4">Progress Timeline</h3>
                   <div className="space-y-4">
-                    {active.statusHistory.map((s, i) => (
-                      <div key={i} className="flex gap-4">
-                        <div className="w-3 h-3 bg-blue-600 rounded-full mt-2" />
-                        <div>
-                          <p className="font-semibold capitalize">{s.status}</p>
-                          <p className="text-sm text-gray-500">{s.note}</p>
-                          <p className="text-xs text-gray-400 mt-1">{new Date(s.createdAt || s.date).toLocaleString()}</p>
+                    {active.statusHistory.map((s, i) => {
+                      const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+                      const safeNote = s.note ? s.note.replace(emailRegex, (m) => (s.actorRole || 'admin')) : '';
+                      return (
+                        <div key={i} className="flex gap-4">
+                          <div className="w-3 h-3 bg-blue-600 rounded-full mt-2" />
+                          <div>
+                            <p className="font-semibold capitalize">{s.status} {s.actorRole ? `· ${s.actorRole}` : ''}</p>
+                            <p className="text-sm text-gray-500">{safeNote}</p>
+                            <p className="text-xs text-gray-400 mt-1">{new Date(s.createdAt || s.date).toLocaleString()}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

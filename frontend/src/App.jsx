@@ -39,6 +39,7 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminPricing from "./pages/admin/AdminPricing";
 import AdminRequests from "./pages/admin/AdminRequests";
+import Contact from "./pages/Contact";
 
 // Layout & Context
 import Layout from "./layout/Layout";
@@ -114,6 +115,7 @@ function AppRoutes() {
       <Route path="/my-requests" element={<ProtectedRoute><Layout><UserRequests /></Layout></ProtectedRoute>} />
       <Route path="/wallet" element={<ProtectedRoute><Layout><Wallet /></Layout></ProtectedRoute>} />
       <Route path="/transactions" element={<ProtectedRoute><Layout><Transactions /></Layout></ProtectedRoute>} />
+      <Route path="/contact" element={<ProtectedRoute><Layout><Contact /></Layout></ProtectedRoute>} />
 
       {/* Services Routes */}
       <Route path="/nin-services" element={<ProtectedRoute><Layout><NINServices /></Layout></ProtectedRoute>} />

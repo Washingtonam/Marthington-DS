@@ -340,7 +340,12 @@ export default function AdminRequests() {
                         <div className="flex items-center gap-2 mb-1">
                           {getStatusIcon(item.status)}
                           <span className="font-semibold capitalize text-sm">{item.status}</span>
-                          <span className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</span>
+                          {item.actorRole ? (
+                            <span className="text-xs text-slate-500 ml-2 uppercase font-semibold">{item.actorRole}</span>
+                          ) : (
+                            <span className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</span>
+                          )}
+                          <span className="text-xs text-slate-500 ml-2">{!item.actorRole && new Date(item.createdAt).toLocaleString()}</span>
                         </div>
                         {item.note && <div className="text-sm text-slate-700 ml-6">{item.note}</div>}
                       </div>
@@ -361,7 +366,7 @@ export default function AdminRequests() {
                   <div className="space-y-3 max-h-48 overflow-auto">
                     {[...selected.adminComments].reverse().map((c, idx) => (
                       <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                        <div className="text-xs text-slate-500 font-semibold">{c.author}</div>
+                        <div className="text-xs text-slate-500 font-semibold">{c.authorRole || c.author}</div>
                         <div className="text-xs text-slate-400 mt-0.5">{new Date(c.createdAt).toLocaleString()}</div>
                         <div className="mt-2 text-sm text-slate-700">{c.comment}</div>
                       </div>

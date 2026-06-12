@@ -50,8 +50,17 @@ export default function Transactions() {
   };
 
   const getAmount = (tx) => {
-    if (tx.amount > 0) return `+${formatNaira(tx.amount)}`;
+    // Determine sign based on transaction type for clarity
+    const creditTypes = ["UNIT_ADD", "credit"];
+    const debitTypes = ["UNIT_DEDUCT", "debit", "SERVICE", "NIN", "BVN", "NIN_AUTO"];
+
     if (tx.unitsUsed > 0) return `-${tx.unitsUsed} unit(s)`;
+    if (creditTypes.includes(tx.type)) return `+${formatNaira(tx.amount || 0)}`;
+    if (debitTypes.includes(tx.type)) return `-${formatNaira(tx.amount || 0)}`;
+    // Fallback: show amount with sign from numeric value
+    if (typeof tx.amount === "number") {
+      return `${tx.amount >= 0 ? "+" : "-"}${formatNaira(Math.abs(tx.amount))}`;
+    }
     return "-";
   };
 

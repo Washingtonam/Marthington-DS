@@ -150,6 +150,7 @@ exports.updateStatus = async (req, res) => {
     record.statusHistory.push({
       status: normalizedStatus,
       note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`,
+      actorRole: req.user?.role || null,
       createdAt: new Date()
     });
     record.markModified("status");

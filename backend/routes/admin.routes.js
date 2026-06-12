@@ -190,13 +190,14 @@ router.post("/requests/:id/status", isAdmin, async (req, res) => {
     record.statusHistory.push({
       status: newStatus,
       note: comment || `${adminEmail} set request status to ${newStatus}`,
+      actorRole: req.user?.role || null,
       createdAt: new Date()
     });
 
     // Push admin comment thread entry when a comment exists
     if (comment && String(comment).trim().length > 0) {
       if (!Array.isArray(record.adminComments)) record.adminComments = [];
-      record.adminComments.push({ comment, author: adminEmail, createdAt: new Date() });
+      record.adminComments.push({ comment, author: adminEmail, authorRole: req.user?.role || null, createdAt: new Date() });
       record.markModified('adminComments');
     }
 
@@ -261,13 +262,14 @@ router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
     record.statusHistory.push({
       status: normalizedStatus,
       note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`,
+      actorRole: req.user?.role || null,
       createdAt: new Date()
     });
 
     // attach admin comment when provided
     if (note && String(note).trim().length > 0) {
       if (!Array.isArray(record.adminComments)) record.adminComments = [];
-      record.adminComments.push({ comment: note, author: adminEmail, createdAt: new Date() });
+      record.adminComments.push({ comment: note, author: adminEmail, authorRole: req.user?.role || null, createdAt: new Date() });
       record.markModified('adminComments');
     }
 
@@ -329,11 +331,11 @@ router.put("/status/:id", isAdmin, async (req, res) => {
 
     record.status = normalizedStatus;
     if (!record.statusHistory || !Array.isArray(record.statusHistory)) record.statusHistory = [];
-    record.statusHistory.push({ status: normalizedStatus, note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`, createdAt: new Date() });
+    record.statusHistory.push({ status: normalizedStatus, note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`, actorRole: req.user?.role || null, createdAt: new Date() });
     // attach admin comment when provided
     if (note && String(note).trim().length > 0) {
       if (!Array.isArray(record.adminComments)) record.adminComments = [];
-      record.adminComments.push({ comment: note, author: adminEmail, createdAt: new Date() });
+      record.adminComments.push({ comment: note, author: adminEmail, authorRole: req.user?.role || null, createdAt: new Date() });
       record.markModified('adminComments');
     }
     record.markModified("status");
@@ -416,7 +418,7 @@ router.put("/approve-request/:id", isAdmin, async (req, res) => {
     if (!record.statusHistory || !Array.isArray(record.statusHistory)) {
       record.statusHistory = [];
     }
-    record.statusHistory.push({ status: 'approved', note, createdAt: new Date() });
+    record.statusHistory.push({ status: 'approved', note, actorRole: req.user?.role || null, createdAt: new Date() });
     record.markModified('status');
     record.markModified('statusHistory');
     await record.save();
