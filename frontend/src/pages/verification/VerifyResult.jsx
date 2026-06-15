@@ -62,15 +62,13 @@ export default function VerifyResult() {
     setLoadingType(type);
 
     try {
-      const res = await api("https://xcombinator.onrender.com/api/generate-nin-slip", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: info, type }),
-      });
+      const response = await api.post(
+        "/slips/generate-nin-slip",
+        { data: info, type },
+        { responseType: "blob" }
+      );
 
-      if (!res.ok) throw new Error("Download request failed");
-
-      const blob = await res.blob();
+      const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -80,6 +78,7 @@ export default function VerifyResult() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
+      console.error("Slip download failed:", err);
       alert("Failed to generate PDF. Please try again.");
     } finally {
       setLoadingType(null);
