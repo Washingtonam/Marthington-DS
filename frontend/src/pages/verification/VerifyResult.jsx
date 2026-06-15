@@ -63,7 +63,7 @@ export default function VerifyResult() {
 
     try {
       const response = await api.post(
-        "/slips/generate-nin-slip",
+        "/api/slips/generate-nin-slip",
         { data: info, type },
         { responseType: "blob" }
       );
