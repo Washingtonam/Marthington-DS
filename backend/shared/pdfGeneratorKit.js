@@ -9,7 +9,8 @@ const QRCode = require('qrcode');
 async function generateNINSlip(data) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      // Use compression and standard fonts to reduce size
+      const doc = new PDFDocument({ size: 'A4', margin: 40, compress: true });
       const buffers = [];
 
       doc.on('data', (chunk) => buffers.push(chunk));
@@ -33,10 +34,21 @@ async function generateNINSlip(data) {
       const photoY = doc.y;
       if (data.photo && data.photo !== 'undefined') {
         try {
-          const photoBuffer = Buffer.isBuffer(data.photo) 
-            ? data.photo 
+          // If data.photo is a data-url, downscale/convert to JPEG to reduce size
+          let photoBuffer = Buffer.isBuffer(data.photo)
+            ? data.photo
             : Buffer.from(data.photo.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-          doc.image(photoBuffer, 50, photoY, { width: 100, height: 120 });
+
+          // Try to convert PNG to JPEG using a lightweight in-memory conversion
+          // If sharp is present use it; otherwise embed as-is but resize in PDF
+          try {
+            const sharp = require('sharp');
+            photoBuffer = await sharp(photoBuffer).resize(160, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toBuffer();
+            doc.image(photoBuffer, 50, photoY, { width: 100, height: 120 });
+          } catch (e) {
+            // fallback: embed but set size to encourage lower PDF footprint
+            doc.image(photoBuffer, 50, photoY, { width: 100, height: 120 });
+          }
         } catch (err) {
           // Skip photo if there's an error
           console.warn('Photo insertion skipped:', err.message);
@@ -72,6 +84,7 @@ async function generateNINSlip(data) {
       // Footer
       doc.strokeColor('#cccccc').lineWidth(1).moveTo(40, doc.y).lineTo(555, doc.y).stroke();
       doc.moveDown(0.3);
+      // Use system fonts (Helvetica) and avoid embedding heavy font subsets
       doc.fontSize(10).font('Helvetica').text('This document is electronically generated via Xcombinator Verification System', { align: 'center' });
       doc.fontSize(9).text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
 
@@ -91,7 +104,7 @@ async function generateNINSlip(data) {
 async function generateDataSlip(data, trackingId) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 35 });
+      const doc = new PDFDocument({ size: 'A4', margin: 35, compress: true });
       const buffers = [];
 
       doc.on('data', (chunk) => buffers.push(chunk));
@@ -151,7 +164,7 @@ async function generateDataSlip(data, trackingId) {
 async function generatePremiumSlip(data, trackingId) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 35 });
+      const doc = new PDFDocument({ size: 'A4', margin: 35, compress: true });
       const buffers = [];
 
       doc.on('data', (chunk) => buffers.push(chunk));

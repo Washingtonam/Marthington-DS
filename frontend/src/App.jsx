@@ -127,8 +127,8 @@ function AppRoutes() {
       <Route path="/cac-services" element={<ProtectedRoute><Layout><CacServices /></Layout></ProtectedRoute>} />
 
       {/* Admin Routes */}
-      <Route path="/admin" element={<AdminRoute><Layout><Admin /></Layout></AdminRoute>} />
-      <Route path="/admin/users" element={<AdminRoute><Layout><AdminUsers /></Layout></AdminRoute>} />
+      <Route path="/admin" element={<SuperAdminRoute><Layout><Admin /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/users" element={<SuperAdminRoute><Layout><AdminUsers /></Layout></SuperAdminRoute>} />
       <Route path="/admin/payments" element={<AdminRoute><Layout><AdminPayments /></Layout></AdminRoute>} />
       <Route path="/admin/requests" element={<AdminRoute><Layout><AdminRequests /></Layout></AdminRoute>} />
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />

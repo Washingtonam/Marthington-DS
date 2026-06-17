@@ -95,7 +95,7 @@ router.get("/requests", isAdmin, async (req, res) => {
 });
 
 // 🚀 FAST DASHBOARD PERFORMANCE STATS
-router.get("/stats", isAdmin, async (req, res) => {
+router.get("/stats", isSuperAdmin, async (req, res) => {
   try {
     const [totalUsers, totalTransactions, pendingPayments, balanceData] = await Promise.all([
       User.countDocuments(),
@@ -120,7 +120,7 @@ router.get("/stats", isAdmin, async (req, res) => {
 });
 
 // 📥 NIMC PIPELINE ROUTE
-router.get("/nimc-requests", isAdmin, async (req, res) => {
+router.get("/nimc-requests", isSuperAdmin, async (req, res) => {
   try {
     const requests = await ServiceRequest.find()
       .populate("userId", "email firstName lastName phoneNumber role")
@@ -135,7 +135,7 @@ router.get("/nimc-requests", isAdmin, async (req, res) => {
 });
 
 // 🏢 CAC PIPELINE ROUTE
-router.get("/cac-requests", isAdmin, async (req, res) => {
+router.get("/cac-requests", isSuperAdmin, async (req, res) => {
   try {
     const requests = await CACRequest.find()
       .populate("userId", "email firstName lastName phoneNumber role")
@@ -182,6 +182,11 @@ router.post("/requests/:id/status", isAdmin, async (req, res) => {
       flag: "flagged"
     };
     const newStatus = statusMap[normalizedAction];
+
+    // SECURITY: Only super_admin may approve/reject requests that are currently in 'pending'
+    if (record.status === 'pending' && (normalizedAction === 'approve' || normalizedAction === 'reject') && req.user?.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Admin may approve or reject pending requests.' });
+    }
 
     record.status = newStatus;
     if (!Array.isArray(record.statusHistory)) {
@@ -250,6 +255,10 @@ router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
     const record = await TargetModel.findById(id);
     if (!record) {
       return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
+    }
+    // SECURITY: Prevent non-super admins from transitioning requests that are currently 'pending'
+    if (record.status === 'pending' && req.user?.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Admin may change status on pending requests.' });
     }
 
     // Safely configure structural historical arrays using atomic paths to avoid Mongoose validation rejections
@@ -325,9 +334,13 @@ router.put("/status/:id", isAdmin, async (req, res) => {
     if (!record) {
       return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
     }
-
     const normalizedModule = cacRecord ? 'cac' : 'nimc';
     const normalizedStatus = String(status).toLowerCase();
+
+    // SECURITY: Block non-super-admins from modifying pending requests
+    if (record.status === 'pending' && req.user?.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Admin may modify pending requests.' });
+    }
 
     record.status = normalizedStatus;
     if (!record.statusHistory || !Array.isArray(record.statusHistory)) record.statusHistory = [];
@@ -412,6 +425,11 @@ router.put("/approve-request/:id", isAdmin, async (req, res) => {
     const record = serviceRecord || cacRecord;
     if (!record) {
       return res.status(404).json({ success: false, message: "Request ID not found in any registered collection." });
+    }
+
+    // SECURITY: Only super_admin may approve requests that are currently in 'pending'
+    if (record.status === 'pending' && req.user?.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Admin may approve pending requests.' });
     }
 
     record.status = 'approved';
@@ -546,7 +564,7 @@ router.post("/payments/:id/reject", isAdmin, async (req, res) => {
 });
 
 // 👥 PAGINATED USERS REGISTRY DIRECTORY
-router.get("/users", isAdmin, async (req, res) => {
+router.get("/users", isSuperAdmin, async (req, res) => {
   try {
     let { page = 1, limit = 20, search = "" } = req.query;
     page = Math.max(1, parseInt(page));
@@ -581,7 +599,7 @@ router.get("/users", isAdmin, async (req, res) => {
 });
 
 // 📊 TRANSACTIONS LOG PIPELINE (PAGINATED)
-router.get("/transactions", isAdmin, async (req, res) => {
+router.get("/transactions", isSuperAdmin, async (req, res) => {
   try {
     let { page = 1, limit = 20 } = req.query;
     page = Math.max(1, parseInt(page));
@@ -606,7 +624,7 @@ router.get("/transactions", isAdmin, async (req, res) => {
 });
 
 // 📜 SYSTEM AUDIT LOG REPOSITORY TRAIL
-router.get("/audit-logs", isAdmin, async (req, res) => {
+router.get("/audit-logs", isSuperAdmin, async (req, res) => {
   try {
     let { page = 1, limit = 20 } = req.query;
     page = Math.max(1, parseInt(page));
@@ -663,7 +681,7 @@ router.put("/user/:id/remove-admin", isAdmin, isSuperAdmin, async (req, res) => 
   }
 });
 
-router.put("/user/:id/suspend", isAdmin, async (req, res) => {
+router.put("/user/:id/suspend", isSuperAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User matching identifier signature not located" });
@@ -678,7 +696,7 @@ router.put("/user/:id/suspend", isAdmin, async (req, res) => {
   }
 });
 
-router.put("/user/:id/activate", isAdmin, async (req, res) => {
+router.put("/user/:id/activate", isSuperAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "Requested operational user workspace matrix lost" });
@@ -707,7 +725,7 @@ router.delete("/user/:id", isAdmin, isSuperAdmin, async (req, res) => {
   }
 });
 
-router.post("/user/:id/units", isAdmin, async (req, res) => {
+router.post("/user/:id/units", isSuperAdmin, async (req, res) => {
   try {
     const { units, action } = req.body;
     const targetUnits = parseInt(units);
@@ -738,7 +756,7 @@ router.post("/user/:id/units", isAdmin, async (req, res) => {
 // =========================================================================
 // 💰 ADMIN WALLET BALANCE ADJUSTMENT (Creates Ledger Entry)
 // =========================================================================
-router.post("/adjust-funds", isAdmin, async (req, res) => {
+router.post("/adjust-funds", isSuperAdmin, async (req, res) => {
   try {
     const { userId, amount, action, note } = req.body;
     const adminEmail = req.user.email;
@@ -845,7 +863,7 @@ router.post("/adjust-funds", isAdmin, async (req, res) => {
 // =========================================================================
 // 💰 UNIFIED CORE PRICING MATRIX CONFIGURATION MANAGEMENT
 // =========================================================================
-router.put("/pricing", isAdmin, async (req, res) => {
+router.put("/pricing", isSuperAdmin, async (req, res) => {
   try {
     let pricing = await Pricing.findOne();
     if (!pricing) pricing = new Pricing({});

@@ -247,14 +247,26 @@ export default function AdminRequests() {
               </div>
             </div>
             
-            <div className="mt-4 flex gap-2">
-              <button onClick={() => setSelected(r)} className="bg-gray-900 text-white px-3 py-2 rounded-xl text-xs flex-1 hover:bg-black transition">
+              <div className="mt-4 flex gap-2">
+              <button 
+                onClick={() => {
+                  const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : {};
+                  if (r.status === 'pending' && user.role !== 'super_admin') return alert('Access denied: only Super Admin may view pending request details');
+                  setSelected(r);
+                }}
+                className="bg-gray-900 text-white px-3 py-2 rounded-xl text-xs flex-1 hover:bg-black transition"
+              >
                 {/* Inspect */}
               </button>
               {activeStatus === "pending" && (
                 <>
-                  <button onClick={() => handleStatusUpdate(r._id, "approved")} className="bg-green-600 text-white px-3 py-2 rounded-xl text-xs hover:bg-green-700 transition">✓</button>
-                  <button onClick={() => handleStatusUpdate(r._id, "rejected")} className="bg-red-600 text-white px-3 py-2 rounded-xl text-xs hover:bg-red-700 transition">✕</button>
+                  {/* Only render approve/reject buttons for super_admin */}
+                  { (localStorage.getItem('user') && JSON.parse(localStorage.getItem('user')).role === 'super_admin') ? (
+                    <>
+                      <button onClick={() => handleStatusUpdate(r._id, "approved")} className="bg-green-600 text-white px-3 py-2 rounded-xl text-xs hover:bg-green-700 transition">✓</button>
+                      <button onClick={() => handleStatusUpdate(r._id, "rejected")} className="bg-red-600 text-white px-3 py-2 rounded-xl text-xs hover:bg-red-700 transition">✕</button>
+                    </>
+                  ) : null }
                 </>
               )}
             </div>
@@ -418,11 +430,16 @@ export default function AdminRequests() {
                     />
                   </div>
 
-                  <div className="flex gap-2 pt-2">
+                    <div className="flex gap-2 pt-2">
                     <button 
                       onClick={async () => {
                         if (modalStatus === 'rejected' && (!modalComment || modalComment.trim().length < 5)) {
                           return alert('Please provide a detailed rejection reason (at least 5 characters).');
+                        }
+                        // Block non-super-admins from updating pending records
+                        const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : {};
+                        if (selected.status === 'pending' && user.role !== 'super_admin') {
+                          return alert('Forbidden: Only Super Admin may modify pending requests.');
                         }
                         try {
                           await axios.put(`${API_BASE}/api/admin/status/${selected._id}`, { status: modalStatus, note: modalComment }, { headers: authHeaders });

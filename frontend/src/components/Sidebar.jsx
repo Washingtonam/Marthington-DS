@@ -240,12 +240,12 @@ useEffect(() => {
 
                 <div className="space-y-1.5">
                   <NavItem to="/admin" label="Admin Dashboard" icon={<Settings size={18} />} />
-                  <NavItem to="/admin/users" label="Manage Users" icon={<Users size={18} />} />
-                  <NavItem to="/admin/payments" label="Payment Requests" icon={<CreditCard size={18} />} badge={pendingPayments} />
-                  <NavItem to="/admin/requests" label="Service Requests" icon={<Bell size={18} />} badge={pendingRequests} />
-                  {isSuperAdmin && (
-                    <NavItem to="/admin/pricing" label="Pricing Engine" icon={<Sliders size={18} />} />
-                  )}
+                    {isSuperAdmin && <NavItem to="/admin/users" label="Manage Users" icon={<Users size={18} />} />}
+                    <NavItem to="/admin/payments" label="Payment Requests" icon={<CreditCard size={18} />} badge={pendingPayments} />
+                    <NavItem to="/admin/requests" label="Service Requests" icon={<Bell size={18} />} badge={pendingRequests} />
+                    {isSuperAdmin && (
+                      <NavItem to="/admin/pricing" label="Pricing Engine" icon={<Sliders size={18} />} />
+                    )}
                 </div>
               </div>
             )}

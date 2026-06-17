@@ -55,14 +55,19 @@ router.post("/generate-nin-slip", async (req, res) => {
       return res.status(500).json({ message: "HTML generation failed" });
     }
 
-    const file = { content: html };
-
-    const options = {
-      format: "A4",
-      printBackground: true,
-    };
-
-    const pdfBuffer = await pdf.generatePdf(file, options);
+    // Prefer server-side PDFKit generators to reduce size and avoid heavy HTML renderers.
+    // If PDFKit generator exists, use it; otherwise fall back to html-pdf-node.
+    let pdfBuffer;
+    try {
+      const { generateDataSlip, generatePremiumSlip, generateLongSlip } = require('../shared/pdfGeneratorKit');
+      if (type === 'data') pdfBuffer = await generateDataSlip(data, trackingId);
+      else if (type === 'premium') pdfBuffer = await generatePremiumSlip(data, trackingId);
+      else if (type === 'long') pdfBuffer = await generateLongSlip(data, trackingId);
+    } catch (e) {
+      const file = { content: html };
+      const options = { format: "A4", printBackground: true };
+      pdfBuffer = await pdf.generatePdf(file, options);
+    }
 
     res.set({
       "Content-Type": "application/pdf",
