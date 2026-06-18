@@ -18,7 +18,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { formatNaira } from "../../lib/currency";
 
 export default function VerifyNIN() {
-  const { user, walletBalance, setBalance } = useUser();
+  const { user, walletBalance, setBalance, isBalanceLoading } = useUser();
   const { error, success } = useToast();
   const navigate = useNavigate();
   
@@ -35,6 +35,7 @@ export default function VerifyNIN() {
   const costInNaira = unitsRequired * unitPrice;
   const hasEnoughFunds = user?.isAdmin || (walletBalance ?? 0) >= costInNaira;
   const priceLabel = `Cost: ${formatNaira(costInNaira)}`;
+  const walletLabel = isBalanceLoading ? "Loading..." : `Wallet: ${formatNaira(walletBalance ?? 0)}`;
 
   const isNinValid = method !== "nin" || nin.length === 11;
   const isPhoneValid = method !== "phone" || phone.length >= 10;
