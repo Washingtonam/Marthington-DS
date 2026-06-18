@@ -39,6 +39,7 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminPricing from "./pages/admin/AdminPricing";
 import AdminRequests from "./pages/admin/AdminRequests";
+import UserDetailView from "./pages/admin/UserDetailView";
 import Contact from "./pages/Contact";
 
 // Layout & Context
@@ -132,6 +133,7 @@ function AppRoutes() {
       <Route path="/admin/payments" element={<AdminRoute><Layout><AdminPayments /></Layout></AdminRoute>} />
       <Route path="/admin/requests" element={<AdminRoute><Layout><AdminRequests /></Layout></AdminRoute>} />
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/user/:userId/details" element={<SuperAdminRoute><Layout><UserDetailView /></Layout></SuperAdminRoute>} />
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" />} />

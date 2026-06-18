@@ -13,11 +13,13 @@ import {
   Activity,
 } from "lucide-react";
 import { useToast } from "../../context/ToastContext";
+import { useNavigate } from "react-router-dom";
 
 export default function AdminUsers() {
   const { user: currentUser } = useUser();
   const isSuperAdmin = currentUser?.role === "super_admin";
   const { success, error: toastError } = useToast();
+  const navigate = useNavigate();
 
   // State management
   const [users, setUsers] = useState([]);
@@ -466,6 +468,7 @@ export default function AdminUsers() {
 
                 {/* Action Buttons */}
                 <div className="space-y-2">
+                  <button onClick={() => navigate(`/admin/user/${u._id}/details`)} className="w-full px-3 py-2 bg-slate-700/30 hover:bg-slate-700/50 text-white rounded-lg text-sm font-medium transition">View Details</button>
                   {/* Fund Adjustment */}
                   <button
                     onClick={() => openFundModal(u)}

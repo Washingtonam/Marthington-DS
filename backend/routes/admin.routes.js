@@ -656,6 +656,63 @@ router.get("/users/:userId/activity", isSuperAdmin, async (req, res) => {
   }
 });
 
+// GET single user profile
+router.get('/user/:id', isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid user id' });
+    const user = await User.findById(id).select('-password').lean();
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ success: true, data: user });
+  } catch (err) {
+    console.error('GET USER ERROR:', err);
+    res.status(500).json({ message: 'Failed to fetch user' });
+  }
+});
+
+// GET combined user history (transactions + service requests)
+router.get('/users/:userId/history', isAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json({ message: 'Invalid user identifier.' });
+
+    const [serviceRequests, transactions] = await Promise.all([
+      ServiceRequest.find({ userId }).lean(),
+      Transaction.find({ userId }).lean(),
+    ]);
+
+    const serviceRecords = serviceRequests.map((record) => ({
+      id: record._id,
+      createdAt: record.createdAt,
+      type: 'Service Usage',
+      description: record.service || record.type || 'Service Request',
+      amount: record.amount != null ? -Math.abs(Number(record.amount)) : record.amountKobo ? -Math.abs(Number(record.amountKobo) / 100) : 0,
+      raw: record,
+    }));
+
+    const transactionRecords = transactions.map((tx) => {
+      const amountNaira = tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0;
+      const fundingTypes = ['UNIT_ADD', 'credit', 'admin_credit', 'admin_debit'];
+      const isFunding = fundingTypes.includes(String(tx.type));
+      return {
+        id: tx._id,
+        createdAt: tx.createdAt,
+        type: isFunding ? 'Wallet Funding' : 'Wallet Transaction',
+        description: tx.description || tx.type || 'Transaction',
+        amount: isFunding ? amountNaira : -Math.abs(amountNaira),
+        raw: tx,
+      };
+    });
+
+    const combined = [...serviceRecords, ...transactionRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json({ success: true, data: combined });
+  } catch (err) {
+    console.error('FETCH USER HISTORY ERROR:', err);
+    res.status(500).json({ message: 'Failed to compile user history.' });
+  }
+});
+
 // 📊 TRANSACTIONS LOG PIPELINE (PAGINATED)
 router.get("/transactions", isSuperAdmin, async (req, res) => {
   try {
