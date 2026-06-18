@@ -70,14 +70,13 @@ export default function Profile() {
               <InfoItem label="Email" value={user.email} icon={<Mail size={18} />} />
               <InfoItem label="Role" value={user.role?.replace("_", " ")} icon={<BadgeCheck size={18} />} />
               <InfoItem label="Wallet Balance" value={formatNaira(user.walletBalance ?? 0)} icon={<Wallet size={18} />} />
-              <InfoItem label="Units" value={`${user.units || 0} Units`} icon={<Wallet size={18} />} />
             </div>
           </div>
 
           <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-6">
             <h2 className="font-bold text-lg mb-6">Quick Actions</h2>
             <div className="space-y-4">
-              <ActionButton label="Fund Wallet" sub="Buy more verification units" icon={<CreditCard />} onClick={() => navigate("/wallet")} />
+              <ActionButton label="Fund Wallet" sub="Fund your wallet" icon={<CreditCard />} onClick={() => navigate("/wallet")} />
               <ActionButton label="Transactions" sub="View payment history" icon={<FileText />} onClick={() => navigate("/transactions")} />
             </div>
           </div>

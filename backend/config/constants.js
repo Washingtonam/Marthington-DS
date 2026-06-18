@@ -45,7 +45,7 @@ module.exports.NIN_TRACKING_URL = process.env.NIN_TRACKING_URL || "https://ninbv
 module.exports.NIN_DEMOGRAPHY_URL = process.env.NIN_DEMOGRAPHY_URL || "https://ninbvnportal.com.ng/api/nin-demography";
 
 // API Timeouts
-module.exports.NIN_API_TIMEOUT = 15000; // 15 seconds
+module.exports.NIN_API_TIMEOUT = 30000; // 30 seconds
 
 // Verification Configuration
 module.exports.UNITS_REQUIRED = {

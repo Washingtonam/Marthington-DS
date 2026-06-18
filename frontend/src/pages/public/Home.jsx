@@ -66,7 +66,7 @@ export default function Home() {
             <div className="space-y-4">
               <FeatureCard icon={<BadgeCheck className="text-blue-400" />} title="NIN Validation" desc="Validate records instantly with accurate data." />
               <FeatureCard icon={<FileCheck2 className="text-indigo-400" />} title="Modification Requests" desc="Handle corrections professionally with tracking." />
-              <FeatureCard icon={<Wallet className="text-cyan-400" />} title="Wallet & Units" desc="Fund accounts and process tasks without delays." />
+              <FeatureCard icon={<Wallet className="text-cyan-400" />} title="Wallet" desc="Fund accounts and process tasks without delays." />
             </div>
           </motion.div>
         </div>

@@ -575,7 +575,8 @@ router.get("/users", isSuperAdmin, async (req, res) => {
           $or: [
             { email: { $regex: String(search), $options: "i" } },
             { firstName: { $regex: String(search), $options: "i" } },
-            { lastName: { $regex: String(search), $options: "i" } }
+            { lastName: { $regex: String(search), $options: "i" } },
+            { phoneNumber: { $regex: String(search), $options: "i" } }
           ]
         }
       : {};
@@ -595,6 +596,63 @@ router.get("/users", isSuperAdmin, async (req, res) => {
   } catch (err) {
     console.error("FETCH USERS ERROR:", err);
     res.status(500).json({ message: "Error mapping client network infrastructure logs." });
+  }
+});
+
+// 👥 USER ACTIVITY LEDGER / HISTORY
+router.get("/users/:userId/activity", isSuperAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user identifier." });
+    }
+
+    const [serviceRequests, transactions] = await Promise.all([
+      ServiceRequest.find({ userId }).lean(),
+      Transaction.find({ userId }).lean(),
+    ]);
+
+    const serviceRecords = serviceRequests.map((record) => ({
+      id: record._id,
+      timestamp: record.createdAt,
+      category: "Service",
+      transactionType: record.service || record.type || "Service Request",
+      description: record.service
+        ? `${record.service.replace(/_/g, " ")} ${record.type ? `(${record.type})` : ""}`.trim()
+        : record.type || "Service request",
+      amount: record.amount ? -Math.abs(record.amount) : record.amountKobo ? -Math.abs(record.amountKobo / 100) : 0,
+      raw: record,
+    }));
+
+    const transactionRecords = transactions.map((tx) => {
+      const amountNaira = tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0;
+      const fundingTypes = ["UNIT_ADD", "credit", "admin_credit"];
+      const category = fundingTypes.includes(tx.type) ? "Funding" : "Service";
+      const description = tx.description ||
+        (tx.type === "UNIT_ADD" ? "Wallet funding" :
+          tx.type === "NIN" ? "NIN verification" :
+          tx.type === "SERVICE" ? "Service transaction" :
+          tx.type || "Wallet transaction");
+
+      return {
+        id: tx._id,
+        timestamp: tx.createdAt,
+        category,
+        transactionType: tx.type || "Transaction",
+        description,
+        amount: category === "Funding" ? amountNaira : -Math.abs(amountNaira),
+        raw: tx,
+      };
+    });
+
+    const combinedActivity = [...serviceRecords, ...transactionRecords].sort(
+      (a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
+    );
+
+    res.json({ data: combinedActivity });
+  } catch (err) {
+    console.error("FETCH USER ACTIVITY ERROR:", err);
+    res.status(500).json({ message: "Failed to compile user activity history." });
   }
 });
 

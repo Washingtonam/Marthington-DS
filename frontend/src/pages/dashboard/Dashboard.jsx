@@ -25,9 +25,9 @@ import ActionButton from "../../components/ui/ActionButton";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, refreshBalance } = useUser();
+  const { user, refreshBalance, walletBalance } = useUser();
   const [stats, setStats] = useState({ total: 0, completed: 0, pending: 0 });
-  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletBalanceLocal, setWalletBalance] = useState(walletBalance ?? 0);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -66,7 +66,7 @@ export default function Dashboard() {
       }
 
       // Update Balance (Using walletBalance)
-      setWalletBalance(balanceRes.data.walletBalance ?? 0);
+      setWalletBalance(balanceRes.data.walletBalance ?? walletBalance ?? 0);
 
       // Update Stats
       const data = requestsRes.data || [];

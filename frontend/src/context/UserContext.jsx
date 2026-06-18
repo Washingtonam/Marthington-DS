@@ -7,7 +7,8 @@ const UserContext = createContext();
 export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
   const [units, setUnits] = useState(0);
-  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [isBalanceLoading, setIsBalanceLoading] = useState(false);
 
   // =========================
   // NORMALIZE USER
@@ -34,15 +35,12 @@ export function UserProvider({ children }) {
   const apiUnits = async (retryCount = 0) => {
     const MAX_RETRIES = 2;
     try {
+      setIsBalanceLoading(true);
       const res = await api.get("/api/users/wallet");
-      
+
       if (res.data) {
-        if (res.data.units !== undefined) {
-          updateUnits(res.data.units);
-        }
-        if (res.data.walletBalance !== undefined) {
-          updateWalletBalance(res.data.walletBalance);
-        }
+        if (res.data.units !== undefined) updateUnits(res.data.units);
+        if (res.data.walletBalance !== undefined) updateWalletBalance(res.data.walletBalance);
       }
     } catch (error) {
       console.error("❌ BALANCE SYNC ERROR:", error.response?.status, error.message);
@@ -51,6 +49,9 @@ export function UserProvider({ children }) {
         console.log(`Retrying balance sync... (${retryCount + 1}/${MAX_RETRIES})`);
         setTimeout(() => apiUnits(retryCount + 1), 2000);
       }
+    }
+    finally {
+      setIsBalanceLoading(false);
     }
   };
 
@@ -63,19 +64,14 @@ export function UserProvider({ children }) {
       const normalized = normalizeUser(storedUser);
       setUser(normalized);
       setUnits(normalized.units);
-      setWalletBalance(normalized.walletBalance);
+      // Initialize balance from storage (if available) and fetch fresh once
+      if (normalized.walletBalance !== undefined && normalized.walletBalance !== null) {
+        setWalletBalance(normalized.walletBalance);
+      }
       apiUnits();
     }
   }, []);
-
-  // =========================
-  // AUTO SYNC EVERY 30s 🔥
-  // =========================
-  useEffect(() => {
-    if (!user) return;
-    const interval = setInterval(apiUnits, 30000);
-    return () => clearInterval(interval);
-  }, [user]);
+  // NOTE: Balance refresh is now manual via `refreshBalance` or triggered on confirmed transactions.
 
   // =========================
   // UPDATE USER
@@ -84,7 +80,7 @@ export function UserProvider({ children }) {
     const normalized = normalizeUser(userData);
     setUser(normalized);
     setUnits(normalized.units);
-    setWalletBalance(normalized.walletBalance);
+    setWalletBalance(normalized.walletBalance ?? null);
     localStorage.setItem("user", JSON.stringify(normalized));
   };
 
@@ -105,10 +101,10 @@ export function UserProvider({ children }) {
   // UPDATE WALLET BALANCE
   // =========================
   const updateWalletBalance = (newBalance) => {
-    setWalletBalance(newBalance);
+    setWalletBalance((prev) => (typeof newBalance === "function" ? newBalance(prev) : newBalance));
     setUser((prev) => {
       if (!prev) return prev;
-      const updated = { ...prev, walletBalance: newBalance };
+      const updated = { ...prev, walletBalance: typeof newBalance === "function" ? newBalance(prev?.walletBalance) : newBalance };
       localStorage.setItem("user", JSON.stringify(updated));
       return updated;
     });
@@ -120,7 +116,7 @@ export function UserProvider({ children }) {
   const clearUser = () => {
     setUser(null);
     setUnits(0);
-    setWalletBalance(0);
+    setWalletBalance(null);
     localStorage.removeItem("user");
     localStorage.removeItem("token");
   };
@@ -132,6 +128,7 @@ export function UserProvider({ children }) {
         units,
         walletBalance,
         balance: walletBalance,
+        isBalanceLoading,
         setUnits: updateUnits,
         setUser: updateUser,
         setBalance: updateWalletBalance,

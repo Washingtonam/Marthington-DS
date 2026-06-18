@@ -34,6 +34,41 @@ router.post("/request", verifyToken, servicesController.submitServiceRequest);
 // ==============================================================
 // ⚡ ROUTE 2: INSTANT AUTOMATED THIRD-PARTY NIN RECOVERY / VERIFY
 // ==============================================================
+
+async function axiosPostWithRetry(url, payload, options = {}, maxRetries = 2) {
+  let attempt = 0;
+  let lastError;
+
+  while (attempt <= maxRetries) {
+    try {
+      if (attempt > 0) {
+        console.log(`VERIFY RETRY: attempt ${attempt} of ${maxRetries} for URL ${url}`);
+      }
+      return await axios.post(url, payload, options);
+    } catch (error) {
+      lastError = error;
+      const recoverable = !error.response || error.message === 'Network Error' || error.code === 'ECONNABORTED' || error.code === 'ECONNRESET' || error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN' || (error.response && error.response.status >= 500);
+      console.warn(`VERIFY RETRY ERROR [attempt ${attempt}]`, {
+        url,
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        retryable: recoverable,
+      });
+
+      if (!recoverable || attempt === maxRetries) {
+        throw error;
+      }
+
+      const backoffMs = Math.pow(2, attempt) * 1000;
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      attempt += 1;
+    }
+  }
+
+  throw lastError;
+}
+
 router.post("/verify", verifyToken, async (req, res) => {
   const { error } = validateVerification.validate(req.body);
   if (error) return res.status(400).json({ error: error.details[0].message });
@@ -115,7 +150,7 @@ router.post("/verify", verifyToken, async (req, res) => {
     else if (method === "tracking") { url = NIN_TRACKING_URL; payload = { tracking_id, consent: true }; }
     else if (method === "demographic") { url = NIN_DEMOGRAPHY_URL; payload = { firstname, lastname: surname, gender: gender?.toLowerCase(), dob: birthdate, consent: true }; }
 
-    const response = await axios.post(url, payload, { headers: { "x-api-key": API_KEY, "Content-Type": "application/json" }, timeout: NIN_API_TIMEOUT });
+        const response = await axiosPostWithRetry(url, payload, { headers: { "x-api-key": API_KEY, "Content-Type": "application/json" }, timeout: NIN_API_TIMEOUT });
     
     // Validate response structure before accessing properties
     const responseSchema = Joi.object({

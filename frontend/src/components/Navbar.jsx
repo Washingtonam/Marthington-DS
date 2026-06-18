@@ -7,14 +7,14 @@ import {
 } from "lucide-react";
  
 import { useTheme } from "../context/ThemeContext";
+import { useUser } from "../context/UserContext";
+import { formatNaira } from "../lib/currency";
 
 export default function Navbar() {
 
   const { theme, toggleTheme } = useTheme();
 
-  const user = JSON.parse(
-    localStorage.getItem("user")
-  );
+  const { user, walletBalance, isBalanceLoading } = useUser();
 
   return (
     <div className="sticky top-0 z-30 mb-8">
@@ -44,15 +44,13 @@ export default function Navbar() {
           {/* RIGHT */}
           <div className="flex items-center gap-3">
 
-            {/* UNITS */}
-            <div className="hidden sm:flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-2xl shadow-lg">
-
+            {/* WALLET */}
+            <div className="hidden sm:flex items-center gap-3 bg-blue-600 text-white px-4 py-2 rounded-2xl shadow-lg">
               <Wallet size={16} />
-
-              <span className="text-sm font-semibold">
-                Units Available
-              </span>
-
+              <div className="text-sm text-white">
+                <div className="font-semibold">{isBalanceLoading ? "Loading..." : formatNaira(walletBalance ?? 0)}</div>
+                <div className="text-xs opacity-80">Wallet</div>
+              </div>
             </div>
 
             {/* NOTIFICATION */}

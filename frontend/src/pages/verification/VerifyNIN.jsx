@@ -29,15 +29,12 @@ export default function VerifyNIN() {
   const [form, setForm] = useState({ firstname: "", surname: "", gender: "", birthdate: "" });
   const [touched, setTouched] = useState({ nin: false, phone: false, firstname: false, surname: false, gender: false, birthdate: false });
 
-  const unitsRequired = useMemo(() =>
-    ["phone", "demographic"].includes(method) ? 2 : 1,
-  [method]);
+  const unitsRequired = useMemo(() => ["phone", "demographic"].includes(method) ? 2 : 1, [method]);
 
-  const unitPrice = 250; // Naira per unit
+  const unitPrice = 250; // legacy per-unit value; cost calculation remains in Naira
   const costInNaira = unitsRequired * unitPrice;
   const hasEnoughFunds = user?.isAdmin || (walletBalance ?? 0) >= costInNaira;
-  const priceLabel = `Cost: ${unitsRequired} Unit${unitsRequired > 1 ? "s" : ""} (${formatNaira(costInNaira)})`;
-  const walletLabel = `Wallet: ${formatNaira(walletBalance ?? 0)}`;
+  const priceLabel = `Cost: ${formatNaira(costInNaira)}`;
 
   const isNinValid = method !== "nin" || nin.length === 11;
   const isPhoneValid = method !== "phone" || phone.length >= 10;
@@ -93,7 +90,8 @@ export default function VerifyNIN() {
 
       // Deduct cost locally (backend should perform atomic deduction and ledger logging)
       try {
-        setBalance((prev) => Number(prev || 0) - Number(costInNaira));
+        // Update local balance deterministically (backend should be source of truth)
+        setBalance(Number((walletBalance ?? 0) - costInNaira));
       } catch (e) {
         console.warn("Failed to update local balance", e);
       }
@@ -120,13 +118,9 @@ export default function VerifyNIN() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 sm:min-w-[320px]">
               <div className="bg-white/10 backdrop-blur rounded-3xl p-6">
-                <p className="text-white/70 text-sm">Available Units</p>
-                <h2 className="text-4xl font-black">{user?.units ?? 0}</h2>
+                <p className="text-white/70 text-sm">Wallet Balance</p>
+                <h2 className="text-4xl font-black">{formatNaira(walletBalance ?? 0)}</h2>
               </div>
-            <div className="bg-white/10 backdrop-blur rounded-3xl p-6">
-              <p className="text-white/70 text-sm">Wallet Balance</p>
-              <h2 className="text-4xl font-black">{formatNaira(walletBalance ?? 0)}</h2>
-            </div>
           </div>
         </div>
       </motion.div>

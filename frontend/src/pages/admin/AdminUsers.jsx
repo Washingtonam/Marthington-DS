@@ -10,6 +10,7 @@ import {
   Search,
   AlertCircle,
   CheckCircle,
+  Activity,
 } from "lucide-react";
 import { useToast } from "../../context/ToastContext";
 
@@ -25,8 +26,13 @@ export default function AdminUsers() {
     activeUsers: 0,
     totalBalance: 0,
   });
-  const [searchEmail, setSearchEmail] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentSearch, setCurrentSearch] = useState("");
+  const [activityRecords, setActivityRecords] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [activityUser, setActivityUser] = useState(null);
   const [sortBy, setSortBy] = useState("newest"); // 'balance' | 'alphabetical' | 'newest'
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
@@ -44,15 +50,15 @@ export default function AdminUsers() {
   const [message, setMessage] = useState({ type: "", text: "" });
 
   // Fetch users with pagination and search
-  const fetchUsers = async (pageNum = 1, email = "") => {
+  const fetchUsers = async (pageNum = 1, search = "") => {
     setLoading(true);
     try {
       const params = {
         page: pageNum,
         limit: pageSize,
       };
-      if (email.trim()) {
-        params.search = email.trim();
+      if (search.trim()) {
+        params.search = search.trim();
       }
 
       const response = await api.get("/api/admin/users", { params });
@@ -91,26 +97,33 @@ export default function AdminUsers() {
     fetchStats();
   }, []);
 
-  // Handle search
-  const handleSearch = () => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchTerm.trim());
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentSearch(searchQuery);
     setPage(1);
-    // store the server search term and fetch
-    setSearchEmail(searchQuery);
     fetchUsers(1, searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (page !== 1) {
+      fetchUsers(page, currentSearch);
+    }
+  }, [page, currentSearch]);
+
+  const handleSearch = () => {
+    setSearchQuery(searchTerm.trim());
   };
 
-  // Instant client-side filtering of the currently-loaded users
   const filteredUsers = useMemo(() => {
-    const q = (searchQuery || searchEmail || "").toLowerCase().trim();
-    if (!q) return users;
-    return users.filter((user) => {
-      return (
-        (user.email || "").toLowerCase().includes(q) ||
-        (user.firstname || "").toLowerCase().includes(q) ||
-        (user.lastname || "").toLowerCase().includes(q)
-      );
-    });
-  }, [users, searchQuery, searchEmail]);
+    return users;
+  }, [users]);
 
   const sortedAndFilteredUsers = useMemo(() => {
     const result = [...filteredUsers];
@@ -188,7 +201,7 @@ export default function AdminUsers() {
     try {
       await api.put(`/api/admin/user/${userId}/suspend`);
       setMessage({ type: "success", text: "User suspended successfully" });
-      await fetchUsers(page, searchEmail);
+      await fetchUsers(page, currentSearch);
     } catch (error) {
       console.error("❌ Suspend error:", error);
       setMessage({
@@ -203,7 +216,7 @@ export default function AdminUsers() {
     try {
       await api.put(`/api/admin/user/${userId}/activate`);
       setMessage({ type: "success", text: "User activated successfully" });
-      await fetchUsers(page, searchEmail);
+      await fetchUsers(page, currentSearch);
     } catch (error) {
       console.error("❌ Activate error:", error);
       setMessage({
@@ -223,7 +236,7 @@ export default function AdminUsers() {
     try {
       await api.put(`/api/admin/user/${userId}/make-admin`);
       setMessage({ type: "success", text: "User promoted to admin" });
-      await fetchUsers(page, searchEmail);
+      await fetchUsers(page, currentSearch);
     } catch (error) {
       console.error("❌ Promote error:", error);
       setMessage({
@@ -243,7 +256,7 @@ export default function AdminUsers() {
     try {
       await api.put(`/api/admin/user/${userId}/remove-admin`);
       setMessage({ type: "success", text: "User demoted to regular user" });
-      await fetchUsers(page, searchEmail);
+      await fetchUsers(page, currentSearch);
     } catch (error) {
       console.error("❌ Demote error:", error);
       setMessage({
@@ -270,7 +283,7 @@ export default function AdminUsers() {
     try {
       await api.delete(`/api/admin/user/${userId}`);
       setMessage({ type: "success", text: "User deleted successfully" });
-      await fetchUsers(page, searchEmail);
+      await fetchUsers(page, currentSearch);
       await fetchStats();
     } catch (error) {
       console.error("❌ Delete error:", error);
@@ -281,6 +294,32 @@ export default function AdminUsers() {
     }
   };
 
+  const openActivityModal = async (user) => {
+    setActivityLoading(true);
+    setActivityUser(user);
+    setActivityModalOpen(true);
+
+    try {
+      const response = await api.get(`/api/admin/users/${user._id}/activity`);
+      setActivityRecords(response.data.data || []);
+    } catch (error) {
+      console.error("❌ Fetch user activity error:", error);
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || "Failed to fetch user activity",
+      });
+      setActivityRecords([]);
+    } finally {
+      setActivityLoading(false);
+    }
+  };
+
+  const closeActivityModal = () => {
+    setActivityModalOpen(false);
+    setActivityRecords([]);
+    setActivityUser(null);
+  };
+
   const openFundModal = (user) => {
     setSelectedUser(user);
     setShowFundModal(true);
@@ -289,13 +328,12 @@ export default function AdminUsers() {
     setFundNote("");
   };
 
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-white mb-2">User Management</h1>
-        <p className="text-slate-400">Manage users, adjust balances, and control access</p>
+        <h1 className="text-4xl font-bold mb-2 text-slate-950 dark:text-white">User Management</h1>
+        <p className="text-slate-600 dark:text-slate-400">Manage users, adjust balances, and control access</p>
       </div>
 
       {/* Message Alert */}
@@ -318,15 +356,15 @@ export default function AdminUsers() {
 
       {/* Stats Header */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
           <p className="text-slate-400 text-sm mb-1">Total Users</p>
           <p className="text-3xl font-bold text-white">{stats.totalUsers}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
           <p className="text-slate-400 text-sm mb-1">Active Users</p>
           <p className="text-3xl font-bold text-green-400">{stats.activeUsers}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
           <p className="text-slate-400 text-sm mb-1">Total Platform Balance</p>
           <p className="text-3xl font-bold text-blue-400">
             ₦{stats.totalBalance.toLocaleString("en-NG", {
@@ -343,8 +381,8 @@ export default function AdminUsers() {
           <input
             type="text"
             placeholder="Search by email or name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             onKeyPress={(e) => e.key === "Enter" && handleSearch()}
             className="flex-1 px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
           />
@@ -491,6 +529,63 @@ export default function AdminUsers() {
               </div>
             ))}
           </div>
+          {activityModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-start justify-center p-6 bg-black/50">
+              <div className="w-full max-w-4xl bg-slate-950 rounded-3xl border border-slate-700 shadow-2xl overflow-hidden">
+                <div className="flex items-center justify-between p-5 border-b border-slate-800">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">{activityUser?.email || "User"} Activity</h2>
+                    <p className="text-sm text-slate-400">Latest wallet funding and service activity.</p>
+                  </div>
+                  <button
+                    onClick={closeActivityModal}
+                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 transition"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="p-5">
+                  {activityLoading ? (
+                    <div className="text-slate-400">Loading activity...</div>
+                  ) : activityRecords.length === 0 ? (
+                    <div className="text-slate-400">No activity records found for this user.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left text-sm divide-y divide-slate-700">
+                        <thead className="bg-slate-900 text-slate-300">
+                          <tr>
+                            <th className="px-4 py-3">Timestamp</th>
+                            <th className="px-4 py-3">Type</th>
+                            <th className="px-4 py-3">Description</th>
+                            <th className="px-4 py-3 text-right">Amount (₦)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {activityRecords.map((record) => (
+                            <tr key={record.id} className="bg-slate-950 hover:bg-slate-900 transition">
+                              <td className="px-4 py-3 text-slate-300">
+                                {new Date(record.timestamp).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-slate-200 capitalize">
+                                {record.category}
+                              </td>
+                              <td className="px-4 py-3 text-slate-300">
+                                {record.description}
+                              </td>
+                              <td className={`px-4 py-3 text-right font-semibold ${record.amount >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                                {record.amount >= 0 ? "+" : "-"}₦{Math.abs(record.amount).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Pagination */}
           <div className="flex items-center justify-between">
@@ -499,14 +594,14 @@ export default function AdminUsers() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => fetchUsers(page - 1, searchEmail)}
+                onClick={() => fetchUsers(page - 1, currentSearch)}
                 disabled={page <= 1 || loading}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg transition"
               >
                 Previous
               </button>
               <button
-                onClick={() => fetchUsers(page + 1, searchEmail)}
+                onClick={() => fetchUsers(page + 1, currentSearch)}
                 disabled={page >= totalPages || loading}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg transition"
               >

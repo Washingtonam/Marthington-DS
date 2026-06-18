@@ -17,19 +17,17 @@ export function ThemeProvider({
   // =========================
   const [theme, setTheme] =
     useState(() => {
+      if (typeof window === "undefined") {
+        return "dark";
+      }
 
-      const saved =
-        localStorage.getItem("theme");
-
-      if (
-        saved === "dark" ||
-        saved === "light"
-      ) {
+      const saved = localStorage.getItem("theme");
+      if (saved === "dark" || saved === "light") {
         return saved;
       }
 
-      // DEFAULT
-      return "dark";
+      const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+      return prefersDark ? "dark" : "light";
     });
 
   // =========================

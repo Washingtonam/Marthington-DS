@@ -17,7 +17,7 @@ export default function Layout({ children }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-[#0B1120] transition-colors duration-300 flex">
+    <div className="min-h-screen flex bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300">
       
       {/* SIDEBAR */}
       <Sidebar />
@@ -30,10 +30,10 @@ export default function Layout({ children }) {
         }}
       >
         {/* TOP STATUS CONTROL BAR */}
-        <div className="sticky top-0 z-30 backdrop-blur-xl bg-white/70 dark:bg-[#0F172A]/70 border-b border-gray-200 dark:border-white/10">
+        <div className="sticky top-0 z-30 backdrop-blur-xl bg-white/70 dark:bg-slate-950/70 border-b border-gray-200 dark:border-slate-800">
           <div className="flex items-center justify-between px-6 py-4 pl-20 lg:pl-6">
             <div>
-              <h1 className="text-lg font-semibold text-gray-800 dark:text-white">
+              <h1 className="text-lg font-semibold text-slate-900 dark:text-white">
                 Xcombinator Platform
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">

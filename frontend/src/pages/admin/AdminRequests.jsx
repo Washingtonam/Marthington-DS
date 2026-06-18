@@ -16,13 +16,13 @@ const maskNIN = (nin) => {
 
 // 🎨 Status Badge Color Mapping
 const statusColors = {
-  "pending": "bg-yellow-100 text-yellow-800 border border-yellow-300",
-  "in-progress": "bg-blue-100 text-blue-800 border border-blue-300",
-  "processing": "bg-purple-100 text-purple-800 border border-purple-300",
-  "approved": "bg-green-100 text-green-800 border border-green-300",
-  "completed": "bg-emerald-100 text-emerald-800 border border-emerald-300",
-  "rejected": "bg-red-100 text-red-800 border border-red-300",
-  "failed": "bg-orange-100 text-orange-800 border border-orange-300"
+  "pending": "bg-yellow-100 text-yellow-800 border border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-600",
+  "in-progress": "bg-blue-100 text-blue-800 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-600",
+  "processing": "bg-purple-100 text-purple-800 border border-purple-300 dark:bg-purple-900/30 dark:text-purple-200 dark:border-purple-600",
+  "approved": "bg-green-100 text-green-800 border border-green-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-600",
+  "completed": "bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-600",
+  "rejected": "bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/30 dark:text-red-200 dark:border-red-600",
+  "failed": "bg-orange-100 text-orange-800 border border-orange-300 dark:bg-orange-900/30 dark:text-orange-200 dark:border-orange-600"
 };
 
 // 📊 Status Icons
@@ -60,15 +60,15 @@ export default function AdminRequests() {
   const cacSubServices = ["All", "sole_proprietorship", "partnership", "limited_1m", "custom_ngo"];
 
   const serviceColors = {
-    "Validation": "bg-blue-100 text-blue-800",
-    "IP Clearance": "bg-purple-100 text-purple-800",
-    "Modification": "bg-orange-100 text-orange-800",
-    "Personalization": "bg-teal-100 text-teal-800",
-    "Self-Service": "bg-pink-100 text-pink-800",
-    "sole_proprietorship": "bg-slate-100 text-slate-800",
-    "partnership": "bg-amber-100 text-amber-800",
-    "limited_1m": "bg-lime-100 text-lime-800",
-    "custom_ngo": "bg-cyan-100 text-cyan-800"
+    "Validation": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200",
+    "IP Clearance": "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200",
+    "Modification": "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200",
+    "Personalization": "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-200",
+    "Self-Service": "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-200",
+    "sole_proprietorship": "bg-slate-100 text-slate-800 dark:bg-slate-800/80 dark:text-slate-200",
+    "partnership": "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+    "limited_1m": "bg-lime-100 text-lime-800 dark:bg-lime-900/30 dark:text-lime-200",
+    "custom_ngo": "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200"
   };
 
   const token = localStorage.getItem("token")?.replace(/['"]+/g, "") || "";
@@ -111,7 +111,7 @@ export default function AdminRequests() {
           headers: authHeaders 
         });
       } else {
-        await axios.put(`${API_BASE}/api/update-status/${id}`, { status }, { 
+        await axios.put(`${API_BASE}/api/admin/status/${id}`, { status }, { 
           headers: authHeaders 
         });
       }
@@ -175,9 +175,9 @@ export default function AdminRequests() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="flex gap-4 mb-6">
+      <div className="flex gap-4 mb-6 flex-wrap">
         {["nimc", "cac"].map(tab => (
-          <button key={tab} onClick={() => { setActiveTab(tab); setActiveSubService("All"); }} className={`px-6 py-3 font-bold rounded-2xl ${activeTab === tab ? "bg-black text-white" : "bg-gray-100"}`}>
+          <button key={tab} onClick={() => { setActiveTab(tab); setActiveSubService("All"); }} className={`px-6 py-3 font-bold rounded-2xl transition ${activeTab === tab ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
             {tab.toUpperCase()} Services
           </button>
         ))}
@@ -185,30 +185,30 @@ export default function AdminRequests() {
 
       <div className="flex gap-2 mb-6 flex-wrap">
         {["pending", "approved", "in-progress", "processing", "completed", "rejected", "failed"].map(s => (
-          <button key={s} onClick={() => { setActiveStatus(s); setPage(1); }} className={`px-4 py-2 rounded-xl text-xs font-bold capitalize ${activeStatus === s ? "bg-blue-600 text-white" : "bg-gray-100"}`}>
+          <button key={s} onClick={() => { setActiveStatus(s); setPage(1); }} className={`px-4 py-2 rounded-xl text-xs font-bold capitalize transition ${activeStatus === s ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
             {s}
           </button>
         ))}
       </div>
 
-      <div className="flex gap-3 items-center mb-6">
-        <label className="text-sm font-semibold">Requester:</label>
-        <select value={requesterRole} onChange={(e) => setRequesterRole(e.target.value)} className="px-3 py-2 rounded-xl border bg-white text-sm">
+      <div className="flex gap-3 items-center mb-6 flex-wrap">
+        <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">Requester:</label>
+        <select value={requesterRole} onChange={(e) => setRequesterRole(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
           <option value="all">All</option>
           <option value="user">User</option>
           <option value="admin">Admin</option>
           <option value="super_admin">Super Admin</option>
         </select>
-        <div className="ml-4 flex-1 flex items-center bg-white rounded-xl p-2 border">
-          <Search className="mr-2" />
-          <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by email or NIN" className="w-full outline-none" />
+        <div className="ml-4 flex-1 flex items-center rounded-xl p-2 border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
+          <Search className="mr-2 text-slate-500 dark:text-slate-400" />
+          <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by email or NIN" className="w-full outline-none bg-transparent text-slate-900 dark:text-slate-100" />
         </div>
       </div>
 
       {(activeTab === "nimc" || activeTab === "cac") && (
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {(activeTab === "nimc" ? nimcSubServices : cacSubServices).map(s => (
-            <button key={s} onClick={() => setActiveSubService(s)} className={`px-4 py-2 rounded-xl text-xs font-bold ${activeSubService === s ? "bg-gray-800 text-white" : "bg-white border"}`}>
+            <button key={s} onClick={() => setActiveSubService(s)} className={`px-4 py-2 rounded-xl text-xs font-bold transition ${activeSubService === s ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700"}`}>
               {s}
             </button>
           ))}
@@ -217,22 +217,22 @@ export default function AdminRequests() {
 
       <div className="grid md:grid-cols-3 gap-6">
         {displayedRequests.map(r => (
-          <div key={r._id} className="bg-white p-6 rounded-3xl border shadow-sm hover:shadow-md transition">
+          <div key={r._id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition">
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1">
-                <h3 className="font-bold text-sm truncate text-slate-900">{r.userId?.email}</h3>
-                <p className="text-xs text-slate-500 mt-1">ID: {r._id.slice(-6)}</p>
+                <h3 className="font-bold text-sm truncate">{r.userId?.email}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">ID: {r._id.slice(-6)}</p>
               </div>
-              <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${statusColors[r.status] || 'bg-gray-100'}`}>
+              <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${statusColors[r.status] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>
                 {r.status?.replace('-', ' ') || 'pending'}
               </span>
             </div>
             
-            <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${serviceColors[r.service || r.serviceType] || "bg-gray-100"}`}>
+            <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${serviceColors[r.service || r.serviceType] || "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>
               {r.pipelineSource === "cac" ? (r.serviceType || "CAC") : (r.service || "General")}
             </span>
             
-            <div className="mt-3 space-y-2 text-xs text-slate-600">
+            <div className="mt-3 space-y-2 text-xs text-slate-600 dark:text-slate-400">
               <div className="flex justify-between">
                 <span className="text-slate-500">Requested by:</span>
                 <span className="font-semibold">{r.userId?.role || 'user'}</span>
@@ -254,7 +254,7 @@ export default function AdminRequests() {
                   if (r.status === 'pending' && user.role !== 'super_admin') return alert('Access denied: only Super Admin may view pending request details');
                   setSelected(r);
                 }}
-                className="bg-gray-900 text-white px-3 py-2 rounded-xl text-xs flex-1 hover:bg-black transition"
+                className="bg-slate-900 text-white px-3 py-2 rounded-xl text-xs flex-1 hover:bg-slate-800 transition"
               >
                 {/* Inspect */}
               </button>
@@ -275,20 +275,20 @@ export default function AdminRequests() {
       </div>
 
       <div className="flex justify-center items-center gap-4 mt-10">
-        <button disabled={page === 1} onClick={() => fetchRequests(page - 1)} className="p-2 bg-gray-100 rounded-xl"><ChevronLeft /></button>
-        <span className="font-bold">Page {page} of {pages}</span>
-        <button disabled={page === pages} onClick={() => fetchRequests(page + 1)} className="p-2 bg-gray-100 rounded-xl"><ChevronRight /></button>
+        <button disabled={page === 1} onClick={() => fetchRequests(page - 1)} className="p-2 rounded-xl bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 disabled:opacity-50"><ChevronLeft /></button>
+        <span className="font-bold text-slate-900 dark:text-slate-100">Page {page} of {pages}</span>
+        <button disabled={page === pages} onClick={() => fetchRequests(page + 1)} className="p-2 rounded-xl bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 disabled:opacity-50"><ChevronRight /></button>
       </div>
       {selected && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-6">
-          <div className="w-full max-w-3xl bg-white dark:bg-[#0B1220] rounded-2xl p-6 shadow-lg overflow-auto max-h-[90vh]">
+          <div className="w-full max-w-3xl bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 rounded-2xl p-6 shadow-lg overflow-auto max-h-[90vh]">
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h2 className="text-xl font-bold">Request Details</h2>
-                <p className="text-sm text-slate-500">{getRequestTitle(selected)} — {selected.pipelineSource?.toUpperCase() || ''}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{getRequestTitle(selected)} — {selected.pipelineSource?.toUpperCase() || ''}</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setSelected(null)} className="px-3 py-2 rounded-xl bg-gray-100">Close</button>
+                <button onClick={() => setSelected(null)} className="px-3 py-2 rounded-xl bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100">Close</button>
               </div>
             </div>
 
