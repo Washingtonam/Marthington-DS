@@ -10,7 +10,7 @@ export default function Wallet() {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleFlutterwavePayment = async () => {
+  const handlePaystackPayment = async () => {
     const numAmount = Number(amount);
 
     if (!numAmount || numAmount < 100) {
@@ -23,126 +23,158 @@ export default function Wallet() {
       return;
     }
 
-    if (!window?.FlutterwaveCheckout) {
-      alert("Flutterwave SDK is not loaded. Please refresh the page.");
-      return;
-    }
-
     setLoading(true);
 
     try {
       console.log("📤 Initiating payment with backend...");
       const { data } = await api.post("/api/payments/init", {
         amount: numAmount,
-        source: "XCOMBINATOR",
       });
 
       if (!data.reference) {
         throw new Error("Backend did not return a payment reference");
       }
 
-      const subaccountId = import.meta.env.VITE_FLW_OPAY_SUBACCOUNT_ID || import.meta.env.VITE_OPAY_SUBACCOUNT_ID;
-      const paymentConfig = {
-        public_key: import.meta.env.VITE_FLW_PUBLIC_KEY,
-        tx_ref: data.reference,
-        amount: numAmount,
-        currency: "NGN",
-        customer: {
-          email: user.email,
-        },
-        customizations: {
-          title: "Xcombinator Wallet Funding",
-          description: "Fund your Xcombinator wallet",
-        },
-        callback: () => {
-          alert("✅ Payment successful!");
-          api.get("/api/users/wallet").then((res) => setBalance(res.data.walletBalance));
-          setLoading(false);
-        },
-        onclose: () => {
-          setLoading(false);
-        },
-      };
+      console.log("✅ Payment reference received:", data.reference);
+      console.log("🔗 Opening Paystack checkout...");
 
-      if (subaccountId) {
-        paymentConfig.subaccounts = [
-          {
-            id: subaccountId,
-            transaction_split_ratio: 1,
-          },
-        ];
+      // Initialize Paystack payment
+      const paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+      if (!paystackPublicKey) {
+        throw new Error("VITE_PAYSTACK_PUBLIC_KEY is not configured");
       }
 
-      console.log("DEBUG: Sending to Flutterwave SDK:", paymentConfig);
+      const handler = window.PaystackPop.setup({
+        key: paystackPublicKey,
+        email: user.email,
+        amount: numAmount * 100, // Paystack expects amount in kobo
+        ref: data.reference,
+        onClose: function () {
+          console.log("⚠️  Payment window closed");
+          alert("Payment window closed");
+          setLoading(false);
+        },
+        onSuccess: function (response) {
+          console.log("✅ Paystack payment successful!");
+          console.log("   Reference:", response.reference);
+          console.log("   Status:", response.status);
+          
+          // Refresh wallet balance
+          api.get("/api/users/wallet")
+            .then((res) => {
+              setBalance(res.data.walletBalance);
+              alert("✅ Payment successful! Your wallet has been updated.");
+            })
+            .catch((err) => {
+              console.error("Error fetching updated wallet:", err);
+              alert("✅ Payment successful! Please refresh to see updated balance.");
+            });
+          
+          setLoading(false);
+          setAmount("");
+        },
+      });
 
-      window.FlutterwaveCheckout(paymentConfig);
+      handler.openIframe();
     } catch (err) {
       console.error("❌ Payment initialization failed:", err);
-      alert(err.response?.data?.message || "Payment initialization failed");
+      alert("Error: " + (err.response?.data?.message || err.message));
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-blue-700 to-indigo-900 text-white p-8 rounded-[2rem] shadow-2xl mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
-        <div>
-          <h1 className="text-4xl font-black">Wallet</h1>
-          <p className="text-blue-100">Fund your account to access platform services</p>
-        </div>
-        <div className="bg-white/10 backdrop-blur p-6 rounded-3xl min-w-[200px] text-center">
-          <p className="text-xs uppercase tracking-widest text-blue-200">Wallet Balance</p>
-          <h2 className="text-5xl font-black">{formatNaira(user?.walletBalance ?? 0)}</h2>
-        </div>
-      </motion.div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-[#0f172a] dark:to-[#1e293b]">
+      <div className="max-w-6xl mx-auto px-4 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Wallet Info */}
+          <div className="bg-white dark:bg-[#1e293b] rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
+            <h1 className="text-3xl font-bold mb-2">Your Wallet</h1>
+            <p className="text-gray-500 mb-8">Manage your account balance</p>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-xl border">
-          <h2 className="text-2xl font-bold mb-6">Fund Wallet</h2>
-          
-          <input
-            type="number"
-            placeholder="Enter amount (₦)"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            disabled={loading}
-            className="w-full p-4 rounded-2xl border mb-6 bg-gray-50 dark:bg-gray-800 disabled:opacity-50"
-          />
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl p-8 text-white mb-8">
+              <p className="text-sm opacity-80 mb-2">Current Balance</p>
+              <h2 className="text-4xl font-bold">{formatNaira(user?.walletBalance || 0)}</h2>
+            </div>
 
-          <button
-            onClick={handleFlutterwavePayment}
-            disabled={loading || !amount}
-            className="mt-6 w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="animate-spin" size={20} />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Wallet2 size={20} />
-                Pay with Flutterwave
-              </>
-            )}
-          </button>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400">Amount to Deposit</label>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="Enter amount in ₦"
+                  className="w-full mt-2 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-[#0f172a] dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  min="100"
+                  max="5000000"
+                />
+              </div>
 
-          <div className="mt-8 pt-8 border-t">
-            <h3 className="font-bold mb-4">How It Works</h3>
-            <ul className="text-sm text-gray-600 space-y-2">
-              <li>✓ Enter amount and click "Pay with Flutterwave"</li>
-              <li>✓ Complete payment in the Flutterwave modal</li>
-              <li>✓ Your wallet updates automatically upon confirmation</li>
-            </ul>
+              {/* Quick Amount Buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                {[500, 1000, 2500, 5000].map((quick) => (
+                  <button
+                    key={quick}
+                    onClick={() => setAmount(String(quick))}
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition text-sm font-medium"
+                  >
+                    ₦{quick.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={handlePaystackPayment}
+                disabled={loading || !amount}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Wallet2 size={20} />
+                    Pay with Paystack
+                  </>
+                )}
+              </button>
+
+              <div className="mt-8 pt-8 border-t">
+                <h3 className="font-bold mb-4">How It Works</h3>
+                <ul className="text-sm text-gray-600 space-y-2">
+                  <li>✓ Enter amount and click "Pay with Paystack"</li>
+                  <li>✓ Complete payment in the Paystack modal</li>
+                  <li>✓ Your wallet updates automatically upon confirmation</li>
+                </ul>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
-            <h3 className="font-bold">💡 Automated Funding</h3>
-            <p className="text-gray-500">
-              All payments via Flutterwave are processed securely and credited to your wallet instantly after confirmation. No additional steps required.
-            </p>
+          {/* Information */}
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-[#1e293b] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
+              <h3 className="font-bold">💡 Automated Funding</h3>
+              <p className="text-gray-500">
+                All payments via Paystack are processed securely and credited to your wallet instantly after confirmation. No additional steps required.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-[#1e293b] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
+              <h3 className="font-bold">🔒 Secure Transactions</h3>
+              <p className="text-gray-500">
+                Your payment information is processed securely by Paystack, a leading payment provider trusted by thousands of businesses.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-[#1e293b] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
+              <h3 className="font-bold">⚡ Instant Credits</h3>
+              <p className="text-gray-500">
+                Payments are verified and your wallet is credited within seconds. Use your balance immediately for services.
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -2,34 +2,35 @@ const express = require("express");
 const router = express.Router();
 const { verifyToken } = require("../shared/authGuard");
 const {
-  handleFlutterwaveWebhook,
+  handlePaystackWebhook,
   initiatePayment,
   verifyPaymentManual,
   getWalletStatus,
 } = require("../controllers/payment.controller");
-        {
-          reference: "FLW_REF_xxx",
-          type: "credit",
-          amountNaira: "500.00",
-          amountKobo: 50000,
+
+/**
+ * ========================================
+ * PAYSTACK WEBHOOK ROUTE
+ * ========================================
  * 
  * POST /api/payments/webhook
  * 
  * - Receives raw request body (NOT JSON-parsed automatically)
- * - Verifies Flutterwave webhook signature header
+ * - Verifies Paystack webhook signature header (x-paystack-signature)
  * - Links payment to Transaction via reference
  * - Atomically credits user wallet
  * - Updates transaction status and creates audit log
+ * - Comprehensive error logging for troubleshooting
  * 
  * SECURITY:
- * - Signature verification using HMAC-SHA256
- * - No authentication required (Flutterwave calls this server-to-server)
- * - Secret key must be in FLW_SECRET_KEY env var
+ * - Signature verification using HMAC-SHA512
+ * - No authentication required (Paystack calls this server-to-server)
+ * - Secret key must be in PAYSTACK_SECRET_KEY env var
  * 
  * ⚠️  IMPORTANT: This route must preserve the exact raw request payload for signature validation.
  * The global JSON parser now captures raw bytes via verify(), so this route can rely on req.rawBody.
  */
-router.post("/webhook", handleFlutterwaveWebhook);
+router.post("/webhook", handlePaystackWebhook);
 
 /**
  * ========================================
@@ -48,9 +49,9 @@ router.post("/webhook", handleFlutterwaveWebhook);
  * 
  * RESPONSE: {
  *   success: true,
- *   reference: "FLW_xxxxxxxxxxxxx_1717419600000",
+ *   reference: "PAY_xxxxxxxxxxxxx_1717419600000",
  *   data: {
- *     reference: "FLW_xxxxxxxxxxxxx_1717419600000",
+ *     reference: "PAY_xxxxxxxxxxxxx_1717419600000",
  *     amountKobo: 50000,
  *     amountNaira: "500.00",
  *     userId: "..."
@@ -68,9 +69,9 @@ router.post("/webhook", handleFlutterwaveWebhook);
  * 3. Backend validates amount
  * 4. Backend creates Transaction with status "pending"
  * 5. Backend returns reference
- * 6. Frontend opens Flutterwave checkout with reference
+ * 6. Frontend opens Paystack checkout with reference
  * 7. User completes payment
- * 8. Flutterwave sends webhook → charge.completed
+ * 8. Paystack sends webhook → charge.success
  * 9. Backend finds Transaction by reference, credits wallet
  */
 router.post("/init", verifyToken, initiatePayment);
@@ -92,7 +93,7 @@ router.post("/init", verifyToken, initiatePayment);
  * {
  *   success: true,
  *   data: {
- *     reference: "FLW_REF_xxx",
+ *     reference: "PAY_REF_xxx",
  *     status: "success",
  *     amountKobo: 50000,
  *     amountNaira: "500.00",
@@ -124,7 +125,7 @@ router.post("/verify", verifyPaymentManual);
  *     walletBalanceKobo: 500050,
  *     recentTransactions: [
  *       {
- *         reference: "FLW_REF_xxx",
+ *         reference: "PAY_REF_xxx",
  *         type: "credit",
  *         amountNaira: "500.00",
  *         amountKobo: 50000,
@@ -138,3 +139,4 @@ router.post("/verify", verifyPaymentManual);
 router.get("/wallet", verifyToken, getWalletStatus);
 
 module.exports = router;
+
