@@ -22,7 +22,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "email", "x-paystack-signature"],
+    allowedHeaders: ["Content-Type", "Authorization", "email", "verif-hash", "x-flw-signature"],
     preflightContinue: false,
 };
 
@@ -30,9 +30,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-// Paystack webhook is handled under the payments router at POST /api/payments/webhook
+// Flutterwave webhook is handled under the payments router at POST /api/payments/webhook
 
-// Capture raw request body for Paystack signature verification
+// Capture raw request body for Flutterwave signature verification
 app.use(express.json({
     limit: "10mb",
     verify: (req, res, buf) => {

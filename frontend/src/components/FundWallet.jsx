@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { usePaystackPayment } from "react-paystack";
 import { useUser } from "../../context/UserContext";
 import { useToast } from "../../context/ToastContext";
 import api from "../../lib/axios";
@@ -10,14 +9,14 @@ import { motion, AnimatePresence } from "framer-motion";
 /**
  * FundWallet Component
  * 
- * Provides automated Paystack wallet funding with:
+ * Provides automated Flutterwave wallet funding with:
  * - Real-time payment processing
  * - Automatic wallet credit on success
  * - Error handling and user feedback
  * - Responsive modal UI
  * 
  * Uses:
- * - react-paystack for payment modal
+ * - Flutterwave inline checkout for payment modal
  * - UserContext for wallet state management
  * - ToastContext for notifications
  */
@@ -31,14 +30,15 @@ export default function FundWallet({ isOpen, onClose }) {
   const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [paymentInitiated, setPaymentInitiated] = useState(false);
+  const [flutterwaveReference, setFlutterwaveReference] = useState("");
 
   // ========================================
   // ENVIRONMENT VARIABLES
   // ========================================
-  const paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+  const flutterwavePublicKey = import.meta.env.VITE_FLW_PUBLIC_KEY;
 
-  if (!paystackPublicKey) {
-    console.error("Missing VITE_PAYSTACK_PUBLIC_KEY environment variable");
+  if (!flutterwavePublicKey) {
+    console.error("Missing VITE_FLW_PUBLIC_KEY environment variable");
   }
 
   // ========================================
@@ -68,21 +68,12 @@ export default function FundWallet({ isOpen, onClose }) {
   // ========================================
   // HANDLE PAYMENT SUCCESS
   // ========================================
-  const onPaymentSuccess = useCallback(async (reference) => {
+  const handlePaymentSuccess = async () => {
     try {
-      console.log("✅ Paystack payment successful:", reference);
-
-      // Refresh wallet balance from backend
-      // Webhook will have already credited the wallet
       await apiUnits();
-
       success("✅ Payment successful! Your wallet has been updated automatically.");
-
-      // Reset form
       setAmount("");
       setPaymentInitiated(false);
-
-      // Close modal after delay to show success message
       setTimeout(() => {
         onClose();
       }, 2000);
@@ -90,39 +81,26 @@ export default function FundWallet({ isOpen, onClose }) {
       console.error("Error after payment success:", err);
       errorToast("Payment processed but failed to refresh wallet. Please refresh the page.");
     }
-  }, [apiUnits, success, errorToast, onClose]);
+  };
 
   // ========================================
   // HANDLE PAYMENT ERROR
   // ========================================
-  const onPaymentError = useCallback((error) => {
-    console.error("❌ Paystack payment error:", error);
+  const handlePaymentError = (error) => {
+    console.error("❌ Flutterwave payment error:", error);
     errorToast("Payment failed. Please try again.");
     setPaymentInitiated(false);
-  }, [errorToast]);
+  };
 
   // ========================================
-  // HANDLE MODAL CLOSE
+  // HANDLE CHECKOUT CLOSE
   // ========================================
-  const onPaymentClose = useCallback(() => {
+  const handleCheckoutClose = () => {
     if (paymentInitiated) {
       errorToast("⚠️ Payment cancelled. Please try again.");
       setPaymentInitiated(false);
     }
-  }, [paymentInitiated, errorToast]);
-
-  // ========================================
-  // PAYSTACK PAYMENT CONFIG
-  // ========================================
-  const config = {
-    reference: "", // Will be set dynamically
-    email: user?.email || "",
-    amount: Number(amount) * 100, // Paystack uses kobo (smallest unit)
-    publicKey: paystackPublicKey,
   };
-
-  // Initialize usePaystackPayment hook
-  const initializePayment = usePaystackPayment(config);
 
   // ========================================
   // HANDLE PAYMENT INITIALIZATION
@@ -155,13 +133,51 @@ export default function FundWallet({ isOpen, onClose }) {
 
       const { reference } = response.data;
       console.log("✅ Payment initialized:", reference);
+      setFlutterwaveReference(reference);
 
-      // Step 2: Update config with reference
-      config.reference = reference;
+      if (!window?.FlutterwaveCheckout) {
+        throw new Error("Flutterwave SDK is not loaded. Please refresh the page.");
+      }
 
-      // Step 3: Open Paystack modal (onSuccess, onClose)
+      const subaccountId = import.meta.env.VITE_FLW_OPAY_SUBACCOUNT_ID || import.meta.env.VITE_OPAY_SUBACCOUNT_ID;
+      const paymentConfig = {
+        public_key: flutterwavePublicKey,
+        tx_ref: reference,
+        amount: Number(amount),
+        currency: "NGN",
+        customer: {
+          email: user.email,
+        },
+        customizations: {
+          title: "Xcombinator Wallet Funding",
+          description: "Fund your Xcombinator wallet",
+        },
+        callback: () => {
+          success("✅ Payment successful! Your wallet has been updated automatically.");
+          api.get("/api/users/wallet").then((res) => updateWalletBalance(res.data.walletBalance));
+          setIsLoading(false);
+          setPaymentInitiated(false);
+        },
+        onclose: () => {
+          if (paymentInitiated) {
+            errorToast("Payment cancelled. Please try again.");
+          }
+          setIsLoading(false);
+          setPaymentInitiated(false);
+        },
+      };
+
+      if (subaccountId) {
+        paymentConfig.subaccounts = [
+          {
+            id: subaccountId,
+            transaction_split_ratio: 1,
+          },
+        ];
+      }
+
       setPaymentInitiated(true);
-      initializePayment(onPaymentSuccess, onPaymentClose);
+      window.FlutterwaveCheckout(paymentConfig);
 
     } catch (err) {
       console.error("Payment initialization error:", err);
@@ -215,7 +231,7 @@ export default function FundWallet({ isOpen, onClose }) {
                   </div>
                   <div>
                     <h2 className="text-white font-bold text-lg">Fund Your Wallet</h2>
-                    <p className="text-blue-100 text-sm">Instant payment via Paystack</p>
+                    <p className="text-blue-100 text-sm">Instant payment via Flutterwave</p>
                   </div>
                 </div>
                 <button
@@ -281,14 +297,14 @@ export default function FundWallet({ isOpen, onClose }) {
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex gap-2">
                   <AlertCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-green-800">
-                    Your payment is secured by Paystack. Your wallet will be updated automatically.
+                    Your payment is secured by Flutterwave. Your wallet will be updated automatically.
                   </p>
                 </div>
 
                 {/* Pay Button */}
                 <button
                   onClick={handlePayment}
-                  disabled={isLoading || !amount || !paystackPublicKey}
+                  disabled={isLoading || !amount || !flutterwavePublicKey}
                   className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isLoading ? (
@@ -299,14 +315,14 @@ export default function FundWallet({ isOpen, onClose }) {
                   ) : (
                     <>
                       <CreditCard className="w-5 h-5" />
-                      Pay with Paystack - {formatNaira(Number(amount) || 0)}
+                      Pay with Flutterwave - {formatNaira(Number(amount) || 0)}
                     </>
                   )}
                 </button>
 
                 {/* Info Text */}
                 <p className="text-xs text-center text-gray-500">
-                  By proceeding, you agree to Paystack's terms and our payment policies.
+                  By proceeding, you agree to Flutterwave's terms and our payment policies.
                 </p>
               </div>
             </div>

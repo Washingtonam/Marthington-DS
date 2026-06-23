@@ -1,9 +1,15 @@
 const axios = require("axios");
+const Flutterwave = require("flutterwave-node-v3");
 const Transaction = require("../models/transaction.model");
 const User = require("../models/User.model");
 const Payment = require("../models/Payment.model");
 const PaymentRequest = require("../models/PaymentRequest.model");
 const { ensureUploaded } = require("../shared/cloudinary");
+
+const flw = new Flutterwave(
+    process.env.FLW_PUBLIC_KEY || process.env.VITE_FLW_PUBLIC_KEY || "",
+    process.env.FLW_SECRET_KEY || process.env.FLW_SECRET_KEY || ""
+);
 
 // Submit a payment
 exports.submitPaymentReceipt = async (req, res) => {
@@ -46,20 +52,22 @@ exports.submitPaymentReceipt = async (req, res) => {
     }
 };
 
-// Initiate Paystack payment
-exports.initiatePaystackPayment = async (req, res) => {
+// Initiate Flutterwave payment
+exports.initiateFlutterwavePayment = async (req, res) => {
     try {
         const { amount } = req.body;
         const userId = req.user.id || req.user._id;
         const userEmail = req.user.email;
-        const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+        const flwSecret = process.env.FLW_SECRET_KEY;
+        const source = String(req.body.source || process.env.FLW_PAYMENT_SOURCE || "XCOMBINATOR").trim();
+        const flutterwaveSubaccount = process.env.FLW_OPAY_SUBACCOUNT_ID;
 
         if (!userEmail) {
             return res.status(400).json({ message: "User email is required." });
         }
 
-        if (!paystackSecret) {
-            console.error("PAYSTACK_SECRET_KEY is not configured");
+        if (!flwSecret) {
+            console.error("FLW_SECRET_KEY is not configured");
             return res.status(500).json({ message: "Payment gateway is not configured." });
         }
 
@@ -68,36 +76,40 @@ exports.initiatePaystackPayment = async (req, res) => {
             return res.status(400).json({ message: "Invalid amount." });
         }
 
-        const amountKobo = Math.round(parsedAmount * 100);
-        const callbackUrl = `${process.env.FRONTEND_URL || "https://xcombinator.onrender.com"}/wallet?paystack=success`;
+        const callbackUrl = `${process.env.FRONTEND_URL || "https://xcombinator.onrender.com"}/wallet?flutterwave=success`;
 
-        const response = await axios.post(
-            "https://api.paystack.co/transaction/initialize",
-            {
+        const initializePayload = {
+            tx_ref: `FLW_${Date.now()}_${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+            amount: parsedAmount,
+            currency: "NGN",
+            redirect_url: callbackUrl,
+            customer: {
                 email: userEmail,
-                amount: amountKobo,
-                callback_url: callbackUrl,
             },
-            {
-                headers: {
-                    Authorization: `Bearer ${paystackSecret}`,
-                    "Content-Type": "application/json",
-                },
-            }
-        );
+            meta: { source },
+        };
 
+        if (flutterwaveSubaccount) {
+            initializePayload.subaccounts = [{
+                id: flutterwaveSubaccount,
+                transaction_split_ratio: 1,
+            }];
+        }
+
+        const response = await flw.Transactions.initialize(initializePayload);
         const data = response.data;
+
         if (!data || !data.status || !data.data) {
-            throw new Error("Invalid response from Paystack initialization.");
+            throw new Error("Invalid response from Flutterwave initialization.");
         }
 
         return res.status(200).json({
-            authorizationUrl: data.data.authorization_url,
-            reference: data.data.reference,
+            authorizationUrl: data.data.link || data.data.authorization_url,
+            reference: data.data.tx_ref || data.data.reference,
         });
     } catch (error) {
-        console.error("Paystack initialization error:", error.response?.data || error.message || error);
-        return res.status(500).json({ message: "Failed to initialize Paystack payment." });
+        console.error("Flutterwave initialization error:", error.response?.data || error.message || error);
+        return res.status(500).json({ message: "Failed to initialize Flutterwave payment." });
     }
 };
 
@@ -165,43 +177,35 @@ exports.approvePayment = async (req, res) => {
     }
 };
 
-// Verify Paystack transaction by reference and credit wallet if successful (ATOMIC)
+// Verify Flutterwave transaction by reference and credit wallet if successful (ATOMIC)
 // Uses findOneAndUpdate to prevent race conditions and ensure transaction reliability
-exports.verifyPaystackTransaction = async (req, res) => {
+exports.verifyFlutterwaveTransaction = async (req, res) => {
     try {
         const { reference } = req.body;
         const userId = req.user.id || req.user._id;
         const userEmail = req.user.email;
-        const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+        const flwSecret = process.env.FLW_SECRET_KEY;
 
         if (!reference) {
             return res.status(400).json({ message: "Transaction reference is required." });
         }
 
-        if (!paystackSecret) {
-            console.error("PAYSTACK_SECRET_KEY is not configured");
+        if (!flwSecret) {
+            console.error("FLW_SECRET_KEY is not configured");
             return res.status(500).json({ message: "Payment verification is not configured." });
         }
 
-        // Call Paystack to verify the transaction
-        const response = await axios.get(
-            `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-            {
-                headers: {
-                    Authorization: `Bearer ${paystackSecret}`,
-                },
-            }
-        );
-
+        // Call Flutterwave to verify the transaction
+        const response = await flw.Transactions.verify({ id: reference });
         const data = response.data;
         if (!data || !data.status) {
-            throw new Error("Invalid response from Paystack verification.");
+            throw new Error("Invalid response from Flutterwave verification.");
         }
 
         const transactionData = data.data;
 
-        // Only proceed if Paystack says the payment was successful
-        if (transactionData.status !== "success") {
+        // Only proceed if Flutterwave says the payment was successful
+        if (transactionData.status !== "successful" && transactionData.status !== "success") {
             return res.status(400).json({
                 success: false,
                 message: `Payment status is ${transactionData.status}. Please try again.`,
@@ -211,8 +215,8 @@ exports.verifyPaystackTransaction = async (req, res) => {
 
         // Verify the email matches the logged-in user
         if (transactionData.customer?.email?.toLowerCase().trim() !== userEmail?.toLowerCase().trim()) {
-            console.warn("Paystack verification email mismatch", {
-                paystackEmail: transactionData.customer?.email,
+            console.warn("Flutterwave verification email mismatch", {
+                flutterwaveEmail: transactionData.customer?.email,
                 userEmail,
             });
             return res.status(403).json({
@@ -222,7 +226,7 @@ exports.verifyPaystackTransaction = async (req, res) => {
         }
 
         // Calculate the amount credited
-        const amountKobo = transactionData.amount || 0;
+        const amountKobo = Math.round((transactionData.amount || 0) * 100);
 
         // ATOMIC UPDATE: Use findOneAndUpdate to increment wallet in a single database operation
         // This ensures that if multiple requests come in simultaneously, each one's amount is properly credited
@@ -239,7 +243,7 @@ exports.verifyPaystackTransaction = async (req, res) => {
             return res.status(404).json({ message: "User not found." });
         }
 
-        console.log("✅ Paystack verification successful (ATOMIC UPDATE)", {
+        console.log("✅ Flutterwave verification successful (ATOMIC UPDATE)", {
             userId,
             reference,
             amountKobo,
@@ -254,7 +258,7 @@ exports.verifyPaystackTransaction = async (req, res) => {
             amountKobo,
         });
     } catch (error) {
-        console.error("Paystack verification error:", error.response?.data || error.message || error);
+        console.error("Flutterwave verification error:", error.response?.data || error.message || error);
         return res.status(500).json({
             success: false,
             message: "Failed to verify payment.",

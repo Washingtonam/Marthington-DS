@@ -1,32 +1,32 @@
 const crypto = require("crypto");
 const User = require("../models/User.model");
 
-const handlePaystackWebhook = async (req, res) => {
+const handleWebhook = async (req, res) => {
   try {
-    const signature = req.headers["x-paystack-signature"];
-    const secret = process.env.PAYSTACK_SECRET_KEY;
+    const signature = req.headers["verif-hash"] || req.headers["x-flw-signature"];
+    const secret = process.env.FLW_SECRET_KEY;
 
     if (!secret) {
-      console.error("PAYSTACK_SECRET_KEY is not configured");
+      console.error("FLW_SECRET_KEY is not configured");
       return res.status(500).json({ success: false, message: "Payment webhook is not configured correctly." });
     }
 
     if (!signature) {
-      console.warn("Missing Paystack signature header");
+      console.warn("Missing webhook signature header");
       return res.status(400).json({ success: false, message: "Invalid webhook request: missing signature." });
     }
 
     const rawBody = req.body;
     if (!rawBody || !Buffer.isBuffer(rawBody)) {
-      console.warn("Paystack webhook received invalid raw body");
+      console.warn("Webhook received invalid raw body");
       return res.status(400).json({ success: false, message: "Invalid webhook payload." });
     }
 
     const payload = rawBody.toString("utf8");
-    const hash = crypto.createHmac("sha512", secret).update(payload).digest("hex");
+    const hash = crypto.createHmac("sha256", secret).update(payload).digest("hex");
 
     if (hash !== signature) {
-      console.warn("Paystack webhook signature mismatch", { expected: signature, actual: hash });
+      console.warn("Webhook signature mismatch", { expected: signature, actual: hash });
       return res.status(400).json({ success: false, message: "Invalid signature." });
     }
 
@@ -34,11 +34,11 @@ const handlePaystackWebhook = async (req, res) => {
     try {
       event = JSON.parse(payload);
     } catch (parseError) {
-      console.error("Failed to parse Paystack webhook payload", parseError);
+      console.error("Failed to parse webhook payload", parseError);
       return res.status(400).json({ success: false, message: "Malformed webhook payload." });
     }
 
-    if (event.event !== "charge.success") {
+    if (event.event !== "charge.completed") {
       return res.status(200).json({ success: true, message: "Webhook received: no action taken." });
     }
 
@@ -46,7 +46,7 @@ const handlePaystackWebhook = async (req, res) => {
     const email = String(event.data?.customer?.email || "").toLowerCase().trim();
 
     if (!email || amount <= 0) {
-      console.warn("Paystack webhook missing required payment details", { email, amount });
+      console.warn("Webhook missing required payment details", { email, amount });
       return res.status(400).json({ success: false, message: "Invalid payment event payload." });
     }
 
@@ -64,7 +64,7 @@ const handlePaystackWebhook = async (req, res) => {
     );
 
     if (!updatedUser) {
-      console.warn("Paystack webhook user not found", { email });
+      console.warn("Webhook user not found", { email });
       return res.status(404).json({ success: false, message: "User account not found." });
     }
 
@@ -76,9 +76,9 @@ const handlePaystackWebhook = async (req, res) => {
       walletBalanceKobo: updatedUser.walletBalanceKobo,
     });
   } catch (err) {
-    console.error("Paystack webhook processing failed", err);
+    console.error("Webhook processing failed", err);
     return res.status(500).json({ success: false, message: "Webhook processing error." });
   }
 };
 
-module.exports = { handlePaystackWebhook };
+module.exports = { handleWebhook };

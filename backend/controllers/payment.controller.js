@@ -4,43 +4,44 @@ const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
 
 /**
- * Verify Paystack webhook signature using HMAC-SHA512
- * @param {string} signature - The x-paystack-signature header
+ * Verify Flutterwave webhook signature using HMAC-SHA256
+ * @param {string} signature - The verif-hash or x-flw-signature header
  * @param {Buffer} rawBody - The raw request body
- * @param {string} secret - The Paystack secret key
+ * @param {string} secret - The Flutterwave secret key
  * @returns {boolean} - True if signature is valid
  */
-function verifyPaystackSignature(signature, rawBody, secret) {
+function verifyFlutterwaveSignature(signature, rawBody, secret) {
+  if (!signature || !secret) return false;
   const payload = rawBody.toString("utf8");
-  const hash = crypto.createHmac("sha512", secret).update(payload).digest("hex");
+  const hash = crypto.createHmac("sha256", secret).update(payload).digest("hex");
   return hash === signature;
 }
 
 /**
- * Handle Paystack charge.success webhook event
+ * Handle Flutterwave charge.completed webhook event
  * - Verifies webhook signature
  * - Links payment to Transaction record by reference
  * - Updates User wallet atomically using $inc
  * - Updates Transaction status to 'success'
  * - Creates AuditLog entry
  * 
- * @param {Object} req - Express request object with x-paystack-signature header and raw body
+ * @param {Object} req - Express request object with Flutterwave webhook header and raw body
  * @param {Object} res - Express response object
  */
-const handlePaystackWebhook = async (req, res) => {
+const handleFlutterwaveWebhook = async (req, res) => {
   const startTime = Date.now();
   let transaction = null;
   let user = null;
 
   try {
-    const signature = req.headers["x-paystack-signature"];
-    const secret = process.env.PAYSTACK_SECRET_KEY;
+    const signature = req.headers["verif-hash"] || req.headers["x-flw-signature"];
+    const secret = process.env.FLW_SECRET_KEY;
 
     // ========================================
     // STEP 1: Security Validation
     // ========================================
     if (!secret) {
-      console.error("❌ PAYSTACK_SECRET_KEY is not configured");
+      console.error("❌ FLW_SECRET_KEY is not configured");
       return res.status(500).json({
         success: false,
         message: "Payment webhook is not configured correctly.",
@@ -64,8 +65,8 @@ const handlePaystackWebhook = async (req, res) => {
       });
     }
 
-    // Verify HMAC-SHA512 signature
-    if (!verifyPaystackSignature(signature, rawBody, secret)) {
+    // Verify HMAC-SHA256 signature
+    if (!verifyFlutterwaveSignature(signature, rawBody, secret)) {
       console.warn("⚠️  Webhook signature mismatch - potential spoofing attempt");
       return res.status(401).json({
         success: false,
@@ -90,7 +91,7 @@ const handlePaystackWebhook = async (req, res) => {
     // ========================================
     // STEP 3: Filter by Event Type
     // ========================================
-    if (event.event !== "charge.success") {
+    if (event.event !== "charge.completed") {
       // Acknowledge other events but don't process
       console.log(`ℹ️  Webhook received: ${event.event} - no action taken`);
       return res.status(200).json({
@@ -102,10 +103,14 @@ const handlePaystackWebhook = async (req, res) => {
     // ========================================
     // STEP 4: Extract Payment Details
     // ========================================
-    const amountKobo = Number(event.data?.amount || 0);
-    const reference = String(event.data?.reference || "").trim();
-    const paystackTransactionId = event.data?.id;
+    const amount = Number(event.data?.amount || 0);
+    const amountKobo = Math.round(amount * 100);
+    const reference = String(event.data?.tx_ref || event.data?.reference || "").trim();
+    const flutterwaveTransactionId = event.data?.id;
     const customerEmail = String(event.data?.customer?.email || "").toLowerCase().trim();
+    const metadata = event.data?.meta || event.data?.metadata || {};
+    const paymentSource = String(metadata?.source || "").trim().toUpperCase();
+    const isXcombinatorSource = paymentSource === "XCOMBINATOR";
 
     if (!reference || amountKobo <= 0) {
       console.warn("❌ Webhook missing required payment details", {
@@ -118,12 +123,20 @@ const handlePaystackWebhook = async (req, res) => {
       });
     }
 
-    console.log(`✅ Processing charge.success event:`, {
+    console.log(`✅ Processing charge.completed event:`, {
       reference,
       amountKobo,
       email: customerEmail,
-      paystackTxId: paystackTransactionId,
+      flutterwaveTxId: flutterwaveTransactionId,
+      source: paymentSource || "UNKNOWN",
     });
+
+    if (isXcombinatorSource) {
+      console.log("🔎 XCOMBINATOR metadata source detected - updating Xcombinator database");
+    } else {
+      console.log("🔎 Non-XCOMBINATOR source detected - executing other website payment flow");
+      // If your other website uses a different payment model, implement that path here.
+    }
 
     // ========================================
     // STEP 5: Find Transaction by Reference
@@ -186,16 +199,32 @@ const handlePaystackWebhook = async (req, res) => {
     const balanceBefore = user.walletBalanceKobo || 0;
 
     // Use atomic $inc operation to prevent race conditions
-    const updatedUser = await User.findByIdAndUpdate(
-      user._id,
-      {
-        $inc: {
-          walletBalanceKobo: amountKobo,
-          walletBalance: amountKobo / 100,
+    let updatedUser;
+    if (isXcombinatorSource) {
+      updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        {
+          $inc: {
+            walletBalanceKobo: amountKobo,
+            walletBalance: amountKobo / 100,
+          },
         },
-      },
-      { returnDocument: 'after' }
-    ).exec();
+        { returnDocument: 'after' }
+      ).exec();
+    } else {
+      // Non-XCOMBINATOR source: use the existing payment logic for your other site.
+      // Replace this block with your other site's database update if it differs.
+      updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        {
+          $inc: {
+            walletBalanceKobo: amountKobo,
+            walletBalance: amountKobo / 100,
+          },
+        },
+        { returnDocument: 'after' }
+      ).exec();
+    }
 
     if (!updatedUser) {
       console.error(`❌ Failed to update user wallet for ${user._id}`);
@@ -226,13 +255,13 @@ const handlePaystackWebhook = async (req, res) => {
     // ========================================
     try {
       const auditLog = new AuditLog({
-        action: "PAYSTACK_CREDIT",
-        performedBy: "system:paystack-webhook",
+        action: "FLUTTERWAVE_CREDIT",
+        performedBy: "system:flutterwave-webhook",
         userId: user._id,
         amount: amountKobo,
         balanceBefore,
         balanceAfter,
-        note: `Paystack payment confirmed | Reference: ${reference} | Paystack TX ID: ${paystackTransactionId}`,
+        note: `Flutterwave payment confirmed | Reference: ${reference} | Flutterwave TX ID: ${flutterwaveTransactionId}`,
       });
       await auditLog.save();
 
@@ -246,7 +275,7 @@ const handlePaystackWebhook = async (req, res) => {
     // STEP 12: Success Response
     // ========================================
     const duration = Date.now() - startTime;
-    console.log(`✅ Paystack webhook processed successfully in ${duration}ms`);
+    console.log(`✅ Flutterwave webhook processed successfully in ${duration}ms`);
 
     return res.status(200).json({
       success: true,
@@ -263,7 +292,7 @@ const handlePaystackWebhook = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Paystack webhook processing error:", {
+    console.error("❌ Flutterwave webhook processing error:", {
       message: error.message,
       stack: error.stack,
       reference: transaction?.reference,
@@ -279,7 +308,7 @@ const handlePaystackWebhook = async (req, res) => {
 };
 
 /**
- * Verify a Paystack payment manually (for testing or user verification)
+ * Verify a payment manually (for testing or user verification)
  * This endpoint is user-facing and allows users to check payment status
  * WITHOUT updating wallets (wallet updates only via webhook)
  * 
@@ -380,11 +409,11 @@ const getWalletStatus = async (req, res) => {
 };
 
 /**
- * Initiate a Paystack payment (Frontend → Backend)
+ * Initiate a Flutterwave payment placeholder reference (Frontend → Backend)
  * 
  * - Creates a pending Transaction record
  * - Generates a unique payment reference
- * - Returns reference to frontend for Paystack modal
+ * - Returns reference to frontend for Flutterwave modal
  * 
  * Called by: Frontend FundWallet component (POST /api/payments/init)
  * Returns: { success: true, reference: "PAY_xxxxx" }
@@ -394,9 +423,9 @@ const getWalletStatus = async (req, res) => {
  * 2. Frontend calls this endpoint (authenticated)
  * 3. Backend creates Transaction with status 'pending'
  * 4. Backend returns reference
- * 5. Frontend opens Paystack modal with reference
- * 6. User completes payment on Paystack
- * 7. Paystack sends webhook to backend (charge.success)
+ * 5. Frontend opens Flutterwave modal with reference
+ * 6. User completes payment on Flutterwave
+ * 7. Flutterwave sends webhook to backend (charge.completed)
  * 8. Webhook finds Transaction by reference and credits wallet
  * 
  * @param {Object} req - Express request with user context and { amount }
@@ -455,7 +484,7 @@ const initiatePayment = async (req, res) => {
     // Ensures uniqueness and includes timestamp for debugging
     const timestamp = Date.now();
     const randomPart = crypto.randomBytes(8).toString("hex").toUpperCase();
-    const reference = `PAY_${randomPart}_${timestamp}`;
+    const reference = `FLW_${randomPart}_${timestamp}`;
 
     // ========================================
     // CREATE PENDING TRANSACTION
@@ -467,7 +496,7 @@ const initiatePayment = async (req, res) => {
       amountKobo,
       status: "pending",
       reference,
-      description: `Paystack payment to fund wallet`,
+      description: `Flutterwave payment to fund wallet`,
     });
 
     await transaction.save();
@@ -504,7 +533,7 @@ const initiatePayment = async (req, res) => {
 };
 
 module.exports = {
-  handlePaystackWebhook,
+  handleFlutterwaveWebhook,
   initiatePayment,
   verifyPaymentManual,
   getWalletStatus,

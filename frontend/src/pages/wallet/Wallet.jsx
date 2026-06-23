@@ -10,7 +10,7 @@ export default function Wallet() {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handlePaystackPayment = async () => {
+  const handleFlutterwavePayment = async () => {
     const numAmount = Number(amount);
 
     if (!numAmount || numAmount < 100) {
@@ -23,8 +23,8 @@ export default function Wallet() {
       return;
     }
 
-    if (!window?.PaystackPop) {
-      alert("Paystack SDK is not loaded. Please refresh the page.");
+    if (!window?.FlutterwaveCheckout) {
+      alert("Flutterwave SDK is not loaded. Please refresh the page.");
       return;
     }
 
@@ -32,31 +32,50 @@ export default function Wallet() {
 
     try {
       console.log("📤 Initiating payment with backend...");
-      const { data } = await api.post("/api/payments/init", { amount: numAmount });
+      const { data } = await api.post("/api/payments/init", {
+        amount: numAmount,
+        source: "XCOMBINATOR",
+      });
 
       if (!data.reference) {
         throw new Error("Backend did not return a payment reference");
       }
 
+      const subaccountId = import.meta.env.VITE_FLW_OPAY_SUBACCOUNT_ID || import.meta.env.VITE_OPAY_SUBACCOUNT_ID;
       const paymentConfig = {
-        key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
-        email: user.email,
-        amount: numAmount * 100,
-        reference: data.reference,
-        onSuccess: () => {
+        public_key: import.meta.env.VITE_FLW_PUBLIC_KEY,
+        tx_ref: data.reference,
+        amount: numAmount,
+        currency: "NGN",
+        customer: {
+          email: user.email,
+        },
+        customizations: {
+          title: "Xcombinator Wallet Funding",
+          description: "Fund your Xcombinator wallet",
+        },
+        callback: () => {
           alert("✅ Payment successful!");
           api.get("/api/users/wallet").then((res) => setBalance(res.data.walletBalance));
           setLoading(false);
         },
-        onCancel: () => {
+        onclose: () => {
           setLoading(false);
         },
       };
 
-      console.log("DEBUG: Sending to Paystack SDK:", paymentConfig);
+      if (subaccountId) {
+        paymentConfig.subaccounts = [
+          {
+            id: subaccountId,
+            transaction_split_ratio: 1,
+          },
+        ];
+      }
 
-      const popup = new window.PaystackPop();
-      popup.newTransaction(paymentConfig);
+      console.log("DEBUG: Sending to Flutterwave SDK:", paymentConfig);
+
+      window.FlutterwaveCheckout(paymentConfig);
     } catch (err) {
       console.error("❌ Payment initialization failed:", err);
       alert(err.response?.data?.message || "Payment initialization failed");
@@ -91,7 +110,7 @@ export default function Wallet() {
           />
 
           <button
-            onClick={handlePaystackPayment}
+            onClick={handleFlutterwavePayment}
             disabled={loading || !amount}
             className="mt-6 w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
@@ -103,7 +122,7 @@ export default function Wallet() {
             ) : (
               <>
                 <Wallet2 size={20} />
-                Pay with Paystack
+                Pay with Flutterwave
               </>
             )}
           </button>
@@ -111,8 +130,8 @@ export default function Wallet() {
           <div className="mt-8 pt-8 border-t">
             <h3 className="font-bold mb-4">How It Works</h3>
             <ul className="text-sm text-gray-600 space-y-2">
-              <li>✓ Enter amount and click "Pay with Paystack"</li>
-              <li>✓ Complete payment in the Paystack modal</li>
+              <li>✓ Enter amount and click "Pay with Flutterwave"</li>
+              <li>✓ Complete payment in the Flutterwave modal</li>
               <li>✓ Your wallet updates automatically upon confirmation</li>
             </ul>
           </div>
@@ -122,7 +141,7 @@ export default function Wallet() {
           <div className="bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
             <h3 className="font-bold">💡 Automated Funding</h3>
             <p className="text-gray-500">
-              All payments via Paystack are processed securely and credited to your wallet instantly after confirmation. No additional steps required.
+              All payments via Flutterwave are processed securely and credited to your wallet instantly after confirmation. No additional steps required.
             </p>
           </div>
         </div>
