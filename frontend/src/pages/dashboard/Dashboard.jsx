@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
@@ -28,6 +28,8 @@ export default function Dashboard() {
   const { user, refreshBalance, walletBalance } = useUser();
   const [stats, setStats] = useState({ total: 0, completed: 0, pending: 0 });
   const [walletBalanceLocal, setWalletBalance] = useState(walletBalance ?? 0);
+  const [requestsData, setRequestsData] = useState([]);
+  const [filter, setFilter] = useState("All");
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -68,12 +70,20 @@ export default function Dashboard() {
       // Update Balance (Using walletBalance)
       setWalletBalance(balanceRes.data.walletBalance ?? walletBalance ?? 0);
 
-      // Update Stats
       const data = requestsRes.data || [];
+      const mappedData = data.map((r) => ({
+        ...r,
+        category:
+          r.category ||
+          r.serviceCategory ||
+          (r.type === "cac_registration" || r.type === "cac" || String(r.service || "").toLowerCase().includes("cac") ? "CAC" : "NIN"),
+      }));
+
+      setRequestsData(mappedData);
       setStats({
-        total: data.length,
-        completed: data.filter(r => ["completed", "approved"].includes(r.status)).length,
-        pending: data.filter(r => ["pending", "processing"].includes(r.status)).length,
+        total: mappedData.length,
+        completed: mappedData.filter(r => ["completed", "approved"].includes(r.status)).length,
+        pending: mappedData.filter(r => ["pending", "processing"].includes(r.status)).length,
       });
     } catch (err) {
       console.error("🔥 DASHBOARD SYNC ERROR:", err);
@@ -81,6 +91,11 @@ export default function Dashboard() {
       setLoading(false);
     }
   }, [user, refreshBalance]);
+
+  const filteredActivity = useMemo(() => {
+    if (filter === "All") return requestsData.slice(0, 5);
+    return requestsData.filter((item) => item.category === filter).slice(0, 5);
+  }, [filter, requestsData]);
 
   useEffect(() => {
     fetchData();
@@ -141,24 +156,24 @@ export default function Dashboard() {
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Quick Actions</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <ActionButton
-            title="Fund Wallet"
-            icon={Wallet}
-            onClick={() => navigate("/wallet")}
-          />
-          <ActionButton
-            title="New Request"
-            icon={FileText}
+            title="Verify NIN"
+            icon={ShieldCheck}
             onClick={() => navigate("/services/nin")}
           />
           <ActionButton
-            title="View Requests"
-            icon={Send}
-            onClick={() => navigate("/my-requests")}
+            title="NIMC Services"
+            icon={FileText}
+            onClick={() => navigate("/services/nimc")}
           />
           <ActionButton
-            title="Settings"
-            icon={Settings}
-            onClick={() => navigate("/profile")}
+            title="CAC Services"
+            icon={FileText}
+            onClick={() => navigate("/services/cac")}
+          />
+          <ActionButton
+            title="Wallet"
+            icon={Wallet}
+            onClick={() => navigate("/wallet")}
           />
         </div>
       </motion.div>
@@ -172,17 +187,23 @@ export default function Dashboard() {
       >
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Recent Activity</h2>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            onClick={() => navigate("/my-requests")}
-            className="text-blue-600 hover:text-blue-700 text-sm font-semibold"
-          >
-            View All →
-          </motion.button>
+          <div className="flex gap-2">
+            {['All', 'NIN', 'CAC'].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1 text-xs font-bold rounded-lg ${
+                  filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="space-y-4">
-          {stats.total === 0 ? (
+          {requestsData.length === 0 ? (
             <div className="text-center py-12">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
                 <FileText size={28} className="text-blue-600" />
@@ -200,69 +221,35 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              {/* Sample activity items - would be replaced with actual data */}
-              {[
-                {
-                  id: 1,
-                  type: "completed",
-                  title: "NIN Verification Completed",
-                  description: "Your verification request has been completed",
-                  time: "2 hours ago",
-                  icon: CheckCircle,
-                  color: "green",
-                },
-                {
-                  id: 2,
-                  type: "pending",
-                  title: "Pending Review",
-                  description: "Your CAC request is being reviewed",
-                  time: "1 day ago",
-                  icon: Clock,
-                  color: "amber",
-                },
-                {
-                  id: 3,
-                  type: "alert",
-                  title: "Document Required",
-                  description: "Please submit additional documentation",
-                  time: "3 days ago",
-                  icon: AlertCircle,
-                  color: "orange",
-                },
-              ].map((activity) => (
+              {filteredActivity.map((activity) => (
                 <motion.div
-                  key={activity.id}
+                  key={activity._id || activity.id}
                   whileHover={{ x: 4 }}
                   className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 hover:bg-gray-100/50 transition-colors cursor-pointer"
                 >
                   <div
-                    className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center
-                    ${
-                      activity.color === "green"
+                    className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${
+                      activity.status === "completed"
                         ? "bg-green-100"
-                        : activity.color === "amber"
+                        : activity.status === "pending"
                         ? "bg-amber-100"
                         : "bg-orange-100"
-                    }
-                  `}
+                    }`}
                   >
-                    <activity.icon
-                      size={20}
-                      className={
-                        activity.color === "green"
-                          ? "text-green-600"
-                          : activity.color === "amber"
-                          ? "text-amber-600"
-                          : "text-orange-600"
-                      }
-                    />
+                    {activity.status === "completed" ? (
+                      <CheckCircle size={20} className="text-green-600" />
+                    ) : activity.status === "pending" ? (
+                      <Clock size={20} className="text-amber-600" />
+                    ) : (
+                      <AlertCircle size={20} className="text-orange-600" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900">{activity.title}</h3>
-                    <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
+                    <h3 className="font-semibold text-gray-900">{activity.title || activity.service || activity.type}</h3>
+                    <p className="text-sm text-gray-600 mt-1">{activity.description || activity.message || activity.status}</p>
                   </div>
                   <div className="flex-shrink-0 text-xs text-gray-500 whitespace-nowrap">
-                    {activity.time}
+                    {activity.updatedAt ? new Date(activity.updatedAt).toLocaleDateString() : activity.time || "Recent"}
                   </div>
                 </motion.div>
               ))}
