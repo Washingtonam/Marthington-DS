@@ -76,7 +76,11 @@ export default function Dashboard() {
         category:
           r.category ||
           r.serviceCategory ||
-          (r.type === "cac_registration" || r.type === "cac" || String(r.service || "").toLowerCase().includes("cac") ? "CAC" : "NIN"),
+          (r.type === "cac_registration" || r.type === "cac" || String(r.service || "").toLowerCase().includes("cac")
+            ? "CAC"
+            : String(r.service || "").toLowerCase().includes("nimc")
+            ? "NIMC"
+            : "NIN"),
       }));
 
       setRequestsData(mappedData);
@@ -188,12 +192,12 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Recent Activity</h2>
           <div className="flex gap-2">
-            {['All', 'NIN', 'CAC'].map((f) => (
+            {['All', 'NIN', 'CAC', 'NIMC'].map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1 text-xs font-bold rounded-lg ${
-                  filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
+                  filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 {f}
@@ -256,6 +260,19 @@ export default function Dashboard() {
             </>
           )}
         </div>
+
+        {/* View All Requests Button */}
+        {requestsData.length > 0 && (
+          <div className="mt-8 pt-6 border-t border-gray-200 flex justify-center">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              onClick={() => navigate("/my-requests")}
+              className="text-blue-600 font-semibold hover:text-blue-800 transition flex items-center gap-2"
+            >
+              View All Requests →
+            </motion.button>
+          </div>
+        )}
       </motion.div>
 
       {/* Premium Glass Stats Footer */}
