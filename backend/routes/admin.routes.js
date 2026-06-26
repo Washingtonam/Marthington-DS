@@ -7,6 +7,7 @@ const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
 const Pricing = require("../models/Pricing.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
+const { normalizeServiceType } = require("../config/serviceTypes");
 
 // =========================================================================
 // 🧠 SAFE SCHEMA COMPILATION & MODEL RESOLUTION
@@ -43,36 +44,105 @@ const isSuperAdmin = (req, res, next) => {
 // Handles pagination, matching statuses (pending, approved, completed), and coordinates cross-model streams.
 router.get("/requests", isAdmin, async (req, res) => {
   try {
-    let { page = 1, limit = 20, status } = req.query;
-    page = Math.max(1, parseInt(page));
-    limit = Math.max(1, parseInt(limit));
+    let { page = 1, limit = 20, status, category, serviceType, search, nin, userRole } = req.query;
+    page = Math.max(1, parseInt(page) || 1);
+    limit = Math.max(1, Math.min(100, parseInt(limit) || 20));
 
-    // Construct precise cross-model filter queries
-    const filterQuery = {};
-    if (status) {
-      filterQuery.status = String(status).toLowerCase();
+    const normalizedStatus = String(status || "").trim().toLowerCase();
+    const normalizedCategory = normalizeServiceType(category || "").toLowerCase();
+    const normalizedServiceType = String(serviceType || "").trim().toLowerCase();
+    const searchTerm = String(search || "").trim();
+    const ninTerm = String(nin || "").trim();
+    const roleFilter = String(userRole || "").trim().toLowerCase();
+
+    const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    const serviceQuery = {};
+    const cacQuery = {};
+
+    if (normalizedStatus) {
+      serviceQuery.status = normalizedStatus;
+      cacQuery.status = normalizedStatus;
     }
 
-    // Execute safe structural operations concurrently
+    if (normalizedCategory === "cac") {
+      serviceQuery.serviceCategory = "CAC";
+      cacQuery.serviceCategory = "CAC";
+    } else if (normalizedCategory === "nimc") {
+      serviceQuery.serviceCategory = "NIMC";
+    } else if (normalizedCategory) {
+      const escapedCategory = escapeRegex(normalizedCategory);
+      serviceQuery.$or = [
+        { serviceCategory: { $regex: escapedCategory, $options: "i" } },
+        { service: { $regex: escapedCategory, $options: "i" } },
+        { type: { $regex: escapedCategory, $options: "i" } }
+      ];
+    }
+
+    if (normalizedServiceType) {
+      const escapedType = escapeRegex(normalizedServiceType);
+      serviceQuery.$or = [
+        ...(serviceQuery.$or || []),
+        { service: { $regex: escapedType, $options: "i" } },
+        { type: { $regex: escapedType, $options: "i" } }
+      ];
+      cacQuery.serviceType = { $regex: escapedType, $options: "i" };
+    }
+
+    if (ninTerm) {
+      const escapedNin = escapeRegex(ninTerm);
+      serviceQuery.nin = { $regex: escapedNin, $options: "i" };
+      cacQuery.nin = { $regex: escapedNin, $options: "i" };
+    }
+
+    if (searchTerm) {
+      const escapedSearch = escapeRegex(searchTerm);
+      serviceQuery.$or = [
+        ...(serviceQuery.$or || []),
+        { nin: { $regex: escapedSearch, $options: "i" } },
+        { service: { $regex: escapedSearch, $options: "i" } },
+        { type: { $regex: escapedSearch, $options: "i" } },
+        { _id: { $regex: escapedSearch, $options: "i" } }
+      ];
+      cacQuery.$or = [
+        ...(cacQuery.$or || []),
+        { nin: { $regex: escapedSearch, $options: "i" } },
+        { businessName1: { $regex: escapedSearch, $options: "i" } },
+        { businessName2: { $regex: escapedSearch, $options: "i" } },
+        { companyEmail: { $regex: escapedSearch, $options: "i" } },
+        { serviceType: { $regex: escapedSearch, $options: "i" } },
+        { _id: { $regex: escapedSearch, $options: "i" } }
+      ];
+    }
+
+    if (roleFilter && roleFilter !== "all") {
+      const matchingUsers = await User.find({ role: roleFilter }).select("_id").lean();
+      const userIds = matchingUsers.map((user) => user._id);
+      if (userIds.length > 0) {
+        serviceQuery.userId = { $in: userIds };
+        cacQuery.userId = { $in: userIds };
+      } else {
+        serviceQuery.userId = null;
+        cacQuery.userId = null;
+      }
+    }
+
     const [nimcRequests, cacRequests] = await Promise.all([
-      ServiceRequest.find(filterQuery)
+      ServiceRequest.find(serviceQuery)
         .populate("userId", "email firstName lastName phoneNumber role")
         .lean(),
-      CACRequest.find(filterQuery)
+      CACRequest.find(cacQuery)
         .populate("userId", "email firstName lastName phoneNumber role")
         .lean()
     ]);
 
-    // Format fields seamlessly into a unified pipeline stream
-    const normalizedNimc = nimcRequests.map(r => ({ ...r, pipelineSource: "nimc" }));
-    const normalizedCac = cacRequests.map(r => ({ ...r, pipelineSource: "cac" }));
+    const normalizedNimc = nimcRequests.map((r) => ({ ...r, pipelineSource: "nimc" }));
+    const normalizedCac = cacRequests.map((r) => ({ ...r, pipelineSource: "cac" }));
 
-    // Merge operations chronologically (Newest items floating to top)
     const combinedCollection = [...normalizedNimc, ...normalizedCac].sort(
       (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
     );
 
-    // Compute localized system pagination profiles 
     const totalRecords = combinedCollection.length;
     const totalPages = Math.ceil(totalRecords / limit);
     const startIndex = (page - 1) * limit;

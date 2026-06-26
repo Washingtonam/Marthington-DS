@@ -1,12 +1,11 @@
-import React, { useEffect, useState, useMemo } from "react";
-import axios from "axios";
+import React, { useEffect, useState } from "react";
+import api from "../../lib/axios";
+import { SERVICE_TYPE_OPTIONS } from "../../config/serviceTypes";
 import {
   Search, ArrowUpDown, Eye, CheckCircle2, XCircle, Clock3,
   ChevronLeft, ChevronRight, Fingerprint, Building2, AlertCircle,
   MessageSquare, Shield, Calendar
 } from "lucide-react";
-
-const API_BASE = "https://xcombinator.onrender.com";
 
 // 🔒 Data Masking Utility for Sensitive Fields
 const maskNIN = (nin) => {
@@ -52,7 +51,6 @@ export default function AdminRequests() {
   const [modalComment, setModalComment] = useState("");
   const [requesterRole, setRequesterRole] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortOrder, setSortOrder] = useState("desc");
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
 
@@ -71,17 +69,19 @@ export default function AdminRequests() {
     "custom_ngo": "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200"
   };
 
-  const token = localStorage.getItem("token")?.replace(/['"]+/g, "") || "";
-  const authHeaders = {
-    email: localStorage.getItem("email") || "",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-
-  const fetchRequests = async (pageNum = page) => {
+  const fetchRequests = async (pageNum = 1) => {
     try {
-      const res = await axios.get(`${API_BASE}/api/admin/requests?page=${pageNum}&limit=12&status=${activeStatus}`, {
-        headers: authHeaders
-      });
+      const params = {
+        page: pageNum,
+        limit: 12,
+        status: activeStatus,
+        category: activeTab === "cac" ? "cac" : "nimc",
+        serviceType: activeSubService === "All" ? "" : activeSubService,
+        search: searchTerm,
+        userRole: requesterRole,
+      };
+
+      const res = await api.get("/api/admin/requests", { params });
       const data = res.data?.data || res.data?.requests || [];
       setRequests(data);
       setPages(res.data?.pagination?.pages || 1);
@@ -92,7 +92,9 @@ export default function AdminRequests() {
     }
   };
 
-  useEffect(() => { fetchRequests(page); }, [page, activeStatus]);
+  useEffect(() => {
+    fetchRequests(1);
+  }, [activeStatus, activeTab, activeSubService, requesterRole]);
 
   useEffect(() => {
     if (selected) {
@@ -107,49 +109,23 @@ export default function AdminRequests() {
 
     try {
       if (status === 'approved') {
-        await axios.put(`${API_BASE}/api/admin/approve-request/${id}`, {}, { 
-          headers: authHeaders 
-        });
+        await api.put(`/api/admin/approve-request/${id}`, {});
       } else {
-        await axios.put(`${API_BASE}/api/admin/status/${id}`, { status }, { 
-          headers: authHeaders 
-        });
+        await api.put(`/api/admin/status/${id}`, { status });
       }
-      fetchRequests();
+      fetchRequests(page);
     } catch (err) {
       console.error("Status update failed:", err);
       alert(err.response?.data?.message || "Failed to update request status.");
     }
   };
 
-  const displayedRequests = useMemo(() => {
-    let filtered = requests.filter(r => {
-      const isCac = r.pipelineSource === "cac";
-      if (activeTab === "cac") {
-        return isCac && (activeSubService === "All" || r.serviceType?.toLowerCase() === activeSubService.toLowerCase());
-      }
-      return !isCac && (activeSubService === "All" || r.service?.toLowerCase() === activeSubService.toLowerCase());
-    });
+  const applyFilters = () => {
+    setPage(1);
+    fetchRequests(1);
+  };
 
-    if (requesterRole && requesterRole !== "all") {
-      filtered = filtered.filter(r => (r.userId?.role || "user") === requesterRole);
-    }
-
-    if (searchTerm) {
-      const s = searchTerm.toLowerCase();
-      filtered = filtered.filter(r => 
-        r.userId?.email?.toLowerCase().includes(s) ||
-        r.nin?.toLowerCase().includes(s) ||
-        r.businessName1?.toLowerCase().includes(s) ||
-        r.serviceType?.toLowerCase().includes(s) ||
-        r.service?.toLowerCase().includes(s)
-      );
-    }
-
-    return filtered.sort((a, b) => 
-      sortOrder === "desc" ? new Date(b.createdAt) - new Date(a.createdAt) : new Date(a.createdAt) - new Date(b.createdAt)
-    );
-  }, [requests, activeTab, activeSubService, searchTerm, sortOrder]);
+  const displayedRequests = requests;
 
   const getRequestTitle = (request) => {
     if (request.pipelineSource === "cac") {
@@ -201,8 +177,9 @@ export default function AdminRequests() {
         </select>
         <div className="ml-4 flex-1 flex items-center rounded-xl p-2 border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
           <Search className="mr-2 text-slate-500 dark:text-slate-400" />
-          <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by email or NIN" className="w-full outline-none bg-transparent text-slate-900 dark:text-slate-100" />
+          <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by email, NIN, service or ID" className="w-full outline-none bg-transparent text-slate-900 dark:text-slate-100" />
         </div>
+        <button onClick={applyFilters} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-200 dark:text-slate-950">Apply</button>
       </div>
 
       {(activeTab === "nimc" || activeTab === "cac") && (
