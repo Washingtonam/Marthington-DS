@@ -2,11 +2,11 @@ const express = require("express");
 const router = express.Router();
 const { verifyToken } = require("../shared/authGuard");
 const {
-  handleFlutterwaveWebhook,
   initiatePayment,
   verifyPaymentManual,
   getWalletStatus,
 } = require("../controllers/payment.controller");
+const { handleWebhook } = require("../controllers/webhook.controller");
 
 /**
  * ========================================
@@ -30,7 +30,7 @@ const {
  * ⚠️  IMPORTANT: This route must preserve the exact raw request payload for signature validation.
  * The global JSON parser now captures raw bytes via verify(), so this route can rely on req.rawBody.
  */
-router.post("/webhook", handleFlutterwaveWebhook);
+router.post("/webhook", handleWebhook);
 
 /**
  * ========================================
