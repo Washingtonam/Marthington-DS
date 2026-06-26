@@ -34,7 +34,7 @@ export default function Layout({ children }) {
           <div className="flex items-center justify-between px-6 py-4 pl-20 lg:pl-6">
             <div>
               <h1 className="text-lg font-semibold text-slate-900 dark:text-white">
-                Xcombinator Platform
+                MSS Platform
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Identity Verification Infrastructure

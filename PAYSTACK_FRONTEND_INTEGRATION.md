@@ -2,7 +2,7 @@
  * PAYSTACK WALLET FUNDING INTEGRATION GUIDE
  * ==========================================
  * 
- * Complete guide for integrating automated Paystack payments into X-Combinator
+ * Complete guide for integrating automated Paystack payments into Marthington
  * 
  * FILES INVOLVED:
  * 

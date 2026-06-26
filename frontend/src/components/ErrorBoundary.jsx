@@ -82,7 +82,7 @@ export class ErrorBoundary extends React.Component {
             <p className="text-center text-sm text-gray-500 mt-4">
               Need help?{" "}
               <a
-                href="mailto:support@xcombinator.com"
+                href="mailto:support@marthington.com"
                 className="text-blue-600 hover:underline"
               >
                 Contact support

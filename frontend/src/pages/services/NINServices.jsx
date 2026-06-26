@@ -36,7 +36,7 @@ export default function NINServices() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-slate-950 to-blue-900 text-white p-10 rounded-[2rem] shadow-2xl mb-10">
         <h1 className="text-4xl font-black mb-2">NIMC Services</h1>
-        <p className="text-white/70">Professional identity infrastructure powered by X-Combinator.</p>
+        <p className="text-white/70">Professional identity infrastructure powered by Marthington.</p>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

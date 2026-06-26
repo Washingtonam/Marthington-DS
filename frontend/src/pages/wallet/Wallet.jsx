@@ -51,7 +51,7 @@ export default function Wallet() {
           name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user.email,
         },
         customizations: {
-          title: "X-Combinator Wallet Funding",
+          title: "Marthington Wallet Funding",
           description: "Top up your wallet",
           logo: "/logo.png",
         },

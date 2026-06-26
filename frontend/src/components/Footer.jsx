@@ -7,7 +7,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
         {/* Company Info */}
         <div>
-          <h3 className="font-bold text-lg mb-4">X-Combinator</h3>
+          <h3 className="font-bold text-lg mb-4">Marthington</h3>
           <p className="text-gray-400 text-sm">
             Professional identity verification and business registration platform.
           </p>
@@ -50,14 +50,14 @@ export default function Footer() {
           <ul className="space-y-2 text-sm">
             <li className="flex items-center gap-2 text-gray-400">
               <Mail className="w-4 h-4" />
-              <a href="mailto:support@xcombinator.com" className="hover:text-white transition">
-                support@xcombinator.com
+              <a href="mailto:support@marthington.com" className="hover:text-white transition">
+                support@marthington.com
               </a>
             </li>
             <li className="flex items-center gap-2 text-gray-400">
               <Phone className="w-4 h-4" />
               <a href="tel:+2348000000000" className="hover:text-white transition">
-                +234 800 0000 000
+                +234 817 973 6442
               </a>
             </li>
             <li className="flex items-center gap-2 text-gray-400">
@@ -106,7 +106,7 @@ export default function Footer() {
 
       {/* Copyright */}
       <div className="max-w-7xl mx-auto mt-8 text-center text-xs text-gray-500">
-        <p>&copy; 2024 X-Combinator. All rights reserved. | Built with professional-grade security standards.</p>
+        <p>&copy; 2024 Marthington. All rights reserved. | Built with professional-grade security standards.</p>
       </div>
     </footer>
   );

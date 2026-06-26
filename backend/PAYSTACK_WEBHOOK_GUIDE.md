@@ -3,7 +3,7 @@
  * ======================================
  * 
  * This guide documents the automated Paystack payment verification system
- * implemented for X-Combinator to eliminate manual funding.
+ * implemented for Marthington to eliminate manual funding.
  * 
  * FILES CREATED/MODIFIED:
  * - controllers/payment.controller.js (NEW)

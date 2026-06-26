@@ -1,7 +1,7 @@
 # Paystack Integration - Environment Setup Guide
 
 ## Overview
-This project uses **Paystack** as the primary payment gateway for X-Combinator. The integration provides secure wallet funding with automated credit verification via webhooks.
+This project uses **Paystack** as the primary payment gateway for Marthington. The integration provides secure wallet funding with automated credit verification via webhooks.
 
 ## Environment Variables
 
