@@ -3,14 +3,12 @@ const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
 
-const verifyFlutterwaveSignature = (signature, rawBody, secret) => {
-  if (!signature || !secret || !rawBody) {
+const verifyFlutterwaveSignature = (signature, secret) => {
+  if (!signature || !secret) {
     return false;
   }
 
-  const payload = Buffer.isBuffer(rawBody) ? rawBody.toString("utf8") : String(rawBody);
-  const expectedHash = crypto.createHmac("sha256", secret).update(payload).digest("hex");
-  return expectedHash === signature;
+  return signature === secret;
 };
 
 const summarizeEvent = (event) => {
@@ -55,19 +53,18 @@ const handleWebhook = async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing signature header." });
     }
 
-    const signatureMatch = verifyFlutterwaveSignature(signature, rawBody, secret);
-    const computedHash = crypto.createHmac("sha256", secret).update(bodyText).digest("hex");
+    const signatureMatch = verifyFlutterwaveSignature(signature, secret);
     console.log("[FLW_WEBHOOK] signature check result", {
       signatureMatch,
       receivedSignature: signature,
-      computedHash,
+      expectedSignature: secret,
       bodyPreview: bodyText.slice(0, 200),
     });
 
     if (!signatureMatch) {
       console.error("[FLW_WEBHOOK] Signature verification failed", {
         receivedSignature: signature,
-        computedHash,
+        expectedSignature: secret,
         secretConfigured: Boolean(secret),
       });
       return res.status(401).json({ success: false, message: "Signature verification failed." });
