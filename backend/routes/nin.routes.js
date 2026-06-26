@@ -32,6 +32,11 @@ const KOBO_PER_UNIT = 25000;
 router.post("/request", verifyToken, servicesController.submitServiceRequest);
 
 // ==============================================================
+// 📦 ROUTE 1B: LIST SERVICE REQUESTS WITH SERVER-SIDE FILTERS
+// ==============================================================
+router.get("/requests", verifyToken, servicesController.getServiceRequests);
+
+// ==============================================================
 // ⚡ ROUTE 2: INSTANT AUTOMATED THIRD-PARTY NIN RECOVERY / VERIFY
 // ==============================================================
 

@@ -6,6 +6,7 @@ const Transaction = require('../models/transaction.model');
 const Pricing = require('../models/Pricing.model');
 const { validateServiceRequest } = require('../shared/validators');
 const { SUPER_ADMIN_EMAIL } = require('../config/constants');
+const { normalizeServiceType } = require('../config/serviceTypes');
 
 exports.getAllCacRequests = async (req, res) => {
   // ...existing logic from cac.routes.js...
@@ -13,6 +14,71 @@ exports.getAllCacRequests = async (req, res) => {
 
 exports.getAllNinRequests = async (req, res) => {
   // ...existing logic from nin.routes.js...
+};
+
+exports.getServiceRequests = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const skip = (page - 1) * limit;
+    const category = String(req.query.category || '').trim();
+    const nin = String(req.query.nin || '').trim();
+    const search = String(req.query.search || '').trim();
+
+    const query = {};
+
+    if (userId) {
+      query.userId = userId;
+    }
+
+    if (category) {
+      const normalizedCategory = normalizeServiceType(category);
+      if (normalizedCategory === 'cac') {
+        query.serviceCategory = 'CAC';
+      } else if (normalizedCategory === 'nimc') {
+        query.serviceCategory = 'NIMC';
+      } else {
+        query.$or = [
+          { serviceCategory: { $regex: normalizedCategory, $options: 'i' } },
+          { service: { $regex: normalizedCategory, $options: 'i' } },
+          { type: { $regex: normalizedCategory, $options: 'i' } }
+        ];
+      }
+    }
+
+    if (nin) {
+      query.nin = { $regex: nin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    }
+
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.$or = [
+        ...(query.$or || []),
+        { nin: { $regex: escapedSearch, $options: 'i' } },
+        { service: { $regex: escapedSearch, $options: 'i' } },
+        { type: { $regex: escapedSearch, $options: 'i' } },
+        { _id: { $regex: escapedSearch, $options: 'i' } }
+      ];
+    }
+
+    const [requests, totalCount] = await Promise.all([
+      ServiceRequest.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      ServiceRequest.countDocuments(query)
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.max(Math.ceil(totalCount / limit), 1),
+      data: requests
+    });
+  } catch (error) {
+    console.error('SERVICE_REQUESTS_QUERY_ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load service requests.' });
+  }
 };
 
 exports.getPricing = async (req, res) => {

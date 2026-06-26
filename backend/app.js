@@ -53,6 +53,7 @@ app.use("/api/payments", require("./routes/payment.routes"));
 app.use("/api/users", require("./routes/users.routes"));
 app.use("/api/user", require("./routes/users.routes"));
 app.use("/api/services", require("./routes/nin.routes"));
+app.get("/api/service-requests", verifyToken, require("./controllers/services.controller").getServiceRequests);
 app.use("/api/cac", require("./routes/cac.routes"));
 app.use("/api/slips", require("./routes/slips.routes"));
 

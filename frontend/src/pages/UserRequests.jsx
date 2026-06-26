@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../lib/axios";
 import { useUser } from "../context/UserContext";
+import { SERVICE_TYPE_OPTIONS } from "../config/serviceTypes";
 
 export default function UserRequests() {
   // =========================
@@ -14,6 +15,9 @@ export default function UserRequests() {
   const [active, setActive] = useState(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [category, setCategory] = useState("");
+  const [nin, setNin] = useState("");
+  const [search, setSearch] = useState("");
 
   // =========================
   // API CALL
@@ -28,19 +32,18 @@ export default function UserRequests() {
       if (append) setLoadingMore(true);
       else setLoading(true);
 
-      let res;
-      try {
-        res = await api.get(`/api/users/requests/history?page=${pageNum}&limit=10`);
-      } catch (err) {
-        if (err?.response?.status === 404) {
-          res = await api.get(`/api/user/requests/${user.id}?page=${pageNum}&limit=10`);
-        } else {
-          throw err;
-        }
-      }
+      const params = new URLSearchParams({
+        page: String(pageNum),
+        limit: "10"
+      });
 
-      const newData = res.data?.data || res.data || [];
-      
+      if (category) params.set("category", category);
+      if (nin) params.set("nin", nin);
+      if (search) params.set("search", search);
+
+      const res = await api.get(`/api/service-requests?${params.toString()}`);
+      const newData = res.data?.data || [];
+
       if (append) {
         setRequests((prev) => [
           ...prev,
@@ -56,6 +59,7 @@ export default function UserRequests() {
       setPage(currentPage);
     } catch (err) {
       console.error("REQUEST api ERROR:", err.response?.data || err.message);
+      setRequests([]);
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -63,8 +67,25 @@ export default function UserRequests() {
   };
 
   useEffect(() => {
-    apiRequests(1);
+    if (user?.id) {
+      apiRequests(1);
+    }
   }, [user?.id]);
+
+  const applyFilters = () => {
+    setPage(1);
+    setHasMore(true);
+    apiRequests(1, false);
+  };
+
+  const clearFilters = () => {
+    setCategory("");
+    setNin("");
+    setSearch("");
+    setPage(1);
+    setHasMore(true);
+    apiRequests(1, false);
+  };
 
   const loadMore = async () => {
     if (loadingMore) return;
@@ -119,6 +140,34 @@ export default function UserRequests() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-[var(--text)]">Requests</h1>
         <p className="text-[var(--muted)] mt-2">Track your submitted NIN services and processing updates</p>
+      </div>
+
+      <div className="mb-6 grid gap-3 md:grid-cols-[1.2fr_0.8fr_1fr_auto_auto]">
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+        >
+          {SERVICE_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <input
+          value={nin}
+          onChange={(e) => setNin(e.target.value)}
+          placeholder="Filter by NIN"
+          className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+        />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by service or ID"
+          className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+        />
+        <button onClick={applyFilters} className="btn-primary">Apply</button>
+        <button onClick={clearFilters} className="rounded-2xl border border-slate-300 px-3 py-2 text-sm dark:border-slate-700">Clear</button>
       </div>
 
       {requests.length === 0 && (
