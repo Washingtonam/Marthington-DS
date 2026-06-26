@@ -225,7 +225,7 @@ useEffect(() => {
                 <NavItem to="/cac-services" label="CAC Services" icon={<Building2 size={18} />} />
                 <NavItem to="/wallet" label="Wallet" icon={<Wallet size={18} />} />
                 <NavItem to="/transactions" label="Transactions" icon={<ScrollText size={18} />} />
-                <NavItem to="/my-requests" label="My Requests" icon={<FileText size={18} />} />
+                <NavItem to="/my-requests" label="Requests" icon={<FileText size={18} />} />
               </div>
             </div>
 

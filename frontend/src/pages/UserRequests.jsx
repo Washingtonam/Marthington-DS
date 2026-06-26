@@ -117,7 +117,7 @@ export default function UserRequests() {
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[var(--text)]">My Requests</h1>
+        <h1 className="text-3xl font-bold text-[var(--text)]">Requests</h1>
         <p className="text-[var(--muted)] mt-2">Track your submitted NIN services and processing updates</p>
       </div>
 
