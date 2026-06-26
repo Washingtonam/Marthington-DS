@@ -8,9 +8,9 @@ const verifyFlutterwaveSignature = (signature, rawBody, secret) => {
     return false;
   }
 
-  const payload = Buffer.isBuffer(rawBody) ? rawBody.toString("utf8") : String(rawBody);
-  const hash = crypto.createHmac("sha256", secret).update(payload).digest("hex");
-  return hash === signature;
+  const payload = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody));
+  const expectedHash = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  return expectedHash === signature;
 };
 
 const summarizeEvent = (event) => {
