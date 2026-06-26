@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../../lib/axios";
-import { SERVICE_TYPE_OPTIONS } from "../../config/serviceTypes";
+import { nimcSubServices, cacSubServices } from "../../config/serviceTypes";
 import {
   Search, ArrowUpDown, Eye, CheckCircle2, XCircle, Clock3,
   ChevronLeft, ChevronRight, Fingerprint, Building2, AlertCircle,
@@ -47,15 +47,13 @@ export default function AdminRequests() {
   const [activeStatus, setActiveStatus] = useState("pending");
   const [requests, setRequests] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [modalStatus, setModalStatus] = useState("");
   const [modalComment, setModalComment] = useState("");
   const [requesterRole, setRequesterRole] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
-
-  const nimcSubServices = ["All", "Validation", "IP Clearance", "Modification", "Personalization", "Self-Service"];
-  const cacSubServices = ["All", "sole_proprietorship", "partnership", "limited_1m", "custom_ngo"];
 
   const serviceColors = {
     "Validation": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200",
@@ -70,11 +68,12 @@ export default function AdminRequests() {
   };
 
   const fetchRequests = async (pageNum = 1) => {
+    setLoading(true);
     try {
       const params = {
         page: pageNum,
         limit: 12,
-        status: activeStatus,
+        status: activeStatus === "all" ? "" : activeStatus,
         category: activeTab === "cac" ? "cac" : "nimc",
         serviceType: activeSubService === "All" ? "" : activeSubService,
         search: searchTerm,
@@ -89,6 +88,8 @@ export default function AdminRequests() {
     } catch (err) {
       console.error("Fetch Error:", err);
       setRequests([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -125,6 +126,27 @@ export default function AdminRequests() {
     fetchRequests(1);
   };
 
+  const handleStatusChange = (status) => {
+    setActiveStatus(status);
+    setPage(1);
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setActiveSubService("All");
+    setPage(1);
+  };
+
+  const handleSubServiceChange = (subService) => {
+    setActiveSubService(subService);
+    setPage(1);
+  };
+
+  const handleRoleChange = (role) => {
+    setRequesterRole(role);
+    setPage(1);
+  };
+
   const displayedRequests = requests;
 
   const getRequestTitle = (request) => {
@@ -152,8 +174,8 @@ export default function AdminRequests() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex gap-4 mb-6 flex-wrap">
-        {["nimc", "cac"].map(tab => (
-          <button key={tab} onClick={() => { setActiveTab(tab); setActiveSubService("All"); }} className={`px-6 py-3 font-bold rounded-2xl transition ${activeTab === tab ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
+        {['nimc', 'cac'].map((tab) => (
+          <button key={tab} onClick={() => handleTabChange(tab)} className={`px-6 py-3 font-bold rounded-2xl transition ${activeTab === tab ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
             {tab.toUpperCase()} Services
           </button>
         ))}
@@ -169,7 +191,7 @@ export default function AdminRequests() {
 
       <div className="flex gap-3 items-center mb-6 flex-wrap">
         <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">Requester:</label>
-        <select value={requesterRole} onChange={(e) => setRequesterRole(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        <select value={requesterRole} onChange={(e) => handleRoleChange(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
           <option value="all">All</option>
           <option value="user">User</option>
           <option value="admin">Admin</option>
@@ -184,16 +206,29 @@ export default function AdminRequests() {
 
       {(activeTab === "nimc" || activeTab === "cac") && (
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          {(activeTab === "nimc" ? nimcSubServices : cacSubServices).map(s => (
-            <button key={s} onClick={() => setActiveSubService(s)} className={`px-4 py-2 rounded-xl text-xs font-bold transition ${activeSubService === s ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700"}`}>
+          {(activeTab === "nimc" ? nimcSubServices : cacSubServices).map((s) => (
+            <button key={s} onClick={() => handleSubServiceChange(s)} className={`px-4 py-2 rounded-xl text-xs font-bold transition ${activeSubService === s ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700"}`}>
               {s}
             </button>
           ))}
         </div>
       )}
 
-      <div className="grid md:grid-cols-3 gap-6">
-        {displayedRequests.map(r => (
+      {loading ? (
+        <div className="flex items-center justify-center rounded-3xl border border-dashed border-slate-300 p-10 text-slate-500 dark:border-slate-700 dark:text-slate-400">
+          <div className="flex items-center gap-3">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+            <span>Loading requests...</span>
+          </div>
+        </div>
+      ) : displayedRequests.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-slate-300 p-10 text-center text-slate-500 dark:border-slate-700 dark:text-slate-400">
+          <p className="text-lg font-semibold text-slate-700 dark:text-slate-200">No requests found</p>
+          <p className="mt-2">Try a different filter or search term.</p>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-3 gap-6">
+          {displayedRequests.map(r => (
           <div key={r._id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition">
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1">
@@ -248,8 +283,9 @@ export default function AdminRequests() {
               )}
             </div>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex justify-center items-center gap-4 mt-10">
         <button disabled={page === 1} onClick={() => fetchRequests(page - 1)} className="p-2 rounded-xl bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 disabled:opacity-50"><ChevronLeft /></button>
@@ -419,10 +455,10 @@ export default function AdminRequests() {
                           return alert('Forbidden: Only Super Admin may modify pending requests.');
                         }
                         try {
-                          await axios.put(`${API_BASE}/api/admin/status/${selected._id}`, { status: modalStatus, note: modalComment }, { headers: authHeaders });
+                          await api.put(`/api/admin/status/${selected._id}`, { status: modalStatus, note: modalComment });
                           alert('✅ Status updated successfully');
                           setSelected(null);
-                          fetchRequests();
+                          fetchRequests(page);
                         } catch (err) {
                           console.error('Status update error:', err);
                           alert(err.response?.data?.message || '❌ Failed to update status');

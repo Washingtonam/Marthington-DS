@@ -66,10 +66,11 @@ router.get("/requests", isAdmin, async (req, res) => {
     }
 
     if (normalizedCategory === "cac") {
-      serviceQuery.serviceCategory = "CAC";
+      serviceQuery._id = null;
       cacQuery.serviceCategory = "CAC";
     } else if (normalizedCategory === "nimc") {
       serviceQuery.serviceCategory = "NIMC";
+      cacQuery._id = null;
     } else if (normalizedCategory) {
       const escapedCategory = escapeRegex(normalizedCategory);
       serviceQuery.$or = [

@@ -9,6 +9,9 @@ export const SERVICE_TYPE_OPTIONS = [
   { value: "cac", label: "CAC" }
 ];
 
+export const nimcSubServices = ["All", "Validation", "IP Clearance", "Modification", "Personalization", "Self-Service"];
+export const cacSubServices = ["All", "sole_proprietorship", "partnership", "limited_1m", "custom_ngo"];
+
 export const normalizeServiceType = (value) => {
   if (value === null || value === undefined) return "";
   const normalized = String(value).trim().toLowerCase();
