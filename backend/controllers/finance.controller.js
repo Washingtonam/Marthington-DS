@@ -96,8 +96,25 @@ exports.initiateFlutterwavePayment = async (req, res) => {
             }];
         }
 
-        const response = await flw.Transactions.initialize(initializePayload);
-        const data = response.data;
+        const flwTransactionClient = flw.Transaction || flw.Transactions;
+        let data;
+
+        if (typeof flwTransactionClient?.initialize === "function") {
+            const response = await flwTransactionClient.initialize(initializePayload);
+            data = response?.data || response;
+        } else {
+            const response = await axios.post(
+                `${process.env.FLW_API_BASE_URL || "https://api.flutterwave.com"}/v3/payments`,
+                initializePayload,
+                {
+                    headers: {
+                        Authorization: `Bearer ${flwSecret}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
+            data = response?.data;
+        }
 
         if (!data || !data.status || !data.data) {
             throw new Error("Invalid response from Flutterwave initialization.");
@@ -196,8 +213,9 @@ exports.verifyFlutterwaveTransaction = async (req, res) => {
         }
 
         // Call Flutterwave to verify the transaction
-        const response = await flw.Transactions.verify({ id: reference });
-        const data = response.data;
+        const flwTransactionClient = flw.Transaction || flw.Transactions;
+        const response = await flwTransactionClient.verify({ id: reference });
+        const data = response?.data || response;
         if (!data || !data.status) {
             throw new Error("Invalid response from Flutterwave verification.");
         }

@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const axios = require("axios");
 const Flutterwave = require("flutterwave-node-v3");
 const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
@@ -43,6 +44,8 @@ const handleFlutterwaveWebhook = async (req, res) => {
       return res.status(401).json({ success: false, message: "Invalid signature - webhook verification failed." });
     }
 
+    const flwTransactionClient = flw.Transaction || flw.Transactions;
+
     let event;
     try {
       event = JSON.parse(rawBody.toString("utf8"));
@@ -74,8 +77,8 @@ const handleFlutterwaveWebhook = async (req, res) => {
       return res.status(200).json({ success: true, message: "Payment already processed.", isDuplicate: true });
     }
 
-    const verificationResponse = await flw.Transactions.verify({ id: txId });
-    const verificationData = verificationResponse?.data?.data;
+    const verificationResponse = await flwTransactionClient.verify({ id: txId });
+    const verificationData = verificationResponse?.data || verificationResponse;
 
     if (!verificationData || !["successful", "success"].includes(verificationData.status)) {
       return res.status(400).json({ success: false, message: "Flutterwave payment is not yet successful." });
@@ -253,8 +256,30 @@ const initiatePayment = async (req, res) => {
       initializePayload.subaccounts = [{ id: flutterwaveSubaccount, transaction_split_ratio: 1 }];
     }
 
-    const response = await flw.Transactions.initialize(initializePayload);
-    const payloadData = response?.data?.data;
+    const flwTransactionClient = flw.Transaction || flw.Transactions;
+    const flutterwaveSecretKey = process.env.FLW_SECRET_KEY;
+    let payloadData;
+
+    if (!flutterwaveSecretKey) {
+      throw new Error("FLW_SECRET_KEY is not configured.");
+    }
+
+    if (typeof flwTransactionClient?.initialize === "function") {
+      const response = await flwTransactionClient.initialize(initializePayload);
+      payloadData = response?.data?.data || response?.data || response;
+    } else {
+      const response = await axios.post(
+        `${process.env.FLW_API_BASE_URL || "https://api.flutterwave.com"}/v3/payments`,
+        initializePayload,
+        {
+          headers: {
+            Authorization: `Bearer ${flutterwaveSecretKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      payloadData = response?.data?.data || response?.data;
+    }
 
     if (!payloadData) {
       throw new Error("Invalid response from Flutterwave initialization.");
