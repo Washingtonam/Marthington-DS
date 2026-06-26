@@ -8,7 +8,7 @@ const verifyFlutterwaveSignature = (signature, rawBody, secret) => {
     return false;
   }
 
-  const payload = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody));
+  const payload = Buffer.isBuffer(rawBody) ? rawBody.toString("utf8") : String(rawBody);
   const expectedHash = crypto.createHmac("sha256", secret).update(payload).digest("hex");
   return expectedHash === signature;
 };
@@ -56,10 +56,20 @@ const handleWebhook = async (req, res) => {
     }
 
     const signatureMatch = verifyFlutterwaveSignature(signature, rawBody, secret);
-    console.log("[FLW_WEBHOOK] signature check result", { signatureMatch });
+    const computedHash = crypto.createHmac("sha256", secret).update(bodyText).digest("hex");
+    console.log("[FLW_WEBHOOK] signature check result", {
+      signatureMatch,
+      receivedSignature: signature,
+      computedHash,
+      bodyPreview: bodyText.slice(0, 200),
+    });
 
     if (!signatureMatch) {
-      console.error("[FLW_WEBHOOK] Signature verification failed", { signature, secretConfigured: Boolean(secret) });
+      console.error("[FLW_WEBHOOK] Signature verification failed", {
+        receivedSignature: signature,
+        computedHash,
+        secretConfigured: Boolean(secret),
+      });
       return res.status(401).json({ success: false, message: "Signature verification failed." });
     }
 
