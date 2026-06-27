@@ -135,6 +135,8 @@ router.get("/user-history/:id", verifyToken, async (req, res) => {
 router.get("/user-requests/:id", verifyToken, async (req, res) => {
   try {
     const targetId = req.params.id;
+    const category = String(req.query.category || "").trim().toLowerCase();
+    const limit = Math.min(Math.max(Number(req.query.limit) || 5, 1), 50);
 
     // Allow access if requester is the owner, a platform admin, or super admin email
     const isOwner = req.user && (req.user.id === targetId || req.user._id === targetId);
@@ -145,7 +147,18 @@ router.get("/user-requests/:id", verifyToken, async (req, res) => {
       return res.status(403).json({ message: "Forbidden: insufficient privileges" });
     }
 
-    const records = await CacRequest.find({ userId: targetId }).sort({ createdAt: -1 }).lean();
+    const query = { userId: targetId };
+    if (category) {
+      const normalizedCategory = category === "cac" ? "CAC" : category === "nimc" ? "NIMC" : category;
+      query.$or = [
+        { serviceCategory: { $regex: normalizedCategory, $options: "i" } },
+        { category: { $regex: normalizedCategory, $options: "i" } },
+        { serviceType: { $regex: normalizedCategory, $options: "i" } },
+        { type: { $regex: normalizedCategory, $options: "i" } }
+      ];
+    }
+
+    const records = await CacRequest.find(query).sort({ createdAt: -1 }).limit(limit).lean();
     return res.json(records);
   } catch (error) {
     console.error("🔥 CAC USER REQUESTS ERROR:", error);
