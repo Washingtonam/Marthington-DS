@@ -18,7 +18,7 @@ export default function StatCard({
     <div className={`
       relative overflow-hidden rounded-3xl p-6 text-white
       ${glassEffect 
-        ? "bg-white/50 backdrop-blur-lg border border-white/20 text-gray-900" 
+        ? "bg-white/70 dark:bg-slate-900/70 backdrop-blur-lg border border-slate-200/70 dark:border-slate-700/70 text-slate-900 dark:text-slate-100" 
         : `bg-gradient-to-br ${colors[color]}`
       }
       shadow-xl hover:shadow-2xl transition-shadow duration-200
@@ -33,16 +33,16 @@ export default function StatCard({
 
           <div>
 
-            <p className={`text-sm mb-2 ${glassEffect ? "text-gray-600" : "text-white/70"}`}>
+            <p className={`text-sm mb-2 ${glassEffect ? "text-slate-600 dark:text-slate-300" : "text-white/70"}`}>
               {title}
             </p>
 
-            <h2 className={`text-4xl font-bold tracking-tight ${glassEffect ? "text-gray-900" : "text-white"}`}>
+            <h2 className={`text-4xl font-bold tracking-tight ${glassEffect ? "text-slate-900 dark:text-slate-100" : "text-white"}`}>
               {value}
             </h2>
 
             {subtitle && (
-              <p className={`text-xs mt-2 ${glassEffect ? "text-gray-600" : "text-white/70"}`}>
+              <p className={`text-xs mt-2 ${glassEffect ? "text-slate-600 dark:text-slate-400" : "text-white/70"}`}>
                 {subtitle}
               </p>
             )}

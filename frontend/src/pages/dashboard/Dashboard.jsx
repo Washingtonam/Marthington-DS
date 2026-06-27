@@ -224,17 +224,17 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="bg-white/50 backdrop-blur-lg border border-white/20 rounded-3xl p-6 md:p-8 shadow-xl"
+        className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-lg border border-slate-200/70 dark:border-slate-700/70 rounded-3xl p-6 md:p-8 shadow-xl"
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Recent Activity</h2>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Recent Activity</h2>
           <div className="flex gap-2">
             {FILTER_OPTIONS.map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
-                  filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  filter === f ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                 }`}
               >
                 {f}
@@ -263,7 +263,7 @@ export default function Dashboard() {
                 <motion.div
                   key={activity._id || activity.id}
                   whileHover={{ x: 4 }}
-                  className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 hover:bg-gray-100/50 transition-colors cursor-pointer"
+                  className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50/80 hover:bg-slate-100/80 transition-colors cursor-pointer dark:bg-slate-800/70 dark:hover:bg-slate-700/70"
                 >
                   <div
                     className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${
@@ -283,10 +283,10 @@ export default function Dashboard() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900">{activity.title || activity.service || activity.type}</h3>
-                    <p className="text-sm text-gray-600 mt-1">{activity.description || activity.message || activity.status}</p>
+                    <h3 className="font-semibold text-slate-900 dark:text-slate-100">{activity.title || activity.service || activity.type}</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{activity.description || activity.message || activity.status}</p>
                   </div>
-                  <div className="flex-shrink-0 text-xs text-gray-500 whitespace-nowrap">
+                  <div className="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                     {activity.updatedAt ? new Date(activity.updatedAt).toLocaleDateString() : activity.time || "Recent"}
                   </div>
                 </motion.div>
