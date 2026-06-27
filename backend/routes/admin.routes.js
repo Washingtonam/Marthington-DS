@@ -643,7 +643,7 @@ router.get("/payments/ledger", isAdmin, async (req, res) => {
         .limit(limit)
         .lean(),
       Transaction.countDocuments(paymentFilter),
-    ];
+    ]);
 
     const enrichedSummary = summaryRecords.map((tx) => {
       const amount = tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0;
