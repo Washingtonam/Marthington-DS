@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, ChevronLeft, ChevronRight, Clock3, CheckCircle2, XCircle, Zap, FileText, BadgeDollarSign, UserCheck } from "lucide-react";
-import { adminGetPaymentsLedger } from "../../services/api";
+import { useToast } from "../../context/ToastContext";
+import { adminGetPaymentsLedger, adminApprovePayment, adminRejectPayment } from "../../services/api";
 
-const STATUS_FILTERS = ["all", "pending", "approved", "rejected", "failed"];
+const STATUS_FILTERS = ["all", "pending", "approved", "rejected"];
 const STATUS_BADGES = {
   pending: "bg-yellow-100 text-yellow-700",
   approved: "bg-emerald-100 text-emerald-700",
@@ -34,6 +35,9 @@ export default function AdminPayments() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionTarget, setActionTarget] = useState(null);
+  const { success, error } = useToast();
 
   const activeSummaryCards = [
     { title: "Total Volume", value: formatCurrency(summary.totalVolume), icon: <BadgeDollarSign size={22} className="text-slate-700" /> },
@@ -43,6 +47,21 @@ export default function AdminPayments() {
   ];
 
   const sourceBreakdown = useMemo(() => Object.entries(summary.sourceBreakdown || {}), [summary.sourceBreakdown]);
+
+  const formatStatusLabel = (status) => {
+    const normalized = String(status || "").toLowerCase();
+    if (normalized === "success" || normalized === "successful" || normalized === "approved") return "Approved";
+    if (normalized === "failed" || normalized === "rejected") return "Rejected";
+    if (normalized === "pending") return "Pending";
+    return status?.toString()?.toUpperCase() || "OTHER";
+  };
+
+  const showStatus = (status) => {
+    const normalized = String(status || "").toLowerCase();
+    if (normalized === "success" || normalized === "successful") return "approved";
+    if (normalized === "failed") return "rejected";
+    return normalized || "other";
+  };
 
   const fetchLedger = async () => {
     setLoading(true);
@@ -79,6 +98,42 @@ export default function AdminPayments() {
   useEffect(() => {
     fetchLedger();
   }, [pagination.page, pagination.limit, statusFilter, searchQuery]);
+
+  const handleApprove = async (transactionId) => {
+    if (!transactionId) return;
+    setActionLoading(true);
+    setActionTarget(transactionId);
+
+    try {
+      await adminApprovePayment(transactionId);
+      success("Payment approved and wallet funded successfully.");
+      fetchLedger();
+    } catch (err) {
+      console.error("APPROVE ERROR:", err);
+      error(err.response?.data?.message || err.message || "Failed to approve payment.");
+    } finally {
+      setActionLoading(false);
+      setActionTarget(null);
+    }
+  };
+
+  const handleReject = async (transactionId) => {
+    if (!transactionId) return;
+    setActionLoading(true);
+    setActionTarget(transactionId);
+
+    try {
+      await adminRejectPayment(transactionId);
+      success("Payment rejected successfully.");
+      fetchLedger();
+    } catch (err) {
+      console.error("REJECT ERROR:", err);
+      error(err.response?.data?.message || err.message || "Failed to reject payment.");
+    } finally {
+      setActionLoading(false);
+      setActionTarget(null);
+    }
+  };
 
   const onSearch = (event) => {
     event.preventDefault();
@@ -163,6 +218,7 @@ export default function AdminPayments() {
                   <th className="py-3 px-4">Amount</th>
                   <th className="py-3 px-4">Source</th>
                   <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -189,15 +245,43 @@ export default function AdminPayments() {
                       <td className="px-4 py-4 text-sm font-semibold text-slate-900">{formatCurrency(payment.amount)}</td>
                       <td className="px-4 py-4 text-sm text-slate-700">{payment.paymentSource || "Unknown"}</td>
                       <td className="px-4 py-4">
-                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGES[payment.status] || STATUS_BADGES.other}`}>
-                          {payment.status?.toUpperCase() || "OTHER"}
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGES[showStatus(payment.status)] || STATUS_BADGES.other}`}>
+                          {formatStatusLabel(payment.status)}
                         </span>
+                      </td>
+                      <td className="px-4 py-4 space-x-2">
+                        {showStatus(payment.status) === "pending" ? (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApprove(payment._id);
+                              }}
+                              disabled={actionLoading && actionTarget === payment._id}
+                              className="rounded-2xl bg-emerald-600 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReject(payment._id);
+                              }}
+                              disabled={actionLoading && actionTarget === payment._id}
+                              className="rounded-2xl bg-rose-600 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-500">—</span>
+                        )}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="px-4 py-10 text-center text-sm text-slate-500">
+                    <td colSpan="6" className="px-4 py-10 text-center text-sm text-slate-500">
                       No ledger records match your filters.
                     </td>
                   </tr>

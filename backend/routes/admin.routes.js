@@ -616,7 +616,16 @@ router.get("/payments/ledger", isAdmin, async (req, res) => {
 
     const filter = {};
     if (status && status !== "all") {
-      filter.status = normalizePaymentStatus(status);
+      const normalized = normalizePaymentStatus(status);
+      if (normalized === "approved") {
+        filter.status = { $in: ["approved", "success", "successful"] };
+      } else if (normalized === "rejected") {
+        filter.status = { $in: ["rejected", "failed"] };
+      } else if (normalized === "pending") {
+        filter.status = "pending";
+      } else {
+        filter.status = normalized;
+      }
     }
 
     if (search) {
