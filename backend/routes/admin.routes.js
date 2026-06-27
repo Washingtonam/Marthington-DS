@@ -171,9 +171,9 @@ router.get("/stats", isSuperAdmin, async (req, res) => {
     const [totalUsers, totalTransactions, pendingPayments, balanceData] = await Promise.all([
       User.countDocuments(),
       Transaction.countDocuments(),
-      Transaction.countDocuments({ type: "UNIT_ADD", status: "pending" }),
+      Transaction.countDocuments({ status: "pending" }),
       User.aggregate([
-        { $group: { _id: null, total: { $sum: { $ifNull: ["$balance", 0] } } } }
+        { $group: { _id: null, total: { $sum: { $ifNull: ["$walletBalance", 0] } } } }
       ])
     ]);
 
@@ -591,6 +591,135 @@ router.get("/payments", isAdmin, async (req, res) => {
   } catch (error) {
     console.error("🔥 api PAYMENTS ERROR:", error);
     res.status(500).json({ success: false, message: "Failed to api ledger credit payment entries" });
+  }
+});
+
+const normalizePaymentStatus = (value) => String(value || "").trim().toLowerCase();
+const buildPaymentSource = (tx) => {
+  const reference = String(tx.reference || "").toUpperCase();
+  const description = String(tx.description || "").toLowerCase();
+
+  if (reference.startsWith("FLW_")) return "Flutterwave";
+  if (reference.startsWith("PAY_")) return "Paystack";
+  if (description.includes("bank transfer")) return "Bank Transfer";
+  if (description.includes("manual") || description.includes("receipt")) return "Manual Receipt";
+  if (String(tx.type).toUpperCase() === "CREDIT") return "Manual Receipt";
+  if (String(tx.type).toUpperCase() === "UNIT_ADD") return "Wallet Deposit";
+  return "Other";
+};
+
+router.get("/payments/ledger", isAdmin, async (req, res) => {
+  try {
+    let { page = 1, limit = 20, status, search } = req.query;
+    page = Math.max(1, parseInt(page, 10) || 1);
+    limit = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
+
+    const filter = {};
+    if (status && status !== "all") {
+      filter.status = normalizePaymentStatus(status);
+    }
+
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&"), "i");
+      filter.$or = [
+        { reference: regex },
+        { description: regex },
+        { type: regex },
+      ];
+    }
+
+    const fundingTypes = ["UNIT_ADD", "credit", "admin_credit", "admin_debit"];
+    const paymentFilter = {
+      ...filter,
+      type: { $in: fundingTypes },
+    };
+
+    const [summaryRecords, pageRecords, totalCount] = await Promise.all([
+      Transaction.find(paymentFilter).select("status type amount amountKobo reference description").lean(),
+      Transaction.find(paymentFilter)
+        .populate("userId", "email role")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments(paymentFilter),
+    ];
+
+    const enrichedSummary = summaryRecords.map((tx) => {
+      const amount = tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0;
+      return {
+        ...tx,
+        amount,
+        status: normalizePaymentStatus(tx.status),
+        paymentSource: buildPaymentSource(tx),
+      };
+    });
+
+    const summary = enrichedSummary.reduce(
+      (acc, tx) => {
+        acc.totalVolume += tx.amount;
+        acc.statusBreakdown[tx.status] = (acc.statusBreakdown[tx.status] || 0) + 1;
+        const source = tx.paymentSource;
+        acc.sourceBreakdown[source] = acc.sourceBreakdown[source] || { count: 0, total: 0 };
+        acc.sourceBreakdown[source].count += 1;
+        acc.sourceBreakdown[source].total += tx.amount;
+
+        if (["success", "successful", "approved"].includes(tx.status)) {
+          acc.approved += 1;
+        } else if (tx.status === "pending") {
+          acc.pending += 1;
+        } else if (tx.status === "rejected") {
+          acc.rejected += 1;
+        } else if (tx.status === "failed") {
+          acc.failed += 1;
+        } else {
+          acc.other += 1;
+        }
+
+        return acc;
+      },
+      {
+        totalCount: summaryRecords.length,
+        totalVolume: 0,
+        approved: 0,
+        pending: 0,
+        rejected: 0,
+        failed: 0,
+        other: 0,
+        statusBreakdown: {},
+        sourceBreakdown: {},
+      }
+    );
+
+    const transactions = pageRecords.map((tx) => ({
+      _id: tx._id,
+      userId: tx.userId?._id,
+      userEmail: tx.userId?.email || "Unknown",
+      userRole: tx.userId?.role || "user",
+      status: normalizePaymentStatus(tx.status),
+      amount: tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0,
+      paymentSource: buildPaymentSource(tx),
+      type: tx.type,
+      reference: tx.reference || "",
+      description: tx.description || "",
+      proof: tx.proof,
+      createdAt: tx.createdAt,
+    }));
+
+    res.json({
+      success: true,
+      summary,
+      data: transactions,
+      pagination: {
+        total: totalCount,
+        page,
+        pages: Math.ceil(totalCount / limit),
+        limit,
+      },
+    });
+  } catch (error) {
+    console.error("🔥 ADMIN PAYMENT LEDGER ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch payment ledger." });
   }
 });
 

@@ -30,6 +30,7 @@ export const getCacFilingHistory = async () => (await api.get("/api/cac/history"
 // 🛠️ ADMIN CONTROL PIPELINES
 // ==========================================
 export const adminGetPendingPayments = async () => (await api.get("/api/finance/payments")).data;
+export const adminGetPaymentsLedger = async (params) => (await api.get("/api/admin/payments/ledger", { params })).data;
 export const adminApprovePayment = async (transactionId) => (await api.post(`/api/finance/payments/${transactionId}/approve`)).data;
 export const adminRejectPayment = async (transactionId) => (await api.post(`/api/finance/payments/${transactionId}/reject`)).data;
 export const adminGetIdentityRequests = async () => (await api.get("/api/services/requests")).data;
