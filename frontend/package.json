@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "axios": "^1.13.6",
@@ -30,6 +34,15 @@
     "globals": "^17.4.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^3.4.1",
-    "vite": "^8.0.1"
+    "vite": "^8.0.1",
+    "vitest": "^1.0.0",
+    "@testing-library/react": "^15.0.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/user-event": "^14.6.0",
+    "jsdom": "^22.1.0"
+    ,
+    "@storybook/react": "^7.0.0",
+    "@storybook/addon-essentials": "^7.0.0",
+    "@storybook/builder-vite": "^7.0.0"
   }
 }

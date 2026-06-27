@@ -6,6 +6,8 @@ import {
   ChevronLeft, ChevronRight, Fingerprint, Building2, AlertCircle,
   MessageSquare, Shield, Calendar
 } from "lucide-react";
+import SlideOver from "../../components/ui/SlideOver";
+import RequestDetails from "./RequestDetails";
 
 // 🔒 Data Masking Utility for Sensitive Fields
 const maskNIN = (nin) => {
@@ -173,46 +175,61 @@ export default function AdminRequests() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="flex gap-4 mb-6 flex-wrap">
-        {['nimc', 'cac'].map((tab) => (
-          <button key={tab} onClick={() => handleTabChange(tab)} className={`px-6 py-3 font-bold rounded-2xl transition ${activeTab === tab ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
-            {tab.toUpperCase()} Services
-          </button>
-        ))}
-      </div>
+      {/* Consolidated Action Header */}
+      <div className="mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            {['nimc', 'cac'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => handleTabChange(tab)}
+                className={`px-4 py-2 font-semibold rounded-2xl transition ${activeTab === tab ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
+              >
+                {tab.toUpperCase()}
+              </button>
+            ))}
 
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {["pending", "approved", "in-progress", "processing", "completed", "rejected", "failed"].map(s => (
-          <button key={s} onClick={() => { setActiveStatus(s); setPage(1); }} className={`px-4 py-2 rounded-xl text-xs font-bold capitalize transition ${activeStatus === s ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
-            {s}
-          </button>
-        ))}
-      </div>
+            <div className="ml-2">
+              <select value={activeSubService} onChange={(e) => handleSubServiceChange(e.target.value)} className="px-3 py-2 rounded-2xl border border-slate-300 bg-white text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                <option value="All">All</option>
+                {(activeTab === 'nimc' ? nimcSubServices : cacSubServices).map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-      <div className="flex gap-3 items-center mb-6 flex-wrap">
-        <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">Requester:</label>
-        <select value={requesterRole} onChange={(e) => handleRoleChange(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-          <option value="all">All</option>
-          <option value="user">User</option>
-          <option value="admin">Admin</option>
-          <option value="super_admin">Super Admin</option>
-        </select>
-        <div className="ml-4 flex-1 flex items-center rounded-xl p-2 border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
-          <Search className="mr-2 text-slate-500 dark:text-slate-400" />
-          <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by email, NIN, service or ID" className="w-full outline-none bg-transparent text-slate-900 dark:text-slate-100" />
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center rounded-xl p-2 border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
+              <Search className="mr-2 text-slate-500 dark:text-slate-400" />
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }}
+                placeholder="Search by email, NIN, service or ID"
+                className="w-64 md:w-80 outline-none bg-transparent text-slate-900 dark:text-slate-100"
+              />
+            </div>
+
+            <select value={activeStatus} onChange={(e) => handleStatusChange(e.target.value)} className="px-3 py-2 rounded-2xl border border-slate-300 bg-white text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+              <option value="all">All Statuses</option>
+              {["pending", "approved", "in-progress", "processing", "completed", "rejected", "failed"].map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            <select value={requesterRole} onChange={(e) => handleRoleChange(e.target.value)} className="px-3 py-2 rounded-2xl border border-slate-300 bg-white text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+              <option value="all">All Requesters</option>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+              <option value="super_admin">Super Admin</option>
+            </select>
+
+            <button onClick={applyFilters} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-200 dark:text-slate-950">Apply</button>
+            <button onClick={() => { setActiveStatus('all'); setActiveSubService('All'); setRequesterRole('all'); setSearchTerm(''); setPage(1); fetchRequests(1); }} className="rounded-2xl bg-transparent px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Clear</button>
+          </div>
         </div>
-        <button onClick={applyFilters} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-200 dark:text-slate-950">Apply</button>
       </div>
-
-      {(activeTab === "nimc" || activeTab === "cac") && (
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          {(activeTab === "nimc" ? nimcSubServices : cacSubServices).map((s) => (
-            <button key={s} onClick={() => handleSubServiceChange(s)} className={`px-4 py-2 rounded-xl text-xs font-bold transition ${activeSubService === s ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700"}`}>
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center rounded-3xl border border-dashed border-slate-300 p-10 text-slate-500 dark:border-slate-700 dark:text-slate-400">
@@ -229,7 +246,10 @@ export default function AdminRequests() {
       ) : (
         <div className="grid md:grid-cols-3 gap-6">
           {displayedRequests.map(r => (
-          <div key={r._id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition">
+          <div
+            key={r._id}
+            className={`bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition ${r.status === 'pending' ? 'ring-1 ring-yellow-300 dark:ring-yellow-600' : ''} h-full flex flex-col`}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1">
                 <h3 className="font-bold text-sm truncate">{r.userId?.email}</h3>
@@ -259,16 +279,17 @@ export default function AdminRequests() {
               </div>
             </div>
             
-              <div className="mt-4 flex gap-2">
+              <div className="mt-auto flex gap-2 items-end">
               <button 
                 onClick={() => {
                   const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : {};
                   if (r.status === 'pending' && user.role !== 'super_admin') return alert('Access denied: only Super Admin may view pending request details');
                   setSelected(r);
                 }}
-                className="bg-slate-900 text-white px-3 py-2 rounded-xl text-xs flex-1 hover:bg-slate-800 transition"
+                className="bg-slate-900 text-white px-3 py-2 rounded-xl text-xs flex-1 hover:bg-slate-800 transition flex items-center justify-center gap-2"
               >
-                {/* Inspect */}
+                <Eye className="w-4 h-4" />
+                <span>Inspect</span>
               </button>
               {activeStatus === "pending" && (
                 <>
@@ -293,193 +314,19 @@ export default function AdminRequests() {
         <button disabled={page === pages} onClick={() => fetchRequests(page + 1)} className="p-2 rounded-xl bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 disabled:opacity-50"><ChevronRight /></button>
       </div>
       {selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-6">
-          <div className="w-full max-w-3xl bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 rounded-2xl p-6 shadow-lg overflow-auto max-h-[90vh]">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h2 className="text-xl font-bold">Request Details</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">{getRequestTitle(selected)} — {selected.pipelineSource?.toUpperCase() || ''}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setSelected(null)} className="px-3 py-2 rounded-xl bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100">Close</button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div>
-                <p className="text-xs text-slate-500">Requester</p>
-                <p className="font-semibold">{selected.userId?.email} <span className="text-sm font-normal">({selected.userId?.role || 'user'})</span></p>
-                <p className="text-xs text-slate-500 mt-2">Status</p>
-                <p className="font-semibold">{selected.status}</p>
-                <p className="text-xs text-slate-500 mt-2">Submitted</p>
-                <p className="font-semibold">{new Date(selected.createdAt).toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Reference</p>
-                <p className="font-semibold">{selected.nin || selected.businessName1 || selected.serviceType || 'N/A'}</p>
-                <p className="text-xs text-slate-500 mt-2">Amount</p>
-                <p className="font-semibold">{selected.amount || selected.amountCharged || 0}</p>
-                <p className="text-xs text-slate-500 mt-2">Pipeline</p>
-                <p className="font-semibold">{selected.pipelineSource}</p>
-              </div>
-            </div>
-            <div>
-              <h3 className="font-bold mb-2">Request Data</h3>
-              {getRequestDetails(selected).length > 0 ? (
-                <div className="grid gap-2">
-                  {getRequestDetails(selected).map(({ key, value }) => (
-                    <div key={key} className="flex gap-4 items-start">
-                      <div className="w-40 text-sm text-slate-500">{key}</div>
-                      <div className="flex-1 text-sm break-words">{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">No request data available.</p>
-              )}
-
-              {selected.formData && Object.keys(selected.formData).length > 0 && (
-                <div className="mt-6">
-                  <h4 className="font-semibold mb-2">Form Data</h4>
-                  <div className="grid gap-2">
-                    {Object.entries(selected.formData).map(([k, v]) => (
-                      <div key={k} className="flex gap-4 items-start">
-                        <div className="w-40 text-sm text-slate-500">{k}</div>
-                        <div className="flex-1 text-sm break-words">{typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Status History Timeline */}
-              <div className="mt-6">
-                <h3 className="font-bold mb-3 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Status Timeline
-                </h3>
-                {Array.isArray(selected.statusHistory) && selected.statusHistory.length > 0 ? (
-                  <div className="space-y-2 max-h-48 overflow-auto">
-                    {[...selected.statusHistory].reverse().map((item, idx) => (
-                      <div key={idx} className={`p-3 rounded-xl border-l-4 ${statusColors[item.status] || 'bg-gray-50'}`}>
-                        <div className="flex items-center gap-2 mb-1">
-                          {getStatusIcon(item.status)}
-                          <span className="font-semibold capitalize text-sm">{item.status}</span>
-                          {item.actorRole ? (
-                            <span className="text-xs text-slate-500 ml-2 uppercase font-semibold">{item.actorRole}</span>
-                          ) : (
-                            <span className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</span>
-                          )}
-                          <span className="text-xs text-slate-500 ml-2">{!item.actorRole && new Date(item.createdAt).toLocaleString()}</span>
-                        </div>
-                        {item.note && <div className="text-sm text-slate-700 ml-6">{item.note}</div>}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500">No status history.</p>
-                )}
-              </div>
-
-              {/* Admin Comments Timeline */}
-              <div className="mt-6">
-                <h3 className="font-bold mb-3 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  Admin Comments
-                </h3>
-                {Array.isArray(selected.adminComments) && selected.adminComments.length > 0 ? (
-                  <div className="space-y-3 max-h-48 overflow-auto">
-                    {[...selected.adminComments].reverse().map((c, idx) => (
-                      <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                        <div className="text-xs text-slate-500 font-semibold">{c.authorRole || c.author}</div>
-                        <div className="text-xs text-slate-400 mt-0.5">{new Date(c.createdAt).toLocaleString()}</div>
-                        <div className="mt-2 text-sm text-slate-700">{c.comment}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500">No comments yet.</p>
-                )}
-              </div>
-
-              {/* Status Update Section */}
-              <div className="mt-6 p-4 rounded-xl bg-blue-50 border border-blue-200">
-                <h3 className="font-bold mb-4 flex items-center gap-2 text-blue-900">
-                  <Shield className="w-4 h-4" />
-                  Resolution Actions
-                </h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700">New Status</label>
-                    <select 
-                      value={modalStatus} 
-                      onChange={(e) => setModalStatus(e.target.value)} 
-                      className="w-full p-3 rounded-xl border border-blue-300 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="pending">📋 Pending</option>
-                      <option value="in-progress">⏳ In Progress</option>
-                      <option value="processing">🔄 Processing</option>
-                      <option value="approved">✅ Approved</option>
-                      <option value="completed">🎉 Completed</option>
-                      <option value="rejected">❌ Rejected</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700">
-                      Comment/Resolution Note
-                      {modalStatus === 'rejected' && <span className="text-red-600 ml-1">*Required for rejection</span>}
-                    </label>
-                    <textarea 
-                      value={modalComment} 
-                      onChange={(e) => setModalComment(e.target.value)} 
-                      placeholder={
-                        modalStatus === 'rejected' 
-                          ? "Explain why this request was rejected..." 
-                          : "Add a resolution note or comment..."
-                      }
-                      className="w-full p-3 rounded-xl border border-blue-300 mt-2 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" 
-                    />
-                  </div>
-
-                    <div className="flex gap-2 pt-2">
-                    <button 
-                      onClick={async () => {
-                        if (modalStatus === 'rejected' && (!modalComment || modalComment.trim().length < 5)) {
-                          return alert('Please provide a detailed rejection reason (at least 5 characters).');
-                        }
-                        // Block non-super-admins from updating pending records
-                        const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : {};
-                        if (selected.status === 'pending' && user.role !== 'super_admin') {
-                          return alert('Forbidden: Only Super Admin may modify pending requests.');
-                        }
-                        try {
-                          await api.put(`/api/admin/status/${selected._id}`, { status: modalStatus, note: modalComment });
-                          alert('✅ Status updated successfully');
-                          setSelected(null);
-                          fetchRequests(page);
-                        } catch (err) {
-                          console.error('Status update error:', err);
-                          alert(err.response?.data?.message || '❌ Failed to update status');
-                        }
-                      }} 
-                      className="flex-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
-                    >
-                      Update Status
-                    </button>
-                    <button 
-                      onClick={() => { setModalStatus(selected.status || "pending"); setModalComment(""); }} 
-                      className="px-4 py-2 rounded-xl bg-gray-200 text-gray-800 hover:bg-gray-300 transition"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <SlideOver isOpen={!!selected} onClose={() => setSelected(null)} title="Request Details">
+          <RequestDetails
+            selected={selected}
+            modalStatus={modalStatus}
+            setModalStatus={setModalStatus}
+            modalComment={modalComment}
+            setModalComment={setModalComment}
+            handleStatusUpdate={handleStatusUpdate}
+            fetchRequests={fetchRequests}
+            page={page}
+            setSelected={setSelected}
+          />
+        </SlideOver>
       )}
     </div>
   );
