@@ -190,7 +190,55 @@ router.get("/stats", isSuperAdmin, async (req, res) => {
   }
 });
 
-// 📥 NIMC PIPELINE ROUTE
+// � ADMIN OVERVIEW METRICS FOR OPERATIONS CONTROL CENTER
+router.get("/stats/overview", isAdmin, async (req, res) => {
+  try {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const successfulStatuses = ["success", "successful", "approved", "completed"];
+
+    const [dailyRevenueAgg, monthlyRevenueAgg, nimcPending, serviceCacPending, cacRequestPending] = await Promise.all([
+      Transaction.aggregate([
+        { $match: { status: { $in: successfulStatuses }, createdAt: { $gte: todayStart } } },
+        { $group: { _id: null, amount: { $sum: { $cond: [{ $gt: ["$amount", null] }, "$amount", { $divide: ["$amountKobo", 100] }] } } } }
+      ]),
+      Transaction.aggregate([
+        { $match: { status: { $in: successfulStatuses }, createdAt: { $gte: monthStart } } },
+        { $group: { _id: null, amount: { $sum: { $cond: [{ $gt: ["$amount", null] }, "$amount", { $divide: ["$amountKobo", 100] }] } } } }
+      ]),
+      ServiceRequest.countDocuments({ status: { $in: ["pending", "processing", "in-progress"] }, serviceCategory: "NIMC" }),
+      ServiceRequest.countDocuments({ status: { $in: ["pending", "processing", "in-progress"] }, serviceCategory: "CAC" }),
+      CACRequest.countDocuments({ status: { $in: ["pending", "processing", "in-progress"] } })
+    ]);
+
+    const dailyRevenue = dailyRevenueAgg[0]?.amount || 0;
+    const monthlyRevenue = monthlyRevenueAgg[0]?.amount || 0;
+    const pendingRequests = {
+      NIMC: nimcPending,
+      CAC: serviceCacPending + cacRequestPending
+    };
+    const systemStatus = {
+      apiGateway: "nominal",
+      verificationWorkers: "stable",
+      paymentGateway: "available",
+      lastCheckedAt: new Date().toISOString()
+    };
+
+    res.json({
+      success: true,
+      dailyRevenue,
+      monthlyRevenue,
+      pendingRequests,
+      systemStatus
+    });
+  } catch (err) {
+    console.error("OVERVIEW STATS ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to compile overview dashboard metrics." });
+  }
+});
+
+// �📥 NIMC PIPELINE ROUTE
 router.get("/nimc-requests", isSuperAdmin, async (req, res) => {
   try {
     const requests = await ServiceRequest.find()

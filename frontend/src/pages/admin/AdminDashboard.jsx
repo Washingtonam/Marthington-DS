@@ -1,11 +1,88 @@
 import { useEffect, useState } from "react";
-import api from "../api"; // Imports your customized Axios configuration instance
+import api from "../../lib/axios"; // Admin dashboard API client
+
+function DashboardControlCenterSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="h-40 rounded-[1.75rem] bg-slate-200/70 animate-pulse" />
+            <div className="h-40 rounded-[1.75rem] bg-slate-200/70 animate-pulse" />
+          </div>
+        </div>
+        <div className="h-56 rounded-[1.75rem] bg-slate-200/70 animate-pulse" />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 h-72 rounded-[1.75rem] bg-slate-200/70 animate-pulse" />
+        <div className="h-72 rounded-[1.75rem] bg-slate-200/70 animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
+function BarChart({ data }) {
+  const categories = Object.entries(data || { NIMC: 0, CAC: 0 });
+  const maxCount = Math.max(...categories.map(([, value]) => value), 1);
+
+  return (
+    <div className="space-y-4">
+      {categories.map(([label, value]) => (
+        <div key={label} className="space-y-2">
+          <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
+            <span>{label}</span>
+            <span>{value}</span>
+          </div>
+          <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-blue-600"
+              style={{ width: `${(value / maxCount) * 100}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState({});
+  const [overview, setOverview] = useState({});
+  const [isOverviewLoading, setIsOverviewLoading] = useState(true);
+  const [recentAdminActions, setRecentAdminActions] = useState([]);
   const [search, setSearch] = useState("");
   const [pipelineRequests, setPipelineRequests] = useState([]);
+
+  // ============================
+  // FETCH ADMIN OVERVIEW
+  // ============================
+  const fetchAdminOverview = async () => {
+    setIsOverviewLoading(true);
+    try {
+      const response = await api.get("/api/admin/stats/overview");
+      if (response.data?.success) {
+        setOverview(response.data);
+      } else {
+        setOverview({});
+      }
+    } catch (error) {
+      console.error("🔥 Error fetching admin overview:", error);
+      setOverview({});
+    } finally {
+      setIsOverviewLoading(false);
+    }
+  };
+
+  const fetchRecentAdminActions = async () => {
+    try {
+      const response = await api.get("/api/admin/audit-logs", { params: { page: 1, limit: 5 } });
+      setRecentAdminActions(response.data?.data || []);
+    } catch (error) {
+      console.error("🔥 Error fetching admin actions:", error);
+      setRecentAdminActions([]);
+    }
+  };
 
   // ============================
   // FETCH PIPELINE REQUESTS
@@ -100,6 +177,8 @@ export default function AdminDashboard() {
     fetchUsers();
     fetchStats();
     fetchPipelineRequests();
+    fetchAdminOverview();
+    fetchRecentAdminActions();
   }, []);
 
   return (
@@ -111,6 +190,86 @@ export default function AdminDashboard() {
         <Card title="Pending Payments Verification" value={stats.pendingPayments} />
         <Card title="Systemic Logged Transactions" value={stats.totalTransactions} />
         <Card title="Aggregated Liability Balance" value={`₦${stats.totalBalance || 0}`} />
+      </div>
+
+      <div className="grid gap-4 mb-8 xl:grid-cols-3">
+        <div className="grid gap-4 xl:col-span-2">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-500">Financial Overview</p>
+                  <h3 className="mt-2 text-xl font-bold text-slate-900">Daily + Monthly Revenue</h3>
+                </div>
+              </div>
+              {isOverviewLoading ? (
+                <div className="space-y-3">
+                  <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
+                  <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-3xl bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-widest text-slate-500">Today</p>
+                    <p className="mt-3 text-2xl font-semibold text-slate-900">₦{Number(overview.dailyRevenue || 0).toLocaleString()}</p>
+                  </div>
+                  <div className="rounded-3xl bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-widest text-slate-500">This Month</p>
+                    <p className="mt-3 text-2xl font-semibold text-slate-900">₦{Number(overview.monthlyRevenue || 0).toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-500">Service Demand</p>
+                  <h3 className="mt-2 text-xl font-bold text-slate-900">Request Volume</h3>
+                </div>
+              </div>
+              <div className="min-h-[184px]">
+                {isOverviewLoading ? (
+                  <div className="space-y-3">
+                    <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+                    <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+                    <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+                  </div>
+                ) : (
+                  <BarChart data={overview.pendingRequests} />
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-500">Recent Admin Activity</p>
+              <h3 className="mt-2 text-xl font-bold text-slate-900">Last 5 Actions</h3>
+            </div>
+          </div>
+          {recentAdminActions.length === 0 ? (
+            <div className="space-y-3">
+              <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+              <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+              <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentAdminActions.map((action) => (
+                <div key={action._id} className="rounded-3xl bg-slate-50 p-4 border border-slate-100">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{action.action || "Admin action"}</p>
+                    <span className="text-xs text-slate-500">{new Date(action.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <p className="text-sm text-slate-600 truncate mt-2">{action.note || action.description || "No description available."}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-2 mb-6">

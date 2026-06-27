@@ -70,42 +70,21 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async (nextFilter = filter) => {
-    const targetId = user?.id || user?._id;
-    if (!targetId) return;
+    if (!user?.id) return;
 
     setLoading(true);
     try {
       const normalizedFilter = nextFilter === "All" ? "" : nextFilter;
-      const query = normalizedFilter ? `?category=${encodeURIComponent(normalizedFilter)}&limit=5` : "?limit=5";
+      const query = normalizedFilter ? `category=${encodeURIComponent(normalizedFilter)}&limit=5` : "limit=5";
 
       const balancePromise = api.get("/api/users/balance");
-      const requestsPromise = api.get(`/api/cac/user-requests/${targetId}${query}`);
+      const requestsPromise = api.get(`/api/service-requests?${query}`);
 
-      let balanceRes;
-      let requestsRes;
-
-      try {
-        [balanceRes, requestsRes] = await Promise.all([balancePromise, requestsPromise]);
-      } catch (err) {
-        if (err?.response?.status === 404) {
-          try {
-            balanceRes = await balancePromise;
-            const hist = await api.get(`/api/cac/history${normalizedFilter ? `?category=${encodeURIComponent(normalizedFilter)}` : ""}`);
-            requestsRes = { data: Array.isArray(hist.data) ? hist.data.filter((r) => String(r.userId) === String(targetId)) : [] };
-          } catch (fallbackError) {
-            console.error("Fallback CAC history failed:", fallbackError);
-            balanceRes = await balancePromise.catch(() => ({ data: { walletBalance: 0 } }));
-            requestsRes = { data: [] };
-          }
-        } else {
-          throw err;
-        }
-      }
-
+      const [balanceRes, requestsRes] = await Promise.all([balancePromise, requestsPromise]);
       const balanceValue = balanceRes?.data?.walletBalance ?? contextWalletBalance ?? 0;
       setWalletBalance(balanceValue);
 
-      const data = Array.isArray(requestsRes?.data) ? requestsRes.data : [];
+      const data = Array.isArray(requestsRes?.data?.data) ? requestsRes.data.data : [];
       const mappedData = data.map((r) => ({
         ...r,
         category:
@@ -121,7 +100,7 @@ export default function Dashboard() {
       setRequestsData(mappedData);
       setStats({
         total: mappedData.length,
-        completed: mappedData.filter((r) => ["completed", "approved"].includes(String(r.status || "").toLowerCase())).length,
+        completed: mappedData.filter((r) => ["completed", "approved", "success", "successful"].includes(String(r.status || "").toLowerCase())).length,
         pending: mappedData.filter((r) => ["pending", "processing", "in-progress"].includes(String(r.status || "").toLowerCase())).length,
       });
     } catch (err) {
@@ -132,7 +111,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [user, contextWalletBalance]);
+  }, [user?.id, contextWalletBalance, filter]);
 
   useEffect(() => {
     fetchData(filter);
@@ -199,17 +178,17 @@ export default function Dashboard() {
           <ActionButton
             title="Verify NIN"
             icon={ShieldCheck}
-            onClick={() => navigate("/services/nin")}
+            onClick={() => navigate("/verify-nin")}
           />
           <ActionButton
             title="NIMC Services"
             icon={FileText}
-            onClick={() => navigate("/services/nimc")}
+            onClick={() => navigate("/nin-services")}
           />
           <ActionButton
             title="CAC Services"
             icon={FileText}
-            onClick={() => navigate("/services/cac")}
+            onClick={() => navigate("/cac-services")}
           />
           <ActionButton
             title="Wallet"
@@ -251,7 +230,7 @@ export default function Dashboard() {
               actionLabel={filter === "All" ? "Create Request" : "Reset Filter"}
               onAction={() => {
                 if (filter === "All") {
-                  navigate("/services/nin");
+                  navigate("/verify-nin");
                 } else {
                   setFilter("All");
                 }
@@ -259,43 +238,69 @@ export default function Dashboard() {
             />
           ) : (
             <>
-              {requestsData.map((activity) => (
-                <motion.div
-                  key={activity._id || activity.id}
-                  whileHover={{ x: 4 }}
-                  className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50/80 hover:bg-slate-100/80 transition-colors cursor-pointer dark:bg-slate-800/70 dark:hover:bg-slate-700/70"
-                >
-                  <div
-                    className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${
-                      activity.status === "completed"
-                        ? "bg-green-100"
-                        : activity.status === "pending"
-                        ? "bg-amber-100"
-                        : "bg-orange-100"
-                    }`}
+              {requestsData.map((activity) => {
+                const latestUpdate = Array.isArray(activity.statusHistory) ? activity.statusHistory[0] : null;
+                const rawStatus = String(activity.status || latestUpdate?.status || latestUpdate?.note || "").toLowerCase();
+                const statusLabel = rawStatus.includes("complete") || rawStatus.includes("success")
+                  ? "Completed"
+                  : rawStatus.includes("pending")
+                  ? "Pending"
+                  : rawStatus.includes("process")
+                  ? "Processing"
+                  : rawStatus.includes("fail") || rawStatus.includes("reject")
+                  ? "Failed"
+                  : activity.status || "Unknown";
+                const statusBadge = statusLabel === "Completed"
+                  ? "bg-green-100 text-green-800"
+                  : statusLabel === "Pending"
+                  ? "bg-yellow-100 text-yellow-800"
+                  : statusLabel === "Processing"
+                  ? "bg-blue-100 text-blue-800"
+                  : "bg-red-100 text-red-800";
+                const statusIcon = statusLabel === "Completed" ? "✅" : statusLabel === "Pending" ? "⏳" : statusLabel === "Processing" ? "⚙️" : "❌";
+                const latestNote = latestUpdate?.note || activity.status || "No update yet";
+
+                return (
+                  <motion.div
+                    key={activity._id || activity.id}
+                    whileHover={{ x: 4 }}
+                    className="flex flex-col gap-4 p-4 rounded-2xl bg-slate-50/80 hover:bg-slate-100/80 transition-colors cursor-pointer dark:bg-slate-800/70 dark:hover:bg-slate-700/70"
+                    onClick={() => navigate(`/verify-result/${activity._id}`)}
                   >
-                    {activity.status === "completed" ? (
-                      <CheckCircle size={20} className="text-green-600" />
-                    ) : activity.status === "pending" ? (
-                      <Clock size={20} className="text-amber-600" />
-                    ) : (
-                      <AlertCircle size={20} className="text-orange-600" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-slate-900 dark:text-slate-100">{activity.title || activity.service || activity.type}</h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{activity.description || activity.message || activity.status}</p>
-                  </div>
-                  <div className="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                    {activity.updatedAt ? new Date(activity.updatedAt).toLocaleDateString() : activity.time || "Recent"}
-                  </div>
-                </motion.div>
-              ))}
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate">{activity.service || activity.type || "Service Request"}</h3>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 truncate">{activity.nin ? `NIN: ${activity.nin}` : activity.serviceCategory || activity.category || "NIMC"}</p>
+                        <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                          <span>{statusIcon}</span>
+                          <span>{statusLabel}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{new Date(activity.createdAt || activity.updatedAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-2xl bg-white dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-700">
+                        <p className="text-xs text-slate-500">Amount</p>
+                        <p className="font-semibold mt-1">₦{Number(activity.amount || 0).toLocaleString()}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-700">
+                        <p className="text-xs text-slate-500">Pipeline</p>
+                        <p className="font-semibold mt-1">{activity.serviceCategory || activity.category || "NIMC"}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-700">
+                        <p className="text-xs text-slate-500">Latest Log</p>
+                        <p className="font-semibold mt-1 truncate">{latestNote}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
             </>
           )}
         </div>
 
-        {/* View All Requests Button */}
         {requestsData.length > 0 && (
           <div className="mt-8 pt-6 border-t border-gray-200 flex justify-center">
             <motion.button
