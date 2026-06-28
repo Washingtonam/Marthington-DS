@@ -154,7 +154,7 @@ export default function Register() {
           <form onSubmit={handleRegister} className="mx-auto w-full max-w-md space-y-4">
             <div className="mb-8 text-center lg:text-left">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-600 lg:hidden">
-                <Sparkles size={14} /> Lovely onboarding
+                <Sparkles size={14} /> Agent OnBoarding
               </div>
               <h2 className="text-4xl font-black text-slate-900">Create Account 🚀</h2>
               <p className="mt-3 text-sm leading-7 text-slate-600">Your account setup should feel just as premium as the platform itself.</p>

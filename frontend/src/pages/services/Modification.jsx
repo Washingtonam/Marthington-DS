@@ -344,22 +344,11 @@ export default function Modification() {
       <div className="bg-gradient-to-r from-blue-700 to-indigo-700 rounded-[2rem] p-10 text-white mb-8 shadow-2xl">
         <h1 className="text-4xl font-black mb-2">Modify Your NIN Details</h1>
         <p className="opacity-80">Secure, wallet-integrated data corrections with full documentation guidance.</p>
-        <div className="mt-6 grid gap-3 md:grid-cols-2">
-          <div className="rounded-3xl bg-white/10 p-5 border border-white/10">
-            <h2 className="font-semibold">Required for all modification requests</h2>
-            <ul className="mt-4 space-y-2 text-sm leading-relaxed">
-              <li>• Half-body passport photo, sharp and clear, no white shirt</li>
-              <li>• 2 or 3 different pictures with different clothes/backgrounds</li>
-              <li>• New email account (Yahoo/Gmail/Outlook) login to be shared</li>
-              <li>• Validated NIN (not suspended or under 17)</li>
-            </ul>
-          </div>
-          <div className="rounded-3xl bg-white/10 p-5 border border-white/10">
-            <h2 className="font-semibold">Bank Update Notice</h2>
-            <p className="mt-4 text-sm leading-relaxed">
-              Add <strong>₦3,000</strong> extra for faster bank update, or wait 2 weeks for banks to auto-sync from NIMC.
-            </p>
-          </div>
+        <div className="mt-6 rounded-3xl bg-white/10 p-6 border border-white/10">
+          <h2 className="font-semibold">Processing time</h2>
+          <p className="mt-4 text-sm leading-relaxed text-slate-100">
+            Please allow up to <strong>3 working days</strong> for complete processing of your modification request. Our agents work through each application carefully to ensure accuracy and approval.
+          </p>
         </div>
       </div>
 
