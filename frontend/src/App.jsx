@@ -93,9 +93,9 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/" element={loggedIn ? <Navigate to={isSuperAdmin() ? "/admin" : "/dashboard"} /> : <Home />} />
-      <Route path="/login" element={loggedIn ? <Navigate to={isSuperAdmin() ? "/admin" : "/dashboard"} /> : <Login />} />
-      <Route path="/register" element={loggedIn ? <Navigate to="/dashboard" /> : <Register />} />
+      <Route path="/" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Home />} />
+      <Route path="/login" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Login />} />
+      <Route path="/register" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       
@@ -108,7 +108,7 @@ function AppRoutes() {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <Layout>{isSuperAdmin() ? <AdminDashboard /> : <Dashboard />}</Layout>
+            <Layout>{isAdmin() ? <Navigate to="/admin" /> : <Dashboard />}</Layout>
           </ProtectedRoute>
         }
       />
@@ -136,7 +136,7 @@ function AppRoutes() {
       <Route path="/cac-services" element={<ProtectedRoute><Layout><CacServices /></Layout></ProtectedRoute>} />
 
       {/* Admin Routes */}
-      <Route path="/admin" element={<SuperAdminRoute><Layout><AdminDashboard /></Layout></SuperAdminRoute>} />
+      <Route path="/admin" element={<AdminRoute><Layout><AdminDashboard /></Layout></AdminRoute>} />
       <Route path="/admin/users" element={<SuperAdminRoute><Layout><AdminUsers /></Layout></SuperAdminRoute>} />
       <Route path="/admin/payments" element={<AdminRoute><Layout><AdminPayments /></Layout></AdminRoute>} />
       <Route path="/admin/requests" element={<AdminRoute><Layout><AdminRequests /></Layout></AdminRoute>} />

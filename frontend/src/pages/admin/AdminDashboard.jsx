@@ -61,6 +61,28 @@ export default function AdminDashboard() {
   const [ninSearch, setNinSearch] = useState("");
   const [ninResults, setNinResults] = useState([]);
   const [ninLoading, setNinLoading] = useState(false);
+  const [visibleEmails, setVisibleEmails] = useState({});
+
+  const currentUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const isSuperAdminLocal = currentUser.role === 'super_admin';
+
+  const maskEmail = (email) => {
+    if (!email) return '**********';
+    const [localPart, domain] = String(email).split('@');
+    if (!domain) return `${email[0]}*****`;
+    return `${localPart[0]}*****@${domain}`;
+  };
+
+  const toggleEmailVisibility = (id) => {
+    setVisibleEmails((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // ============================
   // FETCH ADMIN OVERVIEW
@@ -404,94 +426,51 @@ export default function AdminDashboard() {
               <th className="p-4">Secure Email Identification</th>
               <th className="p-4">Account Balance Metrics</th>
               <th className="p-4">Network Node Status</th>
-              <th className="p-4 text-center">System Actions Matrix</th>
+              {isSuperAdminLocal && <th className="p-4 text-center">System Actions Matrix</th>}
             </tr>
           </thead>
           <tbody>
             {users.length === 0 ? (
               <tr>
-                <td colSpan="5" className="p-4 text-center text-gray-400">No active user records index detected.</td>
+                <td colSpan={isSuperAdminLocal ? "5" : "4"} className="p-4 text-center text-gray-400">No active user records index detected.</td>
               </tr>
             ) : (
-              users.map((user) => (
-                <tr key={user._id} className="border-t hover:bg-gray-50 transition-colors">
-                  <td className="p-4 font-medium text-gray-800">{user.firstName} {user.lastName}</td>
-                  <td className="p-4 text-gray-600">{user.email}</td>
-                  <td className="p-4 font-mono text-gray-700">₦{user.balance}</td>
-                  <td className="p-4">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-white text-xs font-semibold uppercase tracking-wider ${
-                        user.status === "active" ? "bg-green-500" : "bg-red-500"
-                      }`}
-                    >
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="p-4 flex gap-2 justify-center">
-                    {user.status === "active" ? (
-                      <button
-                        onClick={() => suspendUser(user._id)}
-                        className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
-                      >
-                        Suspend Node
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => activateUser(user._id)}
-                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
-                      >
-                        Activate Node
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteUser(user._id)}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
-                    >
-                      Delete Profile
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              users.map((user) => {
+                const email = String(user.email || "");
+                const safeEmail = isSuperAdminLocal && visibleEmails[user._id] ? email : maskEmail(email);
 
-      <h2 className="text-2xl font-bold mb-4 text-gray-800">Pending Identity & Registry Application Tracks</h2>
-      <div className="bg-white rounded shadow overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100 text-left text-gray-600 font-semibold border-b">
-            <tr>
-              <th className="p-4">Applicant Trace</th>
-              <th className="p-4">Target Channel</th>
-              <th className="p-4">Unique File Details</th>
-              <th className="p-4">Status State</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pipelineRequests.length === 0 ? (
-              <tr>
-                <td colSpan="4" className="p-4 text-center text-gray-400">No processing operation profiles in current track pipeline.</td>
-              </tr>
-            ) : (
-              pipelineRequests.map((req) => (
-                <tr key={req._id} className="border-t hover:bg-gray-50">
-                  <td className="p-4 text-gray-700 font-medium">{req.userId?.email || "System-Fallback Native Entry"}</td>
-                  <td className="p-4">
-                    <span className="px-2 py-0.5 rounded font-mono text-xs uppercase bg-purple-100 text-purple-800">
-                      {req.pipelineSource || req.service || "General"}
-                    </span>
-                  </td>
-                  <td className="p-4 text-gray-600 max-w-xs truncate">
-                    {req.businessName1 || req.type || "Identity Verification Document Field Context"}
-                  </td>
-                  <td className="p-4">
-                    <span className="text-xs font-semibold px-2 py-1 rounded bg-amber-100 text-amber-800 uppercase">
-                      {req.status}
-                    </span>
-                  </td>
-                </tr>
-              ))
+                return (
+                  <tr key={user._id} className="border-t hover:bg-gray-50 transition-colors">
+                    <td className="p-4 font-medium text-gray-800">{user.firstName} {user.lastName}</td>
+                    <td className="p-4 text-gray-600 flex items-center gap-2">
+                      <span>{safeEmail}</span>
+                      {isSuperAdminLocal ? (
+                        <button onClick={() => toggleEmailVisibility(user._id)} className="text-slate-500 hover:text-slate-800 focus:outline-none">
+                          {visibleEmails[user._id] ? '🙈' : '👁️'}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">superadmin only</span>
+                      )}
+                    </td>
+                    <td className="p-4 font-mono text-gray-700">₦{user.balance}</td>
+                    <td className="p-4">
+                      <span className={`px-2.5 py-1 rounded-full text-white text-xs font-semibold uppercase tracking-wider ${user.status === "active" ? "bg-green-500" : "bg-red-500"}`}>
+                        {user.status}
+                      </span>
+                    </td>
+                    {isSuperAdminLocal && (
+                      <td className="p-4 flex gap-2 justify-center">
+                        {user.status === "active" ? (
+                          <button onClick={() => suspendUser(user._id)} className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors">Suspend Node</button>
+                        ) : (
+                          <button onClick={() => activateUser(user._id)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">Activate Node</button>
+                        )}
+                        <button onClick={() => deleteUser(user._id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">Delete Profile</button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
