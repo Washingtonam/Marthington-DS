@@ -174,7 +174,7 @@ useEffect(() => {
             <div className="flex items-center justify-between mb-8 overflow-hidden h-10">
               <div className="transition-all duration-300">
                 {open ? (
-                  <img src="/logofull.png" alt="Xcombinator" className="h-10 object-contain animate-fadeIn" />
+                  <img src="/logofull.png" alt="Marthington" className="h-10 object-contain animate-fadeIn" />
                 ) : (
                   <Sparkles size={28} className="text-blue-400 ml-1.5" />
                 )}

@@ -60,7 +60,7 @@ export default function Home() {
 
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }} className="bg-white/[0.04] border border-white/10 rounded-[2rem] p-8 backdrop-blur-xl shadow-2xl">
             <div className="flex justify-between items-center mb-10">
-              <div><p className="text-white/50 text-sm">Active Platform</p><h2 className="text-2xl font-black mt-1">Xcombinator</h2></div>
+              <div><p className="text-white/50 text-sm">Active Platform</p><h2 className="text-2xl font-black mt-1">Marthington</h2></div>
               <div className="w-14 h-14 rounded-2xl bg-green-500/20 flex items-center justify-center"><CheckCircle2 size={30} className="text-green-400" /></div>
             </div>
             <div className="space-y-4">

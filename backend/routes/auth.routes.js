@@ -247,7 +247,7 @@ router.post("/forgot-password", async (req, res) => {
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
     await resend.emails.send({
-      from: "Xcombinator <onboarding@resend.dev>",
+      from: "Marthington <onboarding@resend.dev>",
       to: user.email,
       subject: "Reset Your Password",
       html: `

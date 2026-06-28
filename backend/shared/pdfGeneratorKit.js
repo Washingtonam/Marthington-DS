@@ -85,7 +85,7 @@ async function generateNINSlip(data) {
       doc.strokeColor('#cccccc').lineWidth(1).moveTo(40, doc.y).lineTo(555, doc.y).stroke();
       doc.moveDown(0.3);
       // Use system fonts (Helvetica) and avoid embedding heavy font subsets
-      doc.fontSize(10).font('Helvetica').text('This document is electronically generated via Xcombinator Verification System', { align: 'center' });
+      doc.fontSize(10).font('Helvetica').text('This document is electronically generated via Marthington Verification System', { align: 'center' });
       doc.fontSize(9).text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
 
       doc.end();
@@ -146,7 +146,7 @@ async function generateDataSlip(data, trackingId) {
       // Footer
       doc.strokeColor('#333333').lineWidth(1).moveTo(35, doc.y).lineTo(560, doc.y).stroke();
       doc.moveDown(0.3);
-      doc.fontSize(9).font('Helvetica').text(`Generated: ${new Date().toLocaleString()} | Xcombinator Verification System`, { align: 'center' });
+      doc.fontSize(9).font('Helvetica').text(`Generated: ${new Date().toLocaleString()} | Marthington Verification System`, { align: 'center' });
 
       doc.end();
     } catch (error) {
@@ -216,7 +216,7 @@ async function generatePremiumSlip(data, trackingId) {
 
           doc.fontSize(9).font('Helvetica-Bold').text(`Tracking ID: ${trackingId}`, { align: 'center' });
           doc.fontSize(8).font('Helvetica').text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
-          doc.text('This is a digitally generated document. Xcombinator Verification System', { align: 'center' });
+          doc.text('This is a digitally generated document. Marthington Verification System', { align: 'center' });
 
           doc.end();
           resolve(Buffer.concat(buffers));
@@ -253,7 +253,7 @@ async function generatePremiumSlip(data, trackingId) {
 
           doc.fontSize(9).font('Helvetica-Bold').text(`Tracking ID: ${trackingId}`, { align: 'center' });
           doc.fontSize(8).font('Helvetica').text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
-          doc.text('This is a digitally generated document. Xcombinator Verification System', { align: 'center' });
+          doc.text('This is a digitally generated document. Marthington Verification System', { align: 'center' });
 
           doc.end();
           resolve(Buffer.concat(buffers));
@@ -328,7 +328,7 @@ async function generateLongSlip(data, trackingId) {
       doc.strokeColor('#000000').lineWidth(1).moveTo(35, doc.y).lineTo(560, doc.y).stroke();
       doc.moveDown(0.3);
       doc.fontSize(9).font('Helvetica-Bold').text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
-      doc.fontSize(8).font('Helvetica').text(`Verification System: Xcombinator | Document ID: ${trackingId}`, { align: 'center' });
+      doc.fontSize(8).font('Helvetica').text(`Verification System: Marthington | Document ID: ${trackingId}`, { align: 'center' });
 
       doc.end();
     } catch (error) {

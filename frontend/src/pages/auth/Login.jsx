@@ -75,7 +75,7 @@ export default function Login() {
                 <ShieldCheck size={30} />
               </div>
               <div>
-                <h1 className="text-3xl font-black tracking-tight">Xcombinator</h1>
+                <h1 className="text-3xl font-black tracking-tight">Marthington</h1>
                 <p className="text-white/70 text-sm">Secure Identity Platform</p>
               </div>
             </div>
@@ -123,7 +123,7 @@ export default function Login() {
           <div className="w-full max-w-md mx-auto">
             {/* MOBILE LOGO */}
             <div className="lg:hidden text-center mb-8">
-              <h1 className="text-3xl font-black text-gray-900 dark:text-white">Xcombinator</h1>
+              <h1 className="text-3xl font-black text-gray-900 dark:text-white">Marthington</h1>
               <p className="text-gray-500 mt-2">Secure Identity Platform</p>
             </div>
 
