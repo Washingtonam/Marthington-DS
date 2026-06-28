@@ -21,12 +21,11 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // ==============================
 router.post("/register", async (req, res) => {
   try {
-    let { firstName, lastName, nin, email, password, confirmPassword } = req.body;
+    let { firstName, lastName, nin, email, password, confirmPassword, phone } = req.body;
 
-    // Input validation
-    if (!email || !password) {
+    if (!email || !password || !phone) {
       return res.status(400).json({
-        error: "Email and password are required",
+        error: "Email, password, and phone number are required",
       });
     }
 
@@ -36,13 +35,17 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // Sanitize inputs
     email = email.toLowerCase().trim();
     firstName = (firstName || "").trim();
     lastName = (lastName || "").trim();
     nin = (nin || "").trim();
+    phone = (phone || "").trim();
 
-    // Validate password strength
+    const phoneRegex = /^\+?[0-9\s().-]{8,15}$/;
+    if (!phoneRegex.test(phone)) {
+      return res.status(400).json({ error: "Please enter a valid phone number" });
+    }
+
     if (password.length < 12) {
       return res.status(400).json({
         error: "Password must be at least 12 characters long",
@@ -67,7 +70,6 @@ router.post("/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Explicit check: If it's your primary email, automatically enforce super_admin role
     let assignedRole = "user";
     if (email === SUPER_ADMIN_EMAIL) {
       assignedRole = "super_admin";
@@ -78,8 +80,9 @@ router.post("/register", async (req, res) => {
       lastName: lastName || "",
       nin: nin || "",
       email,
+      phone,
       password: hashedPassword,
-      role: assignedRole, // Dynamic role assignment
+      role: assignedRole,
     });
 
     res.status(201).json({
@@ -87,6 +90,7 @@ router.post("/register", async (req, res) => {
       user: {
         id: newUser._id,
         email: newUser.email,
+        phone: newUser.phone,
         units: newUser.units || 0,
         walletBalance: newUser.walletBalance || 0,
         walletBalanceKobo: newUser.walletBalanceKobo || 0,
@@ -150,10 +154,11 @@ router.post("/login", async (req, res) => {
 
     res.json({
       message: "Login successful",
-      token, // Passed down back to frontend application instances
+      token,
       user: {
         id: user._id,
         email: user.email,
+        phone: user.phone || "",
         units: user.units || 0,
         walletBalance: user.walletBalance || 0,
         walletBalanceKobo: user.walletBalanceKobo || 0,

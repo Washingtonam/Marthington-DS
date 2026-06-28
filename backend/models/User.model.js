@@ -2,11 +2,15 @@ const mongoose = require("mongoose");
 const { SUPER_ADMIN_EMAIL } = require("../config/constants");
 
 const userSchema = new mongoose.Schema({
+    firstName: { type: String, trim: true, default: "" },
+    lastName: { type: String, trim: true, default: "" },
+    nin: { type: String, trim: true, default: "" },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    phone: { type: String, trim: true, default: "" },
     password: { type: String, required: true },
-    walletBalance: { type: Number, default: 0 }, // Naira balance for compatibility
-    walletBalanceKobo: { type: Number, default: 0 }, // Precise integer currency amount
-    units: { type: Number, default: 0 },         // Legacy Units
+    walletBalance: { type: Number, default: 0 },
+    walletBalanceKobo: { type: Number, default: 0 },
+    units: { type: Number, default: 0 },
     role: { type: String, enum: ["user", "admin", "super_admin"], default: "user" },
     status: { type: String, enum: ["active", "suspended"], default: "active" }
 }, { timestamps: true });
