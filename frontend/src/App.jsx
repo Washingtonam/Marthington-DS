@@ -93,8 +93,8 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/" element={loggedIn ? <Navigate to="/dashboard" /> : <Home />} />
-      <Route path="/login" element={loggedIn ? <Navigate to="/dashboard" /> : <Login />} />
+      <Route path="/" element={loggedIn ? <Navigate to={isSuperAdmin() ? "/admin" : "/dashboard"} /> : <Home />} />
+      <Route path="/login" element={loggedIn ? <Navigate to={isSuperAdmin() ? "/admin" : "/dashboard"} /> : <Login />} />
       <Route path="/register" element={loggedIn ? <Navigate to="/dashboard" /> : <Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
@@ -104,7 +104,14 @@ function AppRoutes() {
       <Route path="/legal/:docType" element={<Legal />} />
 
       {/* Dashboard & Protected Routes */}
-      <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Layout>{isSuperAdmin() ? <AdminDashboard /> : <Dashboard />}</Layout>
+          </ProtectedRoute>
+        }
+      />
       <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
       
       {/* Verification Routes */}
