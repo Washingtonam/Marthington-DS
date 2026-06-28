@@ -53,6 +53,10 @@ export default function AdminDashboard() {
   const [recentAdminActions, setRecentAdminActions] = useState([]);
   const [search, setSearch] = useState("");
   const [pipelineRequests, setPipelineRequests] = useState([]);
+  const [pendingPaymentsList, setPendingPaymentsList] = useState([]);
+  const [ninSearch, setNinSearch] = useState("");
+  const [ninResults, setNinResults] = useState([]);
+  const [ninLoading, setNinLoading] = useState(false);
 
   // ============================
   // FETCH ADMIN OVERVIEW
@@ -97,6 +101,39 @@ export default function AdminDashboard() {
       }
     } catch (error) {
       console.error("🔥 Error pulling application stream pipeline:", error);
+    }
+  };
+
+  const fetchPendingPayments = async () => {
+    try {
+      const res = await api.get("/api/admin/payments", { params: { page: 1, limit: 10 } });
+      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      const pending = data.filter((p) => String(p.status || "").toLowerCase() === "pending");
+      setPendingPaymentsList(pending.slice(0, 10));
+    } catch (err) {
+      console.error("Failed to fetch payments:", err);
+      setPendingPaymentsList([]);
+    }
+  };
+
+  const handleVerifyNin = async () => {
+    if (!ninSearch || ninSearch.trim().length === 0) return;
+    setNinLoading(true);
+    try {
+      const res = await api.get("/api/admin/requests", { params: { nin: ninSearch.trim(), limit: 20 } });
+      const data = res.data?.data || [];
+      setNinResults(data.map(r => ({
+        id: r._id,
+        nin: r.nin || (r.formData && r.formData.nin) || "N/A",
+        status: (r.status || "unknown").toUpperCase(),
+        pipeline: r.pipelineSource || r.serviceCategory || "NIMC",
+        createdAt: r.createdAt
+      })));
+    } catch (err) {
+      console.error("NIN verify error:", err);
+      setNinResults([]);
+    } finally {
+      setNinLoading(false);
     }
   };
 
@@ -179,17 +216,29 @@ export default function AdminDashboard() {
     fetchPipelineRequests();
     fetchAdminOverview();
     fetchRecentAdminActions();
+    fetchPendingPayments();
   }, []);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold mb-6">Admin Dashboard Workspace</h1>
+      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-blue-800 to-blue-600 text-white p-6 mb-6 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-extrabold">Admin Control Center</h1>
+            <p className="text-sm text-slate-200 mt-1">Overview of requests, payments and quick verification tools</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs uppercase tracking-wider text-slate-200">System Status</p>
+            <p className="text-lg font-semibold">All Systems Nominal</p>
+          </div>
+        </div>
+      </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card title="Total Registered Users" value={stats.totalUsers} />
-        <Card title="Pending Payments Verification" value={stats.pendingPayments} />
-        <Card title="Systemic Logged Transactions" value={stats.totalTransactions} />
-        <Card title="Aggregated Liability Balance" value={`₦${stats.totalBalance || 0}`} />
+        <Card title="Pending Payments" value={pendingPaymentsList.length || stats.pendingPayments} />
+        <Card title="Pending Approvals" value={pipelineRequests.length} />
+        <Card title="Aggregated Liability" value={`₦${stats.totalBalance || 0}`} />
       </div>
 
       <div className="grid gap-4 mb-8 xl:grid-cols-3">
@@ -287,6 +336,51 @@ export default function AdminDashboard() {
         >
           Search
         </button>
+      </div>
+
+      <div className="mb-6 grid md:grid-cols-3 gap-4">
+        <div className="md:col-span-2 bg-white rounded-3xl p-6 shadow-sm">
+          <h3 className="text-lg font-bold mb-3">Quick NIN Verification</h3>
+          <div className="flex gap-2 mb-3">
+            <input value={ninSearch} onChange={(e) => setNinSearch(e.target.value)} placeholder="Enter NIN to verify" className="flex-1 border p-3 rounded" />
+            <button onClick={handleVerifyNin} className="bg-slate-900 text-white px-4 py-2 rounded">{ninLoading ? 'Checking...' : 'Verify'}</button>
+          </div>
+          <div>
+            {ninResults.length === 0 ? (
+              <p className="text-sm text-slate-500">No results. Enter a NIN and click Verify to check status across requests.</p>
+            ) : (
+              <div className="space-y-2">
+                {ninResults.map(r => (
+                  <div key={r.id} className="p-3 rounded-lg border flex items-center justify-between">
+                    <div>
+                      <div className="font-semibold">{r.nin}</div>
+                      <div className="text-xs text-slate-500">{r.pipeline} • {new Date(r.createdAt).toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-sm font-semibold">{r.status}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl p-6 shadow-sm">
+          <h3 className="text-lg font-bold mb-3">Pending Payments</h3>
+          {pendingPaymentsList.length === 0 ? (
+            <p className="text-sm text-slate-500">No pending payments.</p>
+          ) : (
+            <div className="space-y-2">
+              {pendingPaymentsList.map(p => (
+                <div key={p._id} className="p-3 rounded-lg border flex items-center justify-between">
+                  <div className="text-sm">{p.userEmail || p.userId || 'Unknown'}</div>
+                  <div className="text-xs text-slate-600">₦{p.amount || 0}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded shadow overflow-x-auto mb-8">
