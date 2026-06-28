@@ -106,15 +106,15 @@ export default function AdminRequests() {
     }
   }, [selected]);
 
-  const handleStatusUpdate = async (id, status) => {
+  const handleStatusUpdate = async (id, status, note = '') => {
     if (!id) return;
     if (!window.confirm(`Confirm ${status} for this record?`)) return;
 
     try {
       if (status === 'approved') {
-        await api.put(`/api/admin/approve-request/${id}`, {});
+        await api.put(`/api/admin/approve-request/${id}`, { note });
       } else {
-        await api.put(`/api/admin/status/${id}`, { status });
+        await api.put(`/api/admin/status/${id}`, { status, note });
       }
       fetchRequests(page);
     } catch (err) {

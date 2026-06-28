@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Calendar, MessageSquare, Shield } from 'lucide-react';
 
 export default function RequestDetails({
@@ -14,6 +14,12 @@ export default function RequestDetails({
 }) {
   if (!selected) return null;
 
+  const [expandedKeys, setExpandedKeys] = useState({});
+
+  const toggleExpand = (key) => {
+    setExpandedKeys((s) => ({ ...s, [key]: !s[key] }));
+  };
+
   const getRequestDetails = (request) => {
     const hiddenKeys = ["_id", "__v", "userId", "createdAt", "updatedAt", "statusHistory", "adminComments", "formData", "pipelineSource"];
     if (request.pipelineSource === "cac") {
@@ -21,6 +27,7 @@ export default function RequestDetails({
         .filter(([key]) => !hiddenKeys.includes(key))
         .map(([key, value]) => ({ key, value }));
     }
+    // Prefer `formData` when present to avoid duplicate/overlapping fields
     if (request.formData && Object.keys(request.formData).length > 0) {
       return Object.entries(request.formData).map(([key, value]) => ({ key, value }));
     }
@@ -54,29 +61,29 @@ export default function RequestDetails({
         <h3 className="font-bold mb-2">Request Data</h3>
         {getRequestDetails(selected).length > 0 ? (
           <div className="grid gap-2">
-            {getRequestDetails(selected).map(({ key, value }) => (
-              <div key={key} className="flex gap-4 items-start">
-                <div className="w-40 text-sm text-slate-500">{key}</div>
-                <div className="flex-1 text-sm break-words">{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}</div>
-              </div>
-            ))}
+            {getRequestDetails(selected).map(({ key, value }) => {
+              const raw = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? '');
+              const display = raw.toUpperCase();
+              const isLong = display.length > 160;
+              return (
+                <div key={key} className="flex gap-4 items-start">
+                  <div className="w-40 text-sm text-slate-500">{key}</div>
+                  <div className="flex-1 text-sm break-words">
+                    {!isLong ? (
+                      display
+                    ) : (
+                      <>
+                        {expandedKeys[key] ? display : `${display.slice(0, 160)}...`}
+                        <button onClick={() => toggleExpand(key)} className="ml-3 text-blue-600 text-xs font-semibold">{expandedKeys[key] ? 'See less' : 'See more'}</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-slate-500">No request data available.</p>
-        )}
-
-        {selected.formData && Object.keys(selected.formData).length > 0 && (
-          <div className="mt-6">
-            <h4 className="font-semibold mb-2">Form Data</h4>
-            <div className="grid gap-2">
-              {Object.entries(selected.formData).map(([k, v]) => (
-                <div key={k} className="flex gap-4 items-start">
-                  <div className="w-40 text-sm text-slate-500">{k}</div>
-                  <div className="flex-1 text-sm break-words">{typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         )}
 
         <div className="mt-6">
@@ -158,9 +165,13 @@ export default function RequestDetails({
                   return alert('Forbidden: Only Super Admin may modify pending requests.');
                 }
                 try {
-                  await fetchRequests();
+                  await handleStatusUpdate(selected._id || selected.id, modalStatus, modalComment);
+                  // refresh the list and close the drawer
+                  await fetchRequests(page);
+                  setSelected(null);
                 } catch (err) {
                   console.error(err);
+                  alert('Failed to update status.');
                 }
               }} className="flex-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">Update Status</button>
               <button onClick={() => { setModalStatus(selected.status || "pending"); setModalComment(""); }} className="px-4 py-2 rounded-xl bg-gray-200 text-gray-800 hover:bg-gray-300 transition">Reset</button>
