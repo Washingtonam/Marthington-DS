@@ -35,6 +35,7 @@ import Personalization from "./pages/services/Personalization";
 
 // Admin
 import Admin from "./pages/admin/Admin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminPricing from "./pages/admin/AdminPricing";
@@ -128,7 +129,7 @@ function AppRoutes() {
       <Route path="/cac-services" element={<ProtectedRoute><Layout><CacServices /></Layout></ProtectedRoute>} />
 
       {/* Admin Routes */}
-      <Route path="/admin" element={<SuperAdminRoute><Layout><Admin /></Layout></SuperAdminRoute>} />
+      <Route path="/admin" element={<SuperAdminRoute><Layout><AdminDashboard /></Layout></SuperAdminRoute>} />
       <Route path="/admin/users" element={<SuperAdminRoute><Layout><AdminUsers /></Layout></SuperAdminRoute>} />
       <Route path="/admin/payments" element={<AdminRoute><Layout><AdminPayments /></Layout></AdminRoute>} />
       <Route path="/admin/requests" element={<AdminRoute><Layout><AdminRequests /></Layout></AdminRoute>} />
