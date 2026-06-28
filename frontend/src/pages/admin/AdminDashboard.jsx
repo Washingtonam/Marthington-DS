@@ -105,6 +105,11 @@ export default function AdminDashboard() {
   };
 
   const fetchRecentAdminActions = async () => {
+    if (!isSuperAdminLocal) {
+      setRecentAdminActions([]);
+      return;
+    }
+
     try {
       const response = await api.get("/api/admin/audit-logs", { params: { page: 1, limit: 5 } });
       setRecentAdminActions(response.data?.data || []);
@@ -175,6 +180,11 @@ export default function AdminDashboard() {
   // FETCH USERS
   // ============================
   const fetchUsers = async () => {
+    if (!isSuperAdminLocal) {
+      setUsers([]);
+      return;
+    }
+
     try {
       const response = await api.get("/api/admin/users");
       setUsers(response.data?.data || response.data || []);
@@ -187,6 +197,11 @@ export default function AdminDashboard() {
   // FETCH STATS
   // ============================
   const fetchStats = async () => {
+    if (!isSuperAdminLocal) {
+      setStats({});
+      return;
+    }
+
     try {
       const response = await api.get("/api/admin/stats");
       setStats(response.data);
@@ -326,33 +341,37 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm font-semibold text-slate-500">Recent Admin Activity</p>
-              <h3 className="mt-2 text-xl font-bold text-slate-900">Last 5 Actions</h3>
+            <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-500">Recent Admin Activity</p>
+                <h3 className="mt-2 text-xl font-bold text-slate-900">Last 5 Actions</h3>
+              </div>
             </div>
-          </div>
-          {recentAdminActions.length === 0 ? (
-            <div className="space-y-3">
-              <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
-              <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
-              <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {recentAdminActions.map((action) => (
-                <div key={action._id} className="rounded-3xl bg-slate-50 p-4 border border-slate-100">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-slate-900 truncate">{action.action || "Admin action"}</p>
-                    <span className="text-xs text-slate-500">{new Date(action.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <p className="text-sm text-slate-600 truncate mt-2">{action.note || action.description || "No description available."}</p>
+            {isSuperAdminLocal ? (
+              recentAdminActions.length === 0 ? (
+                <div className="space-y-3">
+                  <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+                  <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+                  <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentAdminActions.map((action) => (
+                    <div key={action._id} className="rounded-3xl bg-slate-50 p-4 border border-slate-100">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{action.action || "Admin action"}</p>
+                        <span className="text-xs text-slate-500">{new Date(action.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <p className="text-sm text-slate-600 truncate mt-2">{action.note || action.description || "No description available."}</p>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              <div className="text-sm text-slate-500">Audit log access is restricted to superadmins.</div>
+            )}
+          </div>
       </div>
 
       <div className="flex gap-2 mb-6">
@@ -418,47 +437,43 @@ export default function AdminDashboard() {
         </motion.div>
       </div>
 
-      <div className="bg-white rounded shadow overflow-x-auto mb-8">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100 text-left text-gray-600 font-semibold border-b">
-            <tr>
-              <th className="p-4">Name String</th>
-              <th className="p-4">Secure Email Identification</th>
-              <th className="p-4">Account Balance Metrics</th>
-              <th className="p-4">Network Node Status</th>
-              {isSuperAdminLocal && <th className="p-4 text-center">System Actions Matrix</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {users.length === 0 ? (
+      {isSuperAdminLocal ? (
+        <div className="bg-white rounded shadow overflow-x-auto mb-8">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100 text-left text-gray-600 font-semibold border-b">
               <tr>
-                <td colSpan={isSuperAdminLocal ? "5" : "4"} className="p-4 text-center text-gray-400">No active user records index detected.</td>
+                <th className="p-4">Name String</th>
+                <th className="p-4">Secure Email Identification</th>
+                <th className="p-4">Account Balance Metrics</th>
+                <th className="p-4">Network Node Status</th>
+                <th className="p-4 text-center">System Actions Matrix</th>
               </tr>
-            ) : (
-              users.map((user) => {
-                const email = String(user.email || "");
-                const safeEmail = isSuperAdminLocal && visibleEmails[user._id] ? email : maskEmail(email);
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="p-4 text-center text-gray-400">No active user records index detected.</td>
+                </tr>
+              ) : (
+                users.map((user) => {
+                  const email = String(user.email || "");
+                  const safeEmail = visibleEmails[user._id] ? email : maskEmail(email);
 
-                return (
-                  <tr key={user._id} className="border-t hover:bg-gray-50 transition-colors">
-                    <td className="p-4 font-medium text-gray-800">{user.firstName} {user.lastName}</td>
-                    <td className="p-4 text-gray-600 flex items-center gap-2">
-                      <span>{safeEmail}</span>
-                      {isSuperAdminLocal ? (
+                  return (
+                    <tr key={user._id} className="border-t hover:bg-gray-50 transition-colors">
+                      <td className="p-4 font-medium text-gray-800">{user.firstName} {user.lastName}</td>
+                      <td className="p-4 text-gray-600 flex items-center gap-2">
+                        <span>{safeEmail}</span>
                         <button onClick={() => toggleEmailVisibility(user._id)} className="text-slate-500 hover:text-slate-800 focus:outline-none">
                           {visibleEmails[user._id] ? '🙈' : '👁️'}
                         </button>
-                      ) : (
-                        <span className="text-xs text-slate-400">superadmin only</span>
-                      )}
-                    </td>
-                    <td className="p-4 font-mono text-gray-700">₦{user.balance}</td>
-                    <td className="p-4">
-                      <span className={`px-2.5 py-1 rounded-full text-white text-xs font-semibold uppercase tracking-wider ${user.status === "active" ? "bg-green-500" : "bg-red-500"}`}>
-                        {user.status}
-                      </span>
-                    </td>
-                    {isSuperAdminLocal && (
+                      </td>
+                      <td className="p-4 font-mono text-gray-700">₦{user.balance}</td>
+                      <td className="p-4">
+                        <span className={`px-2.5 py-1 rounded-full text-white text-xs font-semibold uppercase tracking-wider ${user.status === "active" ? "bg-green-500" : "bg-red-500"}`}>
+                          {user.status}
+                        </span>
+                      </td>
                       <td className="p-4 flex gap-2 justify-center">
                         {user.status === "active" ? (
                           <button onClick={() => suspendUser(user._id)} className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors">Suspend Node</button>
@@ -467,14 +482,18 @@ export default function AdminDashboard() {
                         )}
                         <button onClick={() => deleteUser(user._id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">Delete Profile</button>
                       </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="bg-white rounded shadow p-6 mb-8 text-slate-600">
+          <p className="text-sm">User registry and account management are restricted to superadmins. Your admin dashboard provides payments, requests, and verification tools.</p>
+        </div>
+      )}
     </div>
   );
 }
