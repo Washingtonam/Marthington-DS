@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../../lib/axios"; // Admin dashboard API client
+import { toast } from "sonner";
+import { CheckCircle, CreditCard, FileText, Search, Eye } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 function DashboardControlCenterSkeleton() {
   return (
@@ -104,6 +108,8 @@ export default function AdminDashboard() {
     }
   };
 
+  const navigate = useNavigate();
+
   const fetchPendingPayments = async () => {
     try {
       const res = await api.get("/api/admin/payments", { params: { page: 1, limit: 10 } });
@@ -129,9 +135,15 @@ export default function AdminDashboard() {
         pipeline: r.pipelineSource || r.serviceCategory || "NIMC",
         createdAt: r.createdAt
       })));
+      if ((data?.length || 0) > 0) {
+        toast.success(`Found ${data.length} matching record(s)`);
+      } else {
+        toast(`No records found for ${ninSearch}`);
+      }
     } catch (err) {
       console.error("NIN verify error:", err);
       setNinResults([]);
+      toast.error("Verification lookup failed");
     } finally {
       setNinLoading(false);
     }
@@ -339,11 +351,11 @@ export default function AdminDashboard() {
       </div>
 
       <div className="mb-6 grid md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 bg-white rounded-3xl p-6 shadow-sm">
+          <motion.div layout className="md:col-span-2 bg-white rounded-3xl p-6 shadow-sm">
           <h3 className="text-lg font-bold mb-3">Quick NIN Verification</h3>
           <div className="flex gap-2 mb-3">
             <input value={ninSearch} onChange={(e) => setNinSearch(e.target.value)} placeholder="Enter NIN to verify" className="flex-1 border p-3 rounded" />
-            <button onClick={handleVerifyNin} className="bg-slate-900 text-white px-4 py-2 rounded">{ninLoading ? 'Checking...' : 'Verify'}</button>
+            <button onClick={handleVerifyNin} className="bg-slate-900 text-white px-4 py-2 rounded flex items-center gap-2">{ninLoading ? 'Checking...' : <><Search className="w-4 h-4" />Verify</>}</button>
           </div>
           <div>
             {ninResults.length === 0 ? (
@@ -351,36 +363,37 @@ export default function AdminDashboard() {
             ) : (
               <div className="space-y-2">
                 {ninResults.map(r => (
-                  <div key={r.id} className="p-3 rounded-lg border flex items-center justify-between">
+                  <motion.div whileHover={{ scale: 1.01 }} key={r.id} className="p-3 rounded-lg border flex items-center justify-between cursor-pointer" onClick={() => { navigate(`/admin/requests?nin=${encodeURIComponent(r.nin)}`); toast.success('Opening related requests'); }}>
                     <div>
-                      <div className="font-semibold">{r.nin}</div>
+                      <div className="font-semibold flex items-center gap-2"><FileText className="w-4 h-4 text-slate-500" />{r.nin}</div>
                       <div className="text-xs text-slate-500">{r.pipeline} • {new Date(r.createdAt).toLocaleString()}</div>
                     </div>
-                    <div>
+                    <div className="flex items-center gap-3">
                       <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-sm font-semibold">{r.status}</span>
+                      <Eye className="w-4 h-4 text-slate-500" />
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}
           </div>
-        </div>
+          </motion.div>
 
-        <div className="bg-white rounded-3xl p-6 shadow-sm">
+        <motion.div layout className="bg-white rounded-3xl p-6 shadow-sm">
           <h3 className="text-lg font-bold mb-3">Pending Payments</h3>
           {pendingPaymentsList.length === 0 ? (
             <p className="text-sm text-slate-500">No pending payments.</p>
           ) : (
             <div className="space-y-2">
               {pendingPaymentsList.map(p => (
-                <div key={p._id} className="p-3 rounded-lg border flex items-center justify-between">
-                  <div className="text-sm">{p.userEmail || p.userId || 'Unknown'}</div>
+                <motion.div key={p._id} whileHover={{ x: 6 }} className="p-3 rounded-lg border flex items-center justify-between cursor-pointer" onClick={() => { navigate('/admin/payments'); toast('Opening payments ledger'); }}>
+                  <div className="text-sm flex items-center gap-2"><CreditCard className="w-4 h-4 text-slate-500" />{p.userEmail || (p.userId && p.userId.email) || 'Unknown'}</div>
                   <div className="text-xs text-slate-600">₦{p.amount || 0}</div>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
 
       <div className="bg-white rounded shadow overflow-x-auto mb-8">
