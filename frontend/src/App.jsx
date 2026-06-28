@@ -108,7 +108,7 @@ function AppRoutes() {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <Layout>{isAdmin() ? <Navigate to="/admin" /> : <Dashboard />}</Layout>
+            <Layout><Dashboard /></Layout>
           </ProtectedRoute>
         }
       />
