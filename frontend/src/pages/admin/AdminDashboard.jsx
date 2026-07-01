@@ -170,14 +170,14 @@ export default function AdminDashboard() {
     if (!ninSearch || ninSearch.trim().length === 0) return;
     setNinLoading(true);
     try {
-      const res = await api.get("/api/verification-requests", { params: { nin: ninSearch.trim(), limit: 20 } });
+      const res = await api.get("/api/verification-requests", { params: { nin: ninSearch.trim(), limit: 20, includeServiceRequests: true } });
       const data = res.data?.data || [];
       const filteredData = verificationFilter === "all" ? data : data.filter((r) => String(r.status || "").toLowerCase() === verificationFilter);
       setNinResults(filteredData.map(r => ({
         id: r._id,
         nin: r.nin || "N/A",
         status: (r.status || "unknown").toUpperCase(),
-        pipeline: r.method ? `Verification (${r.method})` : "Verification",
+        pipeline: r.source === 'service' ? `Service request (${r.service || r.type || 'request'})` : (r.method ? `Verification (${r.method})` : "Verification"),
         createdAt: r.createdAt,
         request: r,
       })));

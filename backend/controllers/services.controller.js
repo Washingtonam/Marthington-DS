@@ -90,29 +90,67 @@ exports.getVerificationRequests = async (req, res) => {
     const skip = (page - 1) * limit;
     const nin = String(req.query.nin || '').trim();
     const search = String(req.query.search || '').trim();
+    const includeServiceRequests = String(req.query.includeServiceRequests || req.query.includeService || '').toLowerCase() === 'true';
 
-    const query = {};
+    const verificationQuery = {};
     if (req.user?.role && !['admin', 'super_admin'].includes(req.user.role)) {
-      query.userId = userId;
+      verificationQuery.userId = userId;
     }
 
     if (nin) {
-      query.nin = { $regex: nin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+      verificationQuery.nin = { $regex: nin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
     }
 
     if (search) {
       const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.$or = [
+      verificationQuery.$or = [
         { nin: { $regex: escapedSearch, $options: 'i' } },
         { method: { $regex: escapedSearch, $options: 'i' } },
         { _id: { $regex: escapedSearch, $options: 'i' } }
       ];
     }
 
-    const [requests, totalCount] = await Promise.all([
-      VerificationRequest.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      VerificationRequest.countDocuments(query)
+    const serviceQuery = {};
+    if (req.user?.role && !['admin', 'super_admin'].includes(req.user.role)) {
+      serviceQuery.userId = userId;
+    }
+
+    if (nin) {
+      serviceQuery.nin = { $regex: nin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    }
+
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      serviceQuery.$or = [
+        { nin: { $regex: escapedSearch, $options: 'i' } },
+        { service: { $regex: escapedSearch, $options: 'i' } },
+        { type: { $regex: escapedSearch, $options: 'i' } },
+        { _id: { $regex: escapedSearch, $options: 'i' } }
+      ];
+    }
+
+    const verificationPromise = VerificationRequest.find(verificationQuery).sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
+    const verificationCountPromise = VerificationRequest.countDocuments(verificationQuery);
+    const servicePromise = includeServiceRequests
+      ? ServiceRequest.find(serviceQuery).sort({ createdAt: -1 }).skip(skip).limit(limit).lean()
+      : Promise.resolve([]);
+    const serviceCountPromise = includeServiceRequests
+      ? ServiceRequest.countDocuments(serviceQuery)
+      : Promise.resolve(0);
+
+    const [verificationRequests, verificationTotalCount, serviceRequests, serviceTotalCount] = await Promise.all([
+      verificationPromise,
+      verificationCountPromise,
+      servicePromise,
+      serviceCountPromise,
     ]);
+
+    const combinedData = [
+      ...verificationRequests.map((request) => ({ ...request, source: 'verification' })),
+      ...serviceRequests.map((request) => ({ ...request, source: 'service' }))
+    ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    const totalCount = verificationTotalCount + serviceTotalCount;
 
     return res.status(200).json({
       success: true,
@@ -120,7 +158,7 @@ exports.getVerificationRequests = async (req, res) => {
       limit,
       totalCount,
       totalPages: Math.max(Math.ceil(totalCount / limit), 1),
-      data: requests,
+      data: combinedData.slice(0, limit),
     });
   } catch (error) {
     console.error('VERIFICATION_REQUESTS_QUERY_ERROR:', error);
