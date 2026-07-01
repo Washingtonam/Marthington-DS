@@ -52,11 +52,13 @@ const validateServiceRequest = Joi.object({
   slipType: Joi.string().optional(),
   proof: Joi.string().optional(),
   passport: Joi.string().optional(),
+  paymentSource: Joi.string().valid('main', 'commission').optional(),
   formData: Joi.object().optional()
 });
 
 const validateCacRegistration = Joi.object({
   serviceType: Joi.string().valid('sole_proprietorship', 'partnership', 'limited_1m', 'custom_ngo').required(),
+  paymentSource: Joi.string().valid('main', 'commission').optional(),
   businessName1: Joi.string().min(3).trim().required(),
   businessName2: Joi.string().min(3).trim().required(),
   companyEmail: Joi.string()

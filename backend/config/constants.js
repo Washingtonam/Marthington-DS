@@ -9,6 +9,7 @@ module.exports.JWT_SECRET_FALLBACK = "your-secret-key-change-in-production";
 
 // Admin
 module.exports.SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "admin@xcombinator.com";
+module.exports.DEFAULT_COMMISSION_AMOUNT_NAIRA = Number(process.env.DEFAULT_COMMISSION_AMOUNT_NAIRA || process.env.COMMISSION_AMOUNT_NAIRA || 2000);
 
 // File Upload
 module.exports.FILE_UPLOAD_LIMIT = "10mb";

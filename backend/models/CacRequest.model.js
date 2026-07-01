@@ -63,6 +63,23 @@ const CacRequestSchema = new mongoose.Schema({
     default: "pending", 
     enum: ["pending", "in-progress", "processing", "approved", "completed", "rejected", "failed"] 
   },
+  paymentSource: {
+    type: String,
+    enum: ["main", "commission"],
+    default: "main"
+  },
+  commissionAwarded: {
+    type: Boolean,
+    default: false
+  },
+  commissionAmount: {
+    type: Number,
+    default: 0
+  },
+  commissionAmountKobo: {
+    type: Number,
+    default: 0
+  },
   progressNotes: { type: String, default: "Awaiting administrative document review" },
   adminComments: [
     {

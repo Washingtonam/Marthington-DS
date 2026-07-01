@@ -10,6 +10,8 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true },
     walletBalance: { type: Number, default: 0 },
     walletBalanceKobo: { type: Number, default: 0 },
+    commissionBalance: { type: Number, default: 0 },
+    commissionBalanceKobo: { type: Number, default: 0 },
     units: { type: Number, default: 0 },
     role: { type: String, enum: ["user", "admin", "super_admin"], default: "user" },
     status: { type: String, enum: ["active", "suspended"], default: "active" }
@@ -21,6 +23,12 @@ userSchema.pre("save", async function () {
         this.walletBalance = Number((this.walletBalanceKobo || 0) / 100);
     } else if (this.isModified("walletBalance")) {
         this.walletBalanceKobo = Math.round((this.walletBalance || 0) * 100);
+    }
+
+    if (this.isModified("commissionBalanceKobo")) {
+        this.commissionBalance = Number((this.commissionBalanceKobo || 0) / 100);
+    } else if (this.isModified("commissionBalance")) {
+        this.commissionBalanceKobo = Math.round((this.commissionBalance || 0) * 100);
     }
 
     if (this.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL) {

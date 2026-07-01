@@ -8,6 +8,7 @@ const AuditLog = require("../models/AuditLog.model");
 const Pricing = require("../models/Pricing.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
 const { normalizeServiceType } = require("../config/serviceTypes");
+const { awardCommissionIfEligible } = require("../services/commission.service");
 
 // =========================================================================
 // 🧠 SAFE SCHEMA COMPILATION & MODEL RESOLUTION
@@ -406,6 +407,14 @@ router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
     record.markModified("statusHistory");
 
     await record.save();
+
+    if (normalizedStatus === "completed") {
+      try {
+        await awardCommissionIfEligible({ request: record });
+      } catch (commissionError) {
+        console.warn("Commission payout skipped for completed request:", commissionError.message);
+      }
+    }
 
     // Secondary logging processing via sandboxed internal try-catch mechanics
     try {

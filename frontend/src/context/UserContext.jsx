@@ -21,6 +21,7 @@ export function UserProvider({ children }) {
       id: userData.id || userData._id,
       units: userData.units || 0,
       walletBalance: Number(userData.walletBalance ?? userData.balance ?? 0),
+      commissionBalance: Number(userData.commissionBalance ?? 0),
     };
 
     normalized.isAdmin =
@@ -41,6 +42,9 @@ export function UserProvider({ children }) {
       if (res.data) {
         if (res.data.units !== undefined) updateUnits(res.data.units);
         if (res.data.walletBalance !== undefined) updateWalletBalance(res.data.walletBalance);
+        if (res.data.commissionBalance !== undefined) {
+          setUser((prev) => prev ? { ...prev, commissionBalance: Number(res.data.commissionBalance || 0) } : prev);
+        }
       }
     } catch (error) {
       console.error("❌ BALANCE SYNC ERROR:", error.response?.status, error.message);

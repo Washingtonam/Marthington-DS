@@ -126,7 +126,7 @@ const resolveServicePrice = (pricing, service, type, slipType) => {
   };
 };
 
-const processServiceRequest = async ({ userId, service, type, nin, slipType, proof, passport, formData }) => {
+const processServiceRequest = async ({ userId, service, type, nin, slipType, proof, passport, formData, paymentSource = 'main' }) => {
   const session = await mongoose.startSession();
   let savedRequest = null;
   let walletBalance = 0;
@@ -152,17 +152,30 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
       }
 
       const isSuperAdmin = user.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim();
+      const normalizedPaymentSource = String(paymentSource || 'main').toLowerCase();
       let updatedUser = user;
 
       if (!isSuperAdmin && amountKobo > 0) {
-        updatedUser = await User.findOneAndUpdate(
-          { _id: userId, walletBalanceKobo: { $gte: amountKobo } },
-          { $inc: { walletBalanceKobo: -amountKobo } },
-          { returnDocument: 'after', session }
-        );
+        if (normalizedPaymentSource === 'commission') {
+          updatedUser = await User.findOneAndUpdate(
+            { _id: userId, commissionBalanceKobo: { $gte: amountKobo } },
+            { $inc: { commissionBalanceKobo: -amountKobo, commissionBalance: -(amountKobo / 100) } },
+            { returnDocument: 'after', session }
+          );
 
-        if (!updatedUser) {
-          throw new Error('Insufficient funds');
+          if (!updatedUser) {
+            throw new Error('Insufficient commission balance');
+          }
+        } else {
+          updatedUser = await User.findOneAndUpdate(
+            { _id: userId, walletBalanceKobo: { $gte: amountKobo } },
+            { $inc: { walletBalanceKobo: -amountKobo } },
+            { returnDocument: 'after', session }
+          );
+
+          if (!updatedUser) {
+            throw new Error('Insufficient funds');
+          }
         }
       }
 
@@ -180,6 +193,7 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
           unitsUsed: 0,
           proof: proof ? String(proof) : 'wallet',
           passport: passport ? String(passport) : 'wallet',
+          paymentSource: normalizedPaymentSource,
           formData: typeof formData === 'object' ? formData : {},
           status: 'pending',
           statusHistory: [{ status: 'pending', note: 'Initialized manual pipeline sequence successfully.' }]
@@ -215,7 +229,7 @@ exports.submitServiceRequest = async (req, res) => {
 
   try {
     const userId = req.user.id;
-    const { service, type, nin, slipType, proof, passport, formData } = req.body;
+    const { service, type, nin, slipType, proof, passport, formData, paymentSource } = req.body;
 
     const { savedRequest, walletBalance } = await processServiceRequest({
       userId,
@@ -225,7 +239,8 @@ exports.submitServiceRequest = async (req, res) => {
       slipType,
       proof,
       passport,
-      formData
+      formData,
+      paymentSource
     });
 
     return res.status(200).json({

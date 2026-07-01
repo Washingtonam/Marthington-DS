@@ -20,7 +20,7 @@ router.post("/submit", verifyToken, async (req, res) => {
 
   try {
     const userId = req.user.id;
-    const { serviceType, businessName1, businessName2, companyEmail, companyPhone, category, state, lga, shopNo, streetAddress, proprietors, witness, secretary } = req.body;
+    const { serviceType, businessName1, businessName2, companyEmail, companyPhone, category, state, lga, shopNo, streetAddress, proprietors, witness, secretary, paymentSource } = req.body;
 
     const pricing = await Pricing.getPricing();
     const rates = {
@@ -40,16 +40,31 @@ router.post("/submit", verifyToken, async (req, res) => {
       user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
     }
 
+    const normalizedPaymentSource = String(paymentSource || 'main').toLowerCase();
     if (cost > 0) {
-      const updatedUser = await User.findOneAndUpdate(
-        { _id: userId, walletBalanceKobo: { $gte: costKobo } },
-        { $inc: { walletBalanceKobo: -costKobo } },
-        { returnDocument: 'after', session }
-      );
-      if (!updatedUser) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(402).json({ message: `Insufficient wallet balance. Required ₦${cost}.` });
+      let updatedUser;
+      if (normalizedPaymentSource === 'commission') {
+        updatedUser = await User.findOneAndUpdate(
+          { _id: userId, commissionBalanceKobo: { $gte: costKobo } },
+          { $inc: { commissionBalanceKobo: -costKobo, commissionBalance: -(costKobo / 100) } },
+          { returnDocument: 'after', session }
+        );
+        if (!updatedUser) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(402).json({ message: `Insufficient commission balance. Required ₦${cost}.` });
+        }
+      } else {
+        updatedUser = await User.findOneAndUpdate(
+          { _id: userId, walletBalanceKobo: { $gte: costKobo } },
+          { $inc: { walletBalanceKobo: -costKobo } },
+          { returnDocument: 'after', session }
+        );
+        if (!updatedUser) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(402).json({ message: `Insufficient wallet balance. Required ₦${cost}.` });
+        }
       }
       user.walletBalanceKobo = updatedUser.walletBalanceKobo;
     }
@@ -86,6 +101,7 @@ router.post("/submit", verifyToken, async (req, res) => {
       proprietors: processedProprietors,
       witness: processedWitness,
       secretary,
+      paymentSource: normalizedPaymentSource,
       statusHistory: [{ status: "pending", note: "Corporate pipeline structure initialized." }]
     }], { session });
 

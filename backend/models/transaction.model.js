@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const transactionSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    type: { type: String, enum: ["UNIT_ADD", "UNIT_DEDUCT", "NIN", "BVN", "SERVICE", "NIN_AUTO", "credit", "debit"], required: true },
+    type: { type: String, enum: ["UNIT_ADD", "UNIT_DEDUCT", "NIN", "BVN", "SERVICE", "NIN_AUTO", "COMMISSION", "credit", "debit"], required: true },
     amount: { type: Number, default: 0 },
     amountKobo: { type: Number, default: 0 },
     units: { type: Number, default: 0 },

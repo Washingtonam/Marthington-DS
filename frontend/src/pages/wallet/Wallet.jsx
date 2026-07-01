@@ -93,6 +93,14 @@ export default function Wallet() {
               <h2 className="text-4xl font-bold">{formatNaira(user?.walletBalance || 0)}</h2>
             </div>
 
+            {user?.commissionBalance > 0 ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-700 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-300 mb-8">
+                <p className="text-sm font-semibold">Commission Wallet</p>
+                <p className="text-2xl font-bold">{formatNaira(user?.commissionBalance || 0)}</p>
+                <p className="text-xs opacity-80 mt-1">This balance is credited automatically when a completed request qualifies for a commission payout.</p>
+              </div>
+            ) : null}
+
             <div className="space-y-4">
               <div>
                 <label className="text-sm text-gray-600 dark:text-gray-400">Amount to Deposit</label>

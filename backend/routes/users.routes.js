@@ -24,12 +24,16 @@ router.get("/balance", verifyToken, async (req, res) => {
 
     const walletBalanceKobo = user.walletBalanceKobo || 0;
     const walletBalance = Number((walletBalanceKobo / 100).toFixed(2));
+    const eligibleForCommission = ["admin", "super_admin"].includes(String(user.role || "").toLowerCase());
+    const commissionBalanceKobo = eligibleForCommission ? (user.commissionBalanceKobo || 0) : 0;
+    const commissionBalance = Number((commissionBalanceKobo / 100).toFixed(2));
 
     return res.json({
       units: user.units || 0,
       walletBalance,
       walletBalanceKobo,
       balance: user.balance || 0,
+      ...(eligibleForCommission ? { commissionBalance, commissionBalanceKobo } : {}),
     });
   } catch (error) {
     console.error("🔥 BALANCE ERROR:", error.message);
@@ -49,12 +53,16 @@ router.get("/wallet", verifyToken, async (req, res) => {
 
     const walletBalanceKobo = user.walletBalanceKobo || 0;
     const walletBalance = Number((walletBalanceKobo / 100).toFixed(2));
+    const eligibleForCommission = ["admin", "super_admin"].includes(String(user.role || "").toLowerCase());
+    const commissionBalanceKobo = eligibleForCommission ? (user.commissionBalanceKobo || 0) : 0;
+    const commissionBalance = Number((commissionBalanceKobo / 100).toFixed(2));
 
     return res.json({
       units: user.units || 0,
       walletBalance,
       walletBalanceKobo,
       balance: user.balance || 0,
+      ...(eligibleForCommission ? { commissionBalance, commissionBalanceKobo } : {}),
     });
   } catch (error) {
     console.error("🔥 WALLET ERROR:", error.message);
