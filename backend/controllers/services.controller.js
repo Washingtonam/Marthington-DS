@@ -2,6 +2,7 @@
 const mongoose = require('mongoose');
 const User = require('../models/User.model');
 const ServiceRequest = require('../models/ServiceRequest.model');
+const VerificationRequest = require('../models/VerificationRequest.model');
 const Transaction = require('../models/transaction.model');
 const Pricing = require('../models/Pricing.model');
 const { validateServiceRequest } = require('../shared/validators');
@@ -78,6 +79,78 @@ exports.getServiceRequests = async (req, res) => {
   } catch (error) {
     console.error('SERVICE_REQUESTS_QUERY_ERROR:', error);
     return res.status(500).json({ success: false, message: 'Failed to load service requests.' });
+  }
+};
+
+exports.getVerificationRequests = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const skip = (page - 1) * limit;
+    const nin = String(req.query.nin || '').trim();
+    const search = String(req.query.search || '').trim();
+
+    const query = {};
+    if (req.user?.role && !['admin', 'super_admin'].includes(req.user.role)) {
+      query.userId = userId;
+    }
+
+    if (nin) {
+      query.nin = { $regex: nin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    }
+
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.$or = [
+        { nin: { $regex: escapedSearch, $options: 'i' } },
+        { method: { $regex: escapedSearch, $options: 'i' } },
+        { _id: { $regex: escapedSearch, $options: 'i' } }
+      ];
+    }
+
+    const [requests, totalCount] = await Promise.all([
+      VerificationRequest.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      VerificationRequest.countDocuments(query)
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.max(Math.ceil(totalCount / limit), 1),
+      data: requests,
+    });
+  } catch (error) {
+    console.error('VERIFICATION_REQUESTS_QUERY_ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load verification requests.' });
+  }
+};
+
+exports.getRequestById = async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const [serviceRequest, verificationRequest] = await Promise.all([
+      ServiceRequest.findById(requestId).lean(),
+      VerificationRequest.findById(requestId).lean(),
+    ]);
+
+    const request = verificationRequest || serviceRequest;
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Request not found.' });
+    }
+
+    const isAdminRole = req.user && ['admin', 'super_admin'].includes(req.user.role);
+    const isOwner = req.user && String(request.userId) === String(req.user.id);
+    if (!isOwner && !isAdminRole) {
+      return res.status(403).json({ success: false, message: 'Forbidden: insufficient privileges' });
+    }
+
+    return res.status(200).json({ success: true, data: request });
+  } catch (error) {
+    console.error('FETCH REQUEST ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load request.' });
   }
 };
 

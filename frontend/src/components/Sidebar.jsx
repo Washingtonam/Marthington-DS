@@ -225,7 +225,8 @@ useEffect(() => {
                 <NavItem to="/cac-services" label="CAC Services" icon={<Building2 size={18} />} />
                 <NavItem to="/wallet" label="Wallet" icon={<Wallet size={18} />} />
                 <NavItem to="/transactions" label="Transactions" icon={<ScrollText size={18} />} />
-                <NavItem to="/my-requests" label="Requests" icon={<FileText size={18} />} />
+                <NavItem to="/my-requests" label="Service Requests" icon={<FileText size={18} />} />
+                <NavItem to="/my-verification-requests" label="Verification Requests" icon={<ShieldCheck size={18} />} />
               </div>
             </div>
 
@@ -243,6 +244,7 @@ useEffect(() => {
                     {isSuperAdmin && <NavItem to="/admin/users" label="Manage Users" icon={<Users size={18} />} />}
                     <NavItem to="/admin/payments" label="Payment Requests" icon={<CreditCard size={18} />} badge={pendingPayments} />
                     <NavItem to="/admin/requests" label="Service Requests" icon={<Bell size={18} />} badge={pendingRequests} />
+                    <NavItem to="/admin/verification-requests" label="Verification Requests" icon={<ShieldCheck size={18} />} />
                     {isSuperAdmin && (
                       <NavItem to="/admin/pricing" label="Pricing Engine" icon={<Sliders size={18} />} />
                     )}

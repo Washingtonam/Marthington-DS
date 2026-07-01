@@ -18,6 +18,7 @@ import Legal from "./pages/Legal";
 import Dashboard from "./pages/dashboard/Dashboard";
 import Profile from "./pages/profile/Profile";
 import UserRequests from "./pages/UserRequests";
+import VerificationRequests from "./pages/VerificationRequests";
 import Wallet from "./pages/wallet/Wallet";
 import Transactions from "./pages/transactions/Transactions";
 
@@ -122,6 +123,7 @@ function AppRoutes() {
 
       {/* User History Routes */}
       <Route path="/my-requests" element={<ProtectedRoute><Layout><UserRequests /></Layout></ProtectedRoute>} />
+      <Route path="/my-verification-requests" element={<ProtectedRoute><Layout><VerificationRequests /></Layout></ProtectedRoute>} />
       <Route path="/wallet" element={<ProtectedRoute><Layout><Wallet /></Layout></ProtectedRoute>} />
       <Route path="/transactions" element={<ProtectedRoute><Layout><Transactions /></Layout></ProtectedRoute>} />
       <Route path="/contact" element={<ProtectedRoute><Layout><Contact /></Layout></ProtectedRoute>} />
@@ -140,6 +142,7 @@ function AppRoutes() {
       <Route path="/admin/users" element={<SuperAdminRoute><Layout><AdminUsers /></Layout></SuperAdminRoute>} />
       <Route path="/admin/payments" element={<AdminRoute><Layout><AdminPayments /></Layout></AdminRoute>} />
       <Route path="/admin/requests" element={<AdminRoute><Layout><AdminRequests /></Layout></AdminRoute>} />
+      <Route path="/admin/verification-requests" element={<AdminRoute><Layout><VerificationRequests /></Layout></AdminRoute>} />
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/user/:userId/details" element={<SuperAdminRoute><Layout><UserDetailView /></Layout></SuperAdminRoute>} />
 

@@ -7,8 +7,10 @@ const router = express.Router();
 const servicesController = require("../controllers/services.controller");
 const User = require("../models/User.model");
 const ServiceRequest = require("../models/ServiceRequest.model");
+const VerificationRequest = require("../models/VerificationRequest.model");
 const Transaction = require("../models/transaction.model");
 const Pricing = require("../models/Pricing.model");
+const { createVerificationRequestRecord } = require("../services/verification.service");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
 const { validateVerification } = require("../shared/validators");
 const {
@@ -113,23 +115,20 @@ router.post("/verify", verifyToken, async (req, res) => {
       }
 
       const mockData = { firstname: "JOHN", surname: "TEST", nin: "00000000000", birthdate: "1995-01-01", gender: "Male" };
-      const [mockRequest] = await ServiceRequest.create([{
+      const { requestId } = await createVerificationRequestRecord({
         userId: user._id,
-        service: "automated_lookup",
-        type: "nin",
+        method,
         nin: "00000000000",
-        unitsUsed: isSuperAdmin ? 0 : 1,
-        amount: mockCostKobo / 100,
-        amountKobo: mockCostKobo,
-        status: "completed",
+        unitsRequired: isSuperAdmin ? 0 : 1,
+        costKobo: mockCostKobo,
         apiResponseData: mockData,
-        statusHistory: [{ status: "completed", note: "Mock verification completed." }]
-      }], { session });
+        VerificationRequestModel: { create: async (docs) => VerificationRequest.create(docs, { session }) },
+        TransactionModel: { create: async (docs) => Transaction.create(docs, { session }) },
+      });
 
-      await Transaction.create([{ type: "NIN", amount: mockCostKobo / 100, amountKobo: mockCostKobo, unitsUsed: isSuperAdmin ? 0 : 1, status: "success", userId: user._id, requestId: mockRequest._id }], { session });
       await session.commitTransaction();
       session.endSession();
-      return res.json({ status: "success", data: mockData, walletBalance: user.getWalletBalanceNaira(), requestId: mockRequest._id });
+      return res.json({ status: "success", data: mockData, walletBalance: user.getWalletBalanceNaira(), requestId });
     }
 
     let unitsRequired = UNITS_REQUIRED[method] || UNITS_REQUIRED.standard;
@@ -169,34 +168,27 @@ router.post("/verify", verifyToken, async (req, res) => {
     
     const cleanData = response.data?.data?.data || response.data?.data || response.data;
 
-    // Persist service request and transaction under the same transaction session
-    const [savedRequest] = await ServiceRequest.create([{
+    const { requestId } = await createVerificationRequestRecord({
       userId: user._id,
-      service: "automated_lookup",
-      type: method,
-      nin: nin || "N/A",
-      unitsUsed: unitsRequired,
-      amount: costKobo / 100,
-      amountKobo: costKobo,
-      status: "completed",
+      method,
+      nin,
+      phone,
+      tracking_id,
+      firstname,
+      surname,
+      gender,
+      birthdate,
+      unitsRequired,
+      costKobo,
       apiResponseData: cleanData,
-      statusHistory: [{ status: "completed", note: "Automated identity payload sync completed." }]
-    }], { session });
-
-    await Transaction.create([{
-      type: "NIN_AUTO",
-      unitsUsed: isSuperAdmin ? 0 : unitsRequired,
-      amount: costKobo / 100,
-      amountKobo: costKobo,
-      userId: user._id,
-      requestId: savedRequest._id,
-      status: "success"
-    }], { session });
+      VerificationRequestModel: { create: async (docs) => VerificationRequest.create(docs, { session }) },
+      TransactionModel: { create: async (docs) => Transaction.create(docs, { session }) },
+    });
 
     await session.commitTransaction();
     session.endSession();
 
-    return res.json({ status: "success", data: cleanData, unitsUsed: unitsRequired, walletBalance: user.getWalletBalanceNaira(), requestId: savedRequest._id });
+    return res.json({ status: "success", data: cleanData, unitsUsed: unitsRequired, walletBalance: user.getWalletBalanceNaira(), requestId });
   } catch (error) {
     console.error("VERIFY ERROR - Request:", { method, url: error.config?.url });
     console.error("VERIFY ERROR - Response:", error.response?.status, error.response?.data);
@@ -217,26 +209,7 @@ router.post("/verify", verifyToken, async (req, res) => {
 // ==============================================================
 // 🛠️ ROUTE 3: FETCH A SINGLE SERVICE REQUEST BY ID
 // ==============================================================
-router.get("/request/:id", verifyToken, async (req, res) => {
-  try {
-    const requestId = req.params.id;
-    const request = await ServiceRequest.findById(requestId).lean();
-    if (!request) {
-      return res.status(404).json({ success: false, message: "Request not found." });
-    }
-
-    const isAdminRole = req.user && ["admin", "super_admin"].includes(req.user.role);
-    const isOwner = req.user && String(request.userId) === String(req.user.id);
-    if (!isOwner && !isAdminRole) {
-      return res.status(403).json({ success: false, message: "Forbidden: insufficient privileges" });
-    }
-
-    return res.status(200).json({ success: true, data: request });
-  } catch (error) {
-    console.error("FETCH REQUEST ERROR:", error);
-    return res.status(500).json({ success: false, message: "Failed to load service request." });
-  }
-});
+router.get("/request/:id", verifyToken, servicesController.getRequestById);
 
 // ==============================================================
 // 🛠️ ROUTE 4: ADMIN CORE OVERVIEW

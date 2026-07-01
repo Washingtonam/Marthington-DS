@@ -53,7 +53,9 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState({});
   const [overview, setOverview] = useState({});
+  const [pricingOverview, setPricingOverview] = useState({});
   const [isOverviewLoading, setIsOverviewLoading] = useState(true);
+  const [isPricingLoading, setIsPricingLoading] = useState(true);
   const [recentAdminActions, setRecentAdminActions] = useState([]);
   const [search, setSearch] = useState("");
   const [pipelineRequests, setPipelineRequests] = useState([]);
@@ -61,6 +63,7 @@ export default function AdminDashboard() {
   const [ninSearch, setNinSearch] = useState("");
   const [ninResults, setNinResults] = useState([]);
   const [ninLoading, setNinLoading] = useState(false);
+  const [verificationFilter, setVerificationFilter] = useState("all");
   const [visibleEmails, setVisibleEmails] = useState({});
 
   const currentUser = (() => {
@@ -119,6 +122,19 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchPricingOverview = async () => {
+    try {
+      setIsPricingLoading(true);
+      const response = await api.get("/api/pricing");
+      setPricingOverview(response.data || {});
+    } catch (error) {
+      console.error("🔥 Error fetching pricing overview:", error);
+      setPricingOverview({});
+    } finally {
+      setIsPricingLoading(false);
+    }
+  };
+
   // ============================
   // FETCH PIPELINE REQUESTS
   // ============================
@@ -153,14 +169,16 @@ export default function AdminDashboard() {
     if (!ninSearch || ninSearch.trim().length === 0) return;
     setNinLoading(true);
     try {
-      const res = await api.get("/api/admin/requests", { params: { nin: ninSearch.trim(), limit: 20 } });
+      const res = await api.get("/api/verification-requests", { params: { nin: ninSearch.trim(), limit: 20 } });
       const data = res.data?.data || [];
-      setNinResults(data.map(r => ({
+      const filteredData = verificationFilter === "all" ? data : data.filter((r) => String(r.status || "").toLowerCase() === verificationFilter);
+      setNinResults(filteredData.map(r => ({
         id: r._id,
-        nin: r.nin || (r.formData && r.formData.nin) || "N/A",
+        nin: r.nin || "N/A",
         status: (r.status || "unknown").toUpperCase(),
-        pipeline: r.pipelineSource || r.serviceCategory || "NIMC",
-        createdAt: r.createdAt
+        pipeline: r.method ? `Verification (${r.method})` : "Verification",
+        createdAt: r.createdAt,
+        request: r,
       })));
       if ((data?.length || 0) > 0) {
         toast.success(`Found ${data.length} matching record(s)`);
@@ -266,6 +284,7 @@ export default function AdminDashboard() {
     fetchAdminOverview();
     fetchRecentAdminActions();
     fetchPendingPayments();
+    fetchPricingOverview();
   }, []);
 
   return (
@@ -290,58 +309,50 @@ export default function AdminDashboard() {
         <Card title="Aggregated Liability" value={`₦${stats.totalBalance || 0}`} />
       </div>
 
-      <div className="grid gap-4 mb-8 xl:grid-cols-3">
-        <div className="grid gap-4 xl:col-span-2">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-sm font-semibold text-slate-500">Financial Overview</p>
-                  <h3 className="mt-2 text-xl font-bold text-slate-900">Daily + Monthly Revenue</h3>
-                </div>
-              </div>
-              {isOverviewLoading ? (
-                <div className="space-y-3">
-                  <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
-                  <div className="h-10 rounded-xl bg-slate-200 animate-pulse" />
-                </div>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-3xl bg-slate-50 p-4">
-                    <p className="text-xs uppercase tracking-widest text-slate-500">Today</p>
-                    <p className="mt-3 text-2xl font-semibold text-slate-900">₦{Number(overview.dailyRevenue || 0).toLocaleString()}</p>
-                  </div>
-                  <div className="rounded-3xl bg-slate-50 p-4">
-                    <p className="text-xs uppercase tracking-widest text-slate-500">This Month</p>
-                    <p className="mt-3 text-2xl font-semibold text-slate-900">₦{Number(overview.monthlyRevenue || 0).toLocaleString()}</p>
-                  </div>
-                </div>
-              )}
+      <div className="grid gap-4 mb-8 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-500">Current Pricing Overview</p>
+              <h3 className="mt-2 text-xl font-bold text-slate-900">Live price list snapshot</h3>
             </div>
-
-            <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-sm font-semibold text-slate-500">Service Demand</p>
-                  <h3 className="mt-2 text-xl font-bold text-slate-900">Request Volume</h3>
-                </div>
-              </div>
-              <div className="min-h-[184px]">
-                {isOverviewLoading ? (
-                  <div className="space-y-3">
-                    <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
-                    <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
-                    <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
-                  </div>
-                ) : (
-                  <BarChart data={overview.pendingRequests} />
-                )}
-              </div>
-            </div>
+            <button onClick={() => navigate('/admin/pricing')} className="text-sm font-semibold text-blue-600 hover:text-blue-700">
+              Manage pricing
+            </button>
           </div>
+          {isPricingLoading ? (
+            <div className="space-y-3">
+              <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+              <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+              <div className="h-4 rounded-full bg-slate-200 animate-pulse" />
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-3xl bg-slate-50 p-4 border border-slate-100">
+                <p className="text-xs uppercase tracking-widest text-slate-500">NIN Unit Price</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">₦{Number(pricingOverview?.nin?.unitPrice || 0).toLocaleString()}</p>
+                <p className="mt-1 text-sm text-slate-500">Agent price: ₦{Number(pricingOverview?.nin?.agentPrice || 0).toLocaleString()}</p>
+              </div>
+              <div className="rounded-3xl bg-slate-50 p-4 border border-slate-100">
+                <p className="text-xs uppercase tracking-widest text-slate-500">Validation / Slip</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">₦{Number(pricingOverview?.ninServices?.validation?.noRecord || 0).toLocaleString()}</p>
+                <p className="mt-1 text-sm text-slate-500">Slip: ₦{Number(pricingOverview?.ninServices?.slipPrice || 0).toLocaleString()}</p>
+              </div>
+              <div className="rounded-3xl bg-slate-50 p-4 border border-slate-100">
+                <p className="text-xs uppercase tracking-widest text-slate-500">Modification</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">₦{Number(pricingOverview?.ninServices?.modification?.dob || 0).toLocaleString()}</p>
+                <p className="mt-1 text-sm text-slate-500">Phone/Name/Address: ₦{Number(pricingOverview?.ninServices?.modification?.phone || 0).toLocaleString()}</p>
+              </div>
+              <div className="rounded-3xl bg-slate-50 p-4 border border-slate-100">
+                <p className="text-xs uppercase tracking-widest text-slate-500">CAC Start Price</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">₦{Number(pricingOverview?.cacServices?.soleProprietorship || 0).toLocaleString()}</p>
+                <p className="mt-1 text-sm text-slate-500">Partnership: ₦{Number(pricingOverview?.cacServices?.partnership || 0).toLocaleString()}</p>
+              </div>
+            </div>
+          )}
         </div>
 
-            <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-sm font-semibold text-slate-500">Recent Admin Activity</p>
@@ -394,8 +405,15 @@ export default function AdminDashboard() {
       <div className="mb-6 grid md:grid-cols-3 gap-4">
           <motion.div layout className="md:col-span-2 bg-white rounded-3xl p-6 shadow-sm">
           <h3 className="text-lg font-bold mb-3">Quick NIN Verification</h3>
-          <div className="flex gap-2 mb-3">
+          <div className="flex flex-col gap-2 mb-3 md:flex-row">
             <input value={ninSearch} onChange={(e) => setNinSearch(e.target.value)} placeholder="Enter NIN to verify" className="flex-1 border p-3 rounded" />
+            <select value={verificationFilter} onChange={(e) => setVerificationFilter(e.target.value)} className="border p-3 rounded bg-white text-sm">
+              <option value="all">All statuses</option>
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="failed">Failed</option>
+            </select>
             <button onClick={handleVerifyNin} className="bg-slate-900 text-white px-4 py-2 rounded flex items-center gap-2">{ninLoading ? 'Checking...' : <><Search className="w-4 h-4" />Verify</>}</button>
           </div>
           <div>
@@ -404,10 +422,11 @@ export default function AdminDashboard() {
             ) : (
               <div className="space-y-2">
                 {ninResults.map(r => (
-                  <motion.div whileHover={{ scale: 1.01 }} key={r.id} className="p-3 rounded-lg border flex items-center justify-between cursor-pointer" onClick={() => { navigate(`/admin/requests?nin=${encodeURIComponent(r.nin)}`); toast.success('Opening related requests'); }}>
+                  <motion.div whileHover={{ scale: 1.01 }} key={r.id} className="p-3 rounded-lg border flex items-center justify-between cursor-pointer" onClick={() => { navigate(`/admin/verification-requests?nin=${encodeURIComponent(r.nin)}`); toast.success('Opening related verification requests'); }}>
                     <div>
                       <div className="font-semibold flex items-center gap-2"><FileText className="w-4 h-4 text-slate-500" />{r.nin}</div>
                       <div className="text-xs text-slate-500">{r.pipeline} • {new Date(r.createdAt).toLocaleString()}</div>
+                      <div className="text-[11px] text-slate-400 mt-1">{r.request?.method ? `Method: ${r.request.method}` : "Verification request"}</div>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-sm font-semibold">{r.status}</span>
