@@ -10,6 +10,8 @@ const allowedOrigins = new Set([
     process.env.FRONTEND_URL_NAKED, // optional: https://xcombinator.com.ng
     "https://www.xcombinator.com.ng",
     "https://xcombinator.com.ng",
+    "https://ds.marthington.com.ng",
+    "https://www.ds.marthington.com.ng",
 ].filter(Boolean));
 
 // CORS middleware with dynamic origin check to support credentials
