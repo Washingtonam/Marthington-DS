@@ -35,7 +35,12 @@ export default function Login() {
       }
     } catch (error) {
       console.error("🔥 LOGIN SUBMISSION EXCEPTION:", error);
-      alert(error.response?.data?.message || error.message || "Authentication processing failed.");
+      alert(
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Authentication processing failed."
+      );
     } finally {
       setLoading(false);
     }

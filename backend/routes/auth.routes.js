@@ -117,6 +117,7 @@ router.post("/login", async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({
         error: "Email and password required",
+        message: "Email and password required",
       });
     }
 
@@ -124,16 +125,25 @@ router.post("/login", async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(400).json({ error: "Invalid credentials" });
+      return res.status(400).json({
+        error: "Invalid credentials",
+        message: "Invalid credentials",
+      });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ error: "Invalid credentials" });
+      return res.status(400).json({
+        error: "Invalid credentials",
+        message: "Invalid credentials",
+      });
     }
 
     if (user.status === "suspended") {
-      return res.status(403).json({ error: "Account suspended" });
+      return res.status(403).json({
+        error: "Account suspended",
+        message: "Account suspended",
+      });
     }
 
     // Double check system fallback safety: ensure role matches email on-login
