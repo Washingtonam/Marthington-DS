@@ -85,6 +85,11 @@ const verifyGatewaySignature = ({ payload, signature, secret, algorithm = 'sha25
   return hash === signature;
 };
 
+const isSuccessfulGatewayStatus = (status = '') => {
+  const normalized = String(status || '').trim().toLowerCase();
+  return ['success', 'successful', 'completed', 'paid', 'succeeded', 'done'].includes(normalized);
+};
+
 const selectSignatureHeader = (headers = {}) => {
   const normalized = Object.keys(headers || {}).reduce((acc, key) => {
     acc[key.toLowerCase()] = headers[key];
@@ -99,5 +104,6 @@ module.exports = {
   buildCentralGatewayCheckoutUrl,
   creditWalletForSuccessfulPayment,
   verifyGatewaySignature,
+  isSuccessfulGatewayStatus,
   selectSignatureHeader,
 };

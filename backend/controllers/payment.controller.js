@@ -4,7 +4,7 @@ const Flutterwave = require("flutterwave-node-v3");
 const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
-const { normalizeAmountKobo, buildCentralGatewayCheckoutUrl, creditWalletForSuccessfulPayment, verifyGatewaySignature, selectSignatureHeader } = require("../shared/paymentBridge");
+const { normalizeAmountKobo, buildCentralGatewayCheckoutUrl, creditWalletForSuccessfulPayment, verifyGatewaySignature, isSuccessfulGatewayStatus, selectSignatureHeader } = require("../shared/paymentBridge");
 
 const flw = new Flutterwave(
   process.env.FLW_PUBLIC_KEY || process.env.VITE_FLW_PUBLIC_KEY || "",
@@ -391,12 +391,16 @@ const handleCentralGatewayCallback = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing signature header.' });
     }
 
-    const isValid = verifyGatewaySignature({ payload: payloadText, signature, secret });
+    const payload = JSON.parse(payloadText);
+    const status = String(payload?.status || payload?.state || '').trim();
+    const isValid = verifyGatewaySignature({ payload: payloadText, signature, secret }) || verifyGatewaySignature({ payload: payloadText, signature, secret, algorithm: 'sha512' });
     if (!isValid) {
       return res.status(401).json({ success: false, message: 'Invalid gateway signature.' });
     }
 
-    const payload = JSON.parse(payloadText);
+    if (!isSuccessfulGatewayStatus(status)) {
+      return res.status(200).json({ success: true, message: 'Payment is not yet successful.', ignored: true });
+    }
     const reference = String(payload?.reference || payload?.tx_ref || payload?.transaction_ref || '').trim();
     const amountKobo = normalizeAmountKobo(payload?.amount || payload?.amount_kobo || payload?.total_amount || 0);
     const gateway = String(payload?.gateway || payload?.provider || 'central-gateway').trim();

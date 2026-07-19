@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
@@ -9,6 +9,10 @@ export default function Wallet() {
   const { user, setBalance } = useUser();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const gatewayMode = useMemo(() => {
+    const configuredGateway = import.meta.env.VITE_PAYMENT_GATEWAY_MODE || "central";
+    return configuredGateway.toLowerCase();
+  }, []);
 
   const handleFlutterwavePayment = async () => {
     const numAmount = Number(amount);
@@ -26,6 +30,22 @@ export default function Wallet() {
     setLoading(true);
 
     try {
+      if (gatewayMode === "central") {
+        const { data } = await api.post("/api/payments/init-central", {
+          amount: numAmount,
+          gatewayUrl: import.meta.env.VITE_CENTRAL_PAYMENT_GATEWAY_URL,
+          callbackUrl: import.meta.env.VITE_CENTRAL_PAYMENT_CALLBACK_URL,
+          appName: "marthington",
+        });
+
+        if (!data?.checkoutUrl) {
+          throw new Error(data?.message || "Backend did not return a checkout URL");
+        }
+
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
       const { data } = await api.post("/api/payments/init", { amount: numAmount });
       if (!data?.reference) {
         throw new Error("Backend did not return a payment reference");
@@ -140,7 +160,7 @@ export default function Wallet() {
                 ) : (
                   <>
                     <Wallet2 size={20} />
-                    Pay with Flutterwave
+                    Pay with {gatewayMode === "central" ? "Central Gateway" : "Flutterwave"}
                   </>
                 )}
               </button>

@@ -1,4 +1,4 @@
-const { buildCentralGatewayCheckoutUrl, selectSignatureHeader } = require('../shared/paymentBridge');
+const { buildCentralGatewayCheckoutUrl, selectSignatureHeader, isSuccessfulGatewayStatus } = require('../shared/paymentBridge');
 
 describe('central payment gateway bridge', () => {
   it('builds a checkout URL with the payment reference and callback details', () => {
@@ -22,5 +22,12 @@ describe('central payment gateway bridge', () => {
   it('selects the verif-hash header when the central gateway uses that signature field', () => {
     const signature = selectSignatureHeader({ 'verif-hash': 'abc123' });
     expect(signature).toBe('abc123');
+  });
+
+  it('treats successful and completed statuses as wallet-creditable', () => {
+    expect(isSuccessfulGatewayStatus('success')).toBe(true);
+    expect(isSuccessfulGatewayStatus('successful')).toBe(true);
+    expect(isSuccessfulGatewayStatus('completed')).toBe(true);
+    expect(isSuccessfulGatewayStatus('pending')).toBe(false);
   });
 });
