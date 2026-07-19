@@ -1,4 +1,4 @@
-const { buildCentralGatewayCheckoutUrl } = require('../shared/paymentBridge');
+const { buildCentralGatewayCheckoutUrl, selectSignatureHeader } = require('../shared/paymentBridge');
 
 describe('central payment gateway bridge', () => {
   it('builds a checkout URL with the payment reference and callback details', () => {
@@ -17,5 +17,10 @@ describe('central payment gateway bridge', () => {
     expect(url).toContain('amount=500');
     expect(url).toContain('callback_url=https%3A%2F%2Fapp.example.com%2Fapi%2Fpayments%2Fgateway%2Fcallback');
     expect(url).toContain('app=marthington');
+  });
+
+  it('selects the verif-hash header when the central gateway uses that signature field', () => {
+    const signature = selectSignatureHeader({ 'verif-hash': 'abc123' });
+    expect(signature).toBe('abc123');
   });
 });

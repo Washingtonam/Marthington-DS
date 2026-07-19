@@ -4,7 +4,7 @@ const Flutterwave = require("flutterwave-node-v3");
 const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
-const { normalizeAmountKobo, buildCentralGatewayCheckoutUrl, creditWalletForSuccessfulPayment, verifyGatewaySignature } = require("../shared/paymentBridge");
+const { normalizeAmountKobo, buildCentralGatewayCheckoutUrl, creditWalletForSuccessfulPayment, verifyGatewaySignature, selectSignatureHeader } = require("../shared/paymentBridge");
 
 const flw = new Flutterwave(
   process.env.FLW_PUBLIC_KEY || process.env.VITE_FLW_PUBLIC_KEY || "",
@@ -378,7 +378,7 @@ const initiateCentralGatewayPayment = async (req, res) => {
 
 const handleCentralGatewayCallback = async (req, res) => {
   try {
-    const signature = req.headers['x-central-signature'] || req.headers['x-gateway-signature'] || req.headers['signature'];
+    const signature = selectSignatureHeader(req.headers);
     const secret = process.env.CENTRAL_PAYMENT_GATEWAY_SECRET;
     const rawPayload = req.rawBody || (Buffer.isBuffer(req.body) ? req.body : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {})));
     const payloadText = Buffer.isBuffer(rawPayload) ? rawPayload.toString('utf8') : String(rawPayload || '');
@@ -397,11 +397,16 @@ const handleCentralGatewayCallback = async (req, res) => {
     }
 
     const payload = JSON.parse(payloadText);
-    const reference = String(payload?.reference || payload?.tx_ref || '').trim();
+    const reference = String(payload?.reference || payload?.tx_ref || payload?.transaction_ref || '').trim();
     const amountKobo = normalizeAmountKobo(payload?.amount || payload?.amount_kobo || payload?.total_amount || 0);
     const gateway = String(payload?.gateway || payload?.provider || 'central-gateway').trim();
-    const externalReference = String(payload?.external_reference || payload?.transaction_id || reference).trim();
+    const externalReference = String(payload?.external_reference || payload?.transaction_id || payload?.reference || reference).trim();
     const paymentMethod = String(payload?.payment_method || payload?.method || gateway).trim();
+    const actionType = String(payload?.action_type || payload?.actionType || payload?.type || '').trim().toUpperCase();
+
+    if (actionType && actionType !== 'FUND_WALLET') {
+      return res.status(200).json({ success: true, message: 'Ignored non-wallet action.', ignored: true });
+    }
 
     if (!reference) {
       return res.status(400).json({ success: false, message: 'Missing payment reference.' });

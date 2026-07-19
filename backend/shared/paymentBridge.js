@@ -85,9 +85,19 @@ const verifyGatewaySignature = ({ payload, signature, secret, algorithm = 'sha25
   return hash === signature;
 };
 
+const selectSignatureHeader = (headers = {}) => {
+  const normalized = Object.keys(headers || {}).reduce((acc, key) => {
+    acc[key.toLowerCase()] = headers[key];
+    return acc;
+  }, {});
+
+  return normalized['verif-hash'] || normalized['x-central-signature'] || normalized['x-gateway-signature'] || normalized['signature'] || '';
+};
+
 module.exports = {
   normalizeAmountKobo,
   buildCentralGatewayCheckoutUrl,
   creditWalletForSuccessfulPayment,
   verifyGatewaySignature,
+  selectSignatureHeader,
 };
