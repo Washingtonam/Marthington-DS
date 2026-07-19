@@ -60,12 +60,7 @@ module.exports.UNITS_REQUIRED = {
 module.exports.DEFAULT_PAGE_SIZE = 20;
 module.exports.MAX_PAGE_SIZE = 100;
 
-const FRONTEND_URL = process.env.FRONTEND_URL;
-if (!FRONTEND_URL) {
-  throw new Error(
-    "Missing required environment variable FRONTEND_URL. This is required for CORS and frontend callbacks."
-  );
-}
+const FRONTEND_URL = process.env.FRONTEND_URL || process.env.FRONTEND_URL_NAKED || "https://ds.marthington.com.ng";
 
 // CORS Origins
 module.exports.CORS_ORIGINS = [FRONTEND_URL];
@@ -73,5 +68,5 @@ module.exports.CORS_ORIGINS = [FRONTEND_URL];
 // Frontend URLs
 module.exports.FRONTEND_URLs = {
   production: FRONTEND_URL,
-  staging: process.env.FRONTEND_STAGING_URL
+  staging: process.env.FRONTEND_STAGING_URL || FRONTEND_URL
 };
