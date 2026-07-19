@@ -5,6 +5,8 @@ const {
   initiatePayment,
   verifyPaymentManual,
   getWalletStatus,
+  initiateCentralGatewayPayment,
+  handleCentralGatewayCallback,
 } = require("../controllers/payment.controller");
 const { handleWebhook } = require("../controllers/webhook.controller");
 
@@ -75,6 +77,22 @@ router.post("/webhook", handleWebhook);
  * 9. Backend finds Transaction by reference, credits wallet
  */
 router.post("/init", verifyToken, initiatePayment);
+
+/**
+ * ========================================
+ * CENTRAL GATEWAY INITIATION ROUTE
+ * ========================================
+ *
+ * POST /api/payments/init-central
+ *
+ * - Creates a pending transaction record
+ * - Redirects the frontend to your central payment gateway app
+ * - The gateway app sends a callback to /api/payments/gateway/callback
+ * - Wallet is credited when the callback is verified
+ */
+router.post("/init-central", verifyToken, initiateCentralGatewayPayment);
+
+router.post("/gateway/callback", handleCentralGatewayCallback);
 
 /**
  * ========================================

@@ -4,6 +4,7 @@ const Flutterwave = require("flutterwave-node-v3");
 const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
+const { normalizeAmountKobo, buildCentralGatewayCheckoutUrl, creditWalletForSuccessfulPayment, verifyGatewaySignature } = require("../shared/paymentBridge");
 
 const flw = new Flutterwave(
   process.env.FLW_PUBLIC_KEY || process.env.VITE_FLW_PUBLIC_KEY || "",
@@ -303,9 +304,149 @@ const initiatePayment = async (req, res) => {
   }
 };
 
+const initiateCentralGatewayPayment = async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const { amount, gatewayUrl, callbackUrl, appName = 'marthington' } = req.body;
+    const amountKobo = normalizeAmountKobo(amount);
+
+    if (!amountKobo || amountKobo <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid amount. Amount must be greater than 0.' });
+    }
+
+    if (amountKobo < 10000) {
+      return res.status(400).json({ success: false, message: 'Minimum amount is ₦100' });
+    }
+
+    if (amountKobo > 500000000) {
+      return res.status(400).json({ success: false, message: 'Maximum amount is ₦5,000,000' });
+    }
+
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const timestamp = Date.now();
+    const randomPart = crypto.randomBytes(8).toString('hex').toUpperCase();
+    const reference = `CENTRAL_${randomPart}_${timestamp}`;
+
+    const transaction = new Transaction({
+      userId,
+      type: 'credit',
+      amount: Number((amountKobo / 100).toFixed(2)),
+      amountKobo,
+      status: 'pending',
+      reference,
+      description: 'Central gateway wallet funding',
+    });
+    await transaction.save();
+
+    const gatewayBaseUrl = String(gatewayUrl || process.env.CENTRAL_PAYMENT_GATEWAY_URL || '').trim();
+    if (!gatewayBaseUrl) {
+      return res.status(500).json({ success: false, message: 'Central payment gateway URL is not configured.' });
+    }
+
+    const finalCallbackUrl = String(callbackUrl || process.env.CENTRAL_PAYMENT_CALLBACK_URL || `${process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:5000'}/api/payments/gateway/callback`).trim();
+    const checkoutUrl = buildCentralGatewayCheckoutUrl({
+      gatewayUrl: gatewayBaseUrl,
+      reference,
+      amount: Number((amountKobo / 100).toFixed(2)),
+      userId,
+      email: user.email,
+      callbackUrl: finalCallbackUrl,
+      appName,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Central gateway payment initialized.',
+      reference,
+      checkoutUrl,
+      data: {
+        reference,
+        amountKobo,
+        amountNaira: (amountKobo / 100).toFixed(2),
+        userId,
+      },
+    });
+  } catch (error) {
+    console.error('Central gateway initiation error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to initialize central gateway payment.', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
+  }
+};
+
+const handleCentralGatewayCallback = async (req, res) => {
+  try {
+    const signature = req.headers['x-central-signature'] || req.headers['x-gateway-signature'] || req.headers['signature'];
+    const secret = process.env.CENTRAL_PAYMENT_GATEWAY_SECRET;
+    const rawPayload = req.rawBody || (Buffer.isBuffer(req.body) ? req.body : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {})));
+    const payloadText = Buffer.isBuffer(rawPayload) ? rawPayload.toString('utf8') : String(rawPayload || '');
+
+    if (!secret) {
+      return res.status(500).json({ success: false, message: 'Central gateway secret is not configured.' });
+    }
+
+    if (!signature) {
+      return res.status(400).json({ success: false, message: 'Missing signature header.' });
+    }
+
+    const isValid = verifyGatewaySignature({ payload: payloadText, signature, secret });
+    if (!isValid) {
+      return res.status(401).json({ success: false, message: 'Invalid gateway signature.' });
+    }
+
+    const payload = JSON.parse(payloadText);
+    const reference = String(payload?.reference || payload?.tx_ref || '').trim();
+    const amountKobo = normalizeAmountKobo(payload?.amount || payload?.amount_kobo || payload?.total_amount || 0);
+    const gateway = String(payload?.gateway || payload?.provider || 'central-gateway').trim();
+    const externalReference = String(payload?.external_reference || payload?.transaction_id || reference).trim();
+    const paymentMethod = String(payload?.payment_method || payload?.method || gateway).trim();
+
+    if (!reference) {
+      return res.status(400).json({ success: false, message: 'Missing payment reference.' });
+    }
+
+    const transaction = await Transaction.findOne({ reference }).exec();
+    if (!transaction) {
+      return res.status(404).json({ success: false, message: 'Transaction not found.' });
+    }
+
+    if (transaction.status === 'success' || transaction.status === 'successful') {
+      return res.status(200).json({ success: true, message: 'Transaction already processed.', duplicate: true });
+    }
+
+    const result = await creditWalletForSuccessfulPayment({
+      userId: transaction.userId,
+      amountKobo: amountKobo || transaction.amountKobo || 0,
+      reference,
+      gateway,
+      externalReference,
+      paymentMethod,
+      source: gateway,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Wallet credited successfully.',
+      data: {
+        reference,
+        amountKobo: amountKobo || transaction.amountKobo || 0,
+        walletBalanceKobo: result.walletBalanceKobo,
+        walletBalance: result.walletBalance,
+      },
+    });
+  } catch (error) {
+    console.error('Central gateway callback error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to process central gateway callback.' });
+  }
+};
+
 module.exports = {
   handleFlutterwaveWebhook,
   initiatePayment,
   verifyPaymentManual,
   getWalletStatus,
+  initiateCentralGatewayPayment,
+  handleCentralGatewayCallback,
 };

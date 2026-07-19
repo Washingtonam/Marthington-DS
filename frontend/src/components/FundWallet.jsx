@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMemo } from "react";
 import { useUser } from "../../context/UserContext";
 import { useToast } from "../../context/ToastContext";
 import api from "../../lib/axios";
@@ -12,6 +13,10 @@ export default function FundWallet({ isOpen, onClose }) {
 
   const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const gatewayMode = useMemo(() => {
+    const configuredGateway = import.meta.env.VITE_PAYMENT_GATEWAY_MODE || "flutterwave";
+    return configuredGateway.toLowerCase();
+  }, []);
 
   const validateAmount = () => {
     const numAmount = Number(amount);
@@ -47,6 +52,22 @@ export default function FundWallet({ isOpen, onClose }) {
     setIsLoading(true);
 
     try {
+      if (gatewayMode === "central") {
+        const response = await api.post("/api/payments/init-central", {
+          amount: Number(amount),
+          gatewayUrl: import.meta.env.VITE_CENTRAL_PAYMENT_GATEWAY_URL,
+          callbackUrl: import.meta.env.VITE_CENTRAL_PAYMENT_CALLBACK_URL,
+          appName: "marthington",
+        });
+
+        if (!response.data?.success || !response.data?.checkoutUrl) {
+          throw new Error(response.data?.message || "Failed to initialize central gateway payment");
+        }
+
+        window.location.href = response.data.checkoutUrl;
+        return;
+      }
+
       const response = await api.post("/api/payments/init", { amount: Number(amount) });
       if (!response.data?.success || !response.data?.reference) {
         throw new Error("Failed to initialize payment");
@@ -151,6 +172,7 @@ export default function FundWallet({ isOpen, onClose }) {
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Current Wallet Balance</p>
                   <p className="text-2xl font-bold text-blue-600">{formatNaira(user?.walletBalance || 0)}</p>
+                  <p className="text-xs text-blue-700 mt-2">Payment mode: {gatewayMode === "central" ? "Central gateway" : "Flutterwave"}</p>
                 </div>
 
                 <div>
@@ -191,7 +213,7 @@ export default function FundWallet({ isOpen, onClose }) {
 
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex gap-2">
                   <AlertCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-green-800">Your payment is secured by Flutterwave. Your wallet will be updated automatically.</p>
+                  <p className="text-sm text-green-800">Your payment is secured by {gatewayMode === "central" ? "the central gateway" : "Flutterwave"}. Your wallet will be updated automatically.</p>
                 </div>
 
                 <button
@@ -207,12 +229,12 @@ export default function FundWallet({ isOpen, onClose }) {
                   ) : (
                     <>
                       <CreditCard className="w-5 h-5" />
-                      Pay with Flutterwave - {formatNaira(Number(amount) || 0)}
+                      Pay with {gatewayMode === "central" ? "Central Gateway" : "Flutterwave"} - {formatNaira(Number(amount) || 0)}
                     </>
                   )}
                 </button>
 
-                <p className="text-xs text-center text-gray-500">By proceeding, you agree to Flutterwave's terms and our payment policies.</p>
+                <p className="text-xs text-center text-gray-500">By proceeding, you agree to the selected payment provider's terms and our payment policies.</p>
               </div>
             </div>
           </motion.div>
