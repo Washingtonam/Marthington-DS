@@ -3,12 +3,14 @@ const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
 
-const verifyFlutterwaveSignature = (signature, secret) => {
-  if (!signature || !secret) {
+const verifyFlutterwaveSignature = (signature, secret, rawBody) => {
+  if (!signature || !secret || !rawBody) {
     return false;
   }
 
-  return signature === secret;
+  const payload = Buffer.isBuffer(rawBody) ? rawBody.toString("utf8") : String(rawBody);
+  const hash = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  return hash === signature;
 };
 
 const summarizeEvent = (event) => {
@@ -53,7 +55,7 @@ const handleWebhook = async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing signature header." });
     }
 
-    const signatureMatch = verifyFlutterwaveSignature(signature, secret);
+    const signatureMatch = verifyFlutterwaveSignature(signature, secret, rawBody);
     console.log("[FLW_WEBHOOK] signature check result", {
       signatureMatch,
       receivedSignature: signature,
@@ -232,4 +234,4 @@ const handleWebhook = async (req, res) => {
   }
 };
 
-module.exports = { handleWebhook };
+module.exports = { handleWebhook, verifyFlutterwaveSignature };

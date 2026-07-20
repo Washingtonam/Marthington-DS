@@ -10,7 +10,7 @@ export default function Wallet() {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const gatewayMode = useMemo(() => {
-    const configuredGateway = import.meta.env.VITE_PAYMENT_GATEWAY_MODE || "central";
+    const configuredGateway = import.meta.env.VITE_PAYMENT_GATEWAY_MODE || "flutterwave";
     return configuredGateway.toLowerCase();
   }, []);
 
@@ -170,7 +170,7 @@ export default function Wallet() {
                 <ul className="text-sm text-gray-600 space-y-2">
                   <li>✓ Enter amount and click "Pay with Flutterwave"</li>
                   <li>✓ Complete payment in the Flutterwave modal</li>
-                  <li>✓ Your wallet updates automatically upon confirmation</li>
+                  <li>✓ Your wallet updates automatically after confirmation</li>
                 </ul>
               </div>
             </div>

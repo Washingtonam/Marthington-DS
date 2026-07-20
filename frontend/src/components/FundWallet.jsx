@@ -14,7 +14,7 @@ export default function FundWallet({ isOpen, onClose }) {
   const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const gatewayMode = useMemo(() => {
-    const configuredGateway = import.meta.env.VITE_PAYMENT_GATEWAY_MODE || "central";
+    const configuredGateway = import.meta.env.VITE_PAYMENT_GATEWAY_MODE || "flutterwave";
     return configuredGateway.toLowerCase();
   }, []);
 
