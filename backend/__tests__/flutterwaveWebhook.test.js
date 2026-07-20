@@ -2,6 +2,13 @@ const crypto = require("crypto");
 const { verifyFlutterwaveSignature } = require("../controllers/webhook.controller");
 
 describe("verifyFlutterwaveSignature", () => {
+  it("accepts the configured Flutterwave secret hash from the webhook header", () => {
+    const secret = "flutterwave-secret";
+    const payload = JSON.stringify({ event: "charge.completed", data: { tx_ref: "FLW_TEST_123" } });
+
+    expect(verifyFlutterwaveSignature(secret, secret, payload)).toBe(true);
+  });
+
   it("accepts a valid HMAC-SHA256 signature for the raw payload", () => {
     const secret = "flutterwave-secret";
     const payload = JSON.stringify({ event: "charge.completed", data: { tx_ref: "FLW_TEST_123" } });

@@ -4,11 +4,19 @@ const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
 
 const verifyFlutterwaveSignature = (signature, secret, rawBody) => {
-  if (!signature || !secret || !rawBody) {
+  if (!signature || !secret) {
     return false;
   }
 
-  const payload = Buffer.isBuffer(rawBody) ? rawBody.toString("utf8") : String(rawBody);
+  if (signature === secret) {
+    return true;
+  }
+
+  const payload = Buffer.isBuffer(rawBody) ? rawBody.toString("utf8") : String(rawBody || "");
+  if (!payload) {
+    return false;
+  }
+
   const hash = crypto.createHmac("sha256", secret).update(payload).digest("hex");
   return hash === signature;
 };
