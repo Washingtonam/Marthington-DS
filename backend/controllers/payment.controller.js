@@ -4,7 +4,7 @@ const Flutterwave = require("flutterwave-node-v3");
 const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
-const { normalizeAmountKobo, buildCentralGatewayCheckoutUrl, creditWalletForSuccessfulPayment, verifyGatewaySignature, isSuccessfulGatewayStatus, selectSignatureHeader } = require("../shared/paymentBridge");
+const { normalizeAmountKobo, buildCentralGatewayCheckoutUrl, creditWalletForSuccessfulPayment, verifyGatewaySignature, isSuccessfulGatewayStatus, selectSignatureHeader, resolveCentralCallbackUrl } = require("../shared/paymentBridge");
 
 const flw = new Flutterwave(
   process.env.FLW_PUBLIC_KEY || process.env.VITE_FLW_PUBLIC_KEY || "",
@@ -347,7 +347,7 @@ const initiateCentralGatewayPayment = async (req, res) => {
       return res.status(500).json({ success: false, message: 'Central payment gateway URL is not configured.' });
     }
 
-    const finalCallbackUrl = String(callbackUrl || process.env.CENTRAL_PAYMENT_CALLBACK_URL || `${process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:5000'}/api/payments/gateway/callback`).trim();
+    const finalCallbackUrl = resolveCentralCallbackUrl({ callbackUrl, env: process.env });
     const checkoutUrl = buildCentralGatewayCheckoutUrl({
       gatewayUrl: gatewayBaseUrl,
       reference,

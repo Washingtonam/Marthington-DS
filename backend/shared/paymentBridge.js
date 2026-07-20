@@ -99,6 +99,27 @@ const selectSignatureHeader = (headers = {}) => {
   return normalized['verif-hash'] || normalized['x-central-signature'] || normalized['x-gateway-signature'] || normalized['signature'] || '';
 };
 
+const resolveCentralCallbackUrl = ({ callbackUrl, env = process.env }) => {
+  const serverConfigured = String(
+    env.CENTRAL_PAYMENT_CALLBACK_URL || env.BACKEND_URL || env.RENDER_EXTERNAL_URL || env.RENDER_URL || ''
+  ).trim();
+
+  if (serverConfigured) {
+    return serverConfigured.includes('/api/payments/gateway/callback')
+      ? serverConfigured
+      : `${serverConfigured.replace(/\/$/, '')}/api/payments/gateway/callback`;
+  }
+
+  const fallbackUrl = String(callbackUrl || '').trim();
+  if (fallbackUrl) {
+    return fallbackUrl.includes('/api/payments/gateway/callback')
+      ? fallbackUrl
+      : `${fallbackUrl.replace(/\/$/, '')}/api/payments/gateway/callback`;
+  }
+
+  return '';
+};
+
 module.exports = {
   normalizeAmountKobo,
   buildCentralGatewayCheckoutUrl,
@@ -106,4 +127,5 @@ module.exports = {
   verifyGatewaySignature,
   isSuccessfulGatewayStatus,
   selectSignatureHeader,
+  resolveCentralCallbackUrl,
 };
