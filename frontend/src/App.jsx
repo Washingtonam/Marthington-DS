@@ -59,7 +59,20 @@ const getUser = () => {
   }
 };
 
-const isAuthenticated = () => !!localStorage.getItem("user");
+const isSessionExpired = () => {
+  const lastActivity = Number(localStorage.getItem("lastActivity") || 0);
+  return lastActivity && Date.now() - lastActivity > 60 * 60 * 1000;
+};
+
+const isAuthenticated = () => {
+  if (isSessionExpired()) {
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    localStorage.removeItem("lastActivity");
+    return false;
+  }
+  return !!localStorage.getItem("user") && !!localStorage.getItem("token");
+};
 const isAdmin = () => {
   const user = getUser();
   return user?.role === "admin" || user?.role === "super_admin";

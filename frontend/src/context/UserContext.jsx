@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect } from "react";
 import api from "../lib/axios";
 
 const ADMIN_EMAIL = import.meta.env.VITE_SUPER_ADMIN_EMAIL || "admin@xcombinator.com";
+const SESSION_LAST_ACTIVITY_KEY = "lastActivity";
+const MAX_IDLE_MS = 60 * 60 * 1000; // 60 minutes
 const UserContext = createContext();
 
 export function UserProvider({ children }) {
@@ -64,18 +66,70 @@ export function UserProvider({ children }) {
   // =========================
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
+    const lastActivity = Number(localStorage.getItem(SESSION_LAST_ACTIVITY_KEY) || 0);
+    const isExpired = lastActivity && Date.now() - lastActivity > MAX_IDLE_MS;
+
+    if (storedUser && isExpired) {
+      clearUser();
+      localStorage.removeItem(SESSION_LAST_ACTIVITY_KEY);
+      return;
+    }
+
     if (storedUser) {
       const normalized = normalizeUser(storedUser);
       setUser(normalized);
       setUnits(normalized.units);
-      // Initialize balance from storage (if available) and fetch fresh once
       if (normalized.walletBalance !== undefined && normalized.walletBalance !== null) {
         setWalletBalance(normalized.walletBalance);
       }
+      localStorage.setItem(SESSION_LAST_ACTIVITY_KEY, String(Date.now()));
       apiUnits();
     }
   }, []);
-  // NOTE: Balance refresh is now manual via `refreshBalance` or triggered on confirmed transactions.
+
+  useEffect(() => {
+    if (!user) return;
+
+    const activityEvents = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
+    const markActivity = () => {
+      localStorage.setItem(SESSION_LAST_ACTIVITY_KEY, String(Date.now()));
+    };
+
+    activityEvents.forEach((event) => window.addEventListener(event, markActivity));
+
+    const idleChecker = setInterval(() => {
+      const lastActivity = Number(localStorage.getItem(SESSION_LAST_ACTIVITY_KEY) || 0);
+      if (lastActivity && Date.now() - lastActivity > MAX_IDLE_MS) {
+        clearUser();
+        window.location.href = "/login";
+      }
+    }, 60_000);
+
+    return () => {
+      activityEvents.forEach((event) => window.removeEventListener(event, markActivity));
+      clearInterval(idleChecker);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    let keepAliveInterval = null;
+
+    const pingServer = async () => {
+      try {
+        await api.get("/api/ping");
+        console.debug("Keep-alive ping succeeded");
+      } catch (err) {
+        console.warn("Keep-alive ping failed", err?.message || err);
+      }
+    };
+
+    pingServer();
+    keepAliveInterval = setInterval(pingServer, 10 * 60 * 1000); // every 10 minutes
+
+    return () => {
+      if (keepAliveInterval) clearInterval(keepAliveInterval);
+    };
+  }, []);
 
   // =========================
   // UPDATE USER
@@ -86,6 +140,7 @@ export function UserProvider({ children }) {
     setUnits(normalized.units);
     setWalletBalance(normalized.walletBalance ?? null);
     localStorage.setItem("user", JSON.stringify(normalized));
+    localStorage.setItem(SESSION_LAST_ACTIVITY_KEY, String(Date.now()));
   };
 
   // =========================
@@ -123,6 +178,7 @@ export function UserProvider({ children }) {
     setWalletBalance(null);
     localStorage.removeItem("user");
     localStorage.removeItem("token");
+    localStorage.removeItem(SESSION_LAST_ACTIVITY_KEY);
   };
 
   return (

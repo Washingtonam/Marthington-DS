@@ -27,6 +27,7 @@ export default function Login() {
         localStorage.setItem("user", JSON.stringify(data.user));
         localStorage.setItem("email", data.user.email);
         localStorage.setItem("token", data.token);
+        localStorage.setItem("lastActivity", String(Date.now()));
 
         const destination = data.user?.role === "admin" || data.user?.role === "super_admin" ? "/admin" : "/dashboard";
         navigate(destination);

@@ -113,4 +113,9 @@ app.get("/api/pricing", async (req, res) => {
     }
 });
 
+// Health check / keep-alive endpoint for uptime monitoring
+app.get("/api/ping", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 module.exports = app;

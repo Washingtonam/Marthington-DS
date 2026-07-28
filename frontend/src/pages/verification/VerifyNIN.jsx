@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useUser } from "../../context/UserContext";
 import { useToast } from "../../context/ToastContext";
 import { useNavigate, Link } from "react-router-dom";
@@ -18,23 +18,23 @@ import { motion, AnimatePresence } from "framer-motion";
 import { formatNaira } from "../../lib/currency";
 
 export default function VerifyNIN() {
-  const { user, walletBalance, setBalance, isBalanceLoading } = useUser();
+  const { user, walletBalance, setBalance, refreshBalance, isBalanceLoading } = useUser();
   const { error, success } = useToast();
   const navigate = useNavigate();
   
   const [method, setMethod] = useState("nin");
   const [loading, setLoading] = useState(false);
+  const [pricing, setPricing] = useState(null);
   const [nin, setNin] = useState("");
   const [phone, setPhone] = useState("");
   const [form, setForm] = useState({ firstname: "", surname: "", gender: "", birthdate: "" });
   const [touched, setTouched] = useState({ nin: false, phone: false, firstname: false, surname: false, gender: false, birthdate: false });
 
   const unitsRequired = useMemo(() => ["phone", "demographic"].includes(method) ? 2 : 1, [method]);
-
-  const unitPrice = 250; // legacy per-unit value; cost calculation remains in Naira
+  const unitPrice = pricing?.nin?.unitPrice ?? 250;
   const costInNaira = unitsRequired * unitPrice;
   const hasEnoughFunds = user?.isAdmin || (walletBalance ?? 0) >= costInNaira;
-  const priceLabel = `Cost: ${formatNaira(costInNaira)}`;
+  const priceLabel = `Cost: ${formatNaira(costInNaira)} (${unitsRequired}×₦${unitPrice})`;
   const walletLabel = isBalanceLoading ? "Loading..." : `Wallet: ${formatNaira(walletBalance ?? 0)}`;
 
   const isNinValid = method !== "nin" || nin.length === 11;
@@ -47,6 +47,18 @@ export default function VerifyNIN() {
     error(message, 5000);
   };
 
+  useEffect(() => {
+    const fetchPricing = async () => {
+      try {
+        const res = await api.get("/api/pricing");
+        setPricing(res.data);
+      } catch (err) {
+        console.error("VERIFY PRICING LOAD ERROR:", err);
+      }
+    };
+
+    fetchPricing();
+  }, []);
 
   const handleVerify = async () => {
     if (loading) return;
@@ -89,12 +101,10 @@ export default function VerifyNIN() {
       const data = res.data;
       if (!res || data.error) throw new Error(data?.error || "Verification failed");
 
-      // Deduct cost locally (backend should perform atomic deduction and ledger logging)
-      try {
-        // Update local balance deterministically (backend should be source of truth)
-        setBalance(Number((walletBalance ?? 0) - costInNaira));
-      } catch (e) {
-        console.warn("Failed to update local balance", e);
+      if (data.walletBalance !== undefined) {
+        setBalance(Number(data.walletBalance));
+      } else {
+        refreshBalance();
       }
 
       success("Verification successful.");
