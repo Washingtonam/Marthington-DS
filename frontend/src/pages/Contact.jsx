@@ -6,7 +6,7 @@ export default function Contact() {
       <h1 className="text-3xl font-bold mb-4">Contact Us</h1>
       <p className="text-slate-600 mb-6">Have a question or need help? Reach out via WhatsApp or email and we'll get back to you shortly.</p>
 
-      <div className="bg-white dark:bg-[#0B1220] border rounded-2xl p-6 space-y-4">
+      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-6 space-y-4">
         <div>
           <h2 className="font-semibold">WhatsApp</h2>
           <a href="https://wa.me/2348179736442" target="_blank" rel="noreferrer" className="text-green-600">Chat on WhatsApp</a>

@@ -101,10 +101,10 @@ export default function Wallet() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-[#0f172a] dark:to-[#1e293b]">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800">
       <div className="max-w-6xl mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="bg-white dark:bg-[#1e293b] rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
             <h1 className="text-3xl font-bold mb-2">Your Wallet</h1>
             <p className="text-gray-500 mb-8">Manage your account balance</p>
 
@@ -129,7 +129,7 @@ export default function Wallet() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="Enter amount in ₦"
-                  className="w-full mt-2 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-[#0f172a] dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full mt-2 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   min="100"
                   max="5000000"
                 />
@@ -177,17 +177,17 @@ export default function Wallet() {
           </div>
 
           <div className="space-y-6">
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-white dark:bg-[#1e293b] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
               <h3 className="font-bold">💡 Automated Funding</h3>
               <p className="text-gray-500">All Flutterwave payments are processed securely and credited to your wallet instantly after confirmation.</p>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="bg-white dark:bg-[#1e293b] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
               <h3 className="font-bold">🔒 Secure Transactions</h3>
               <p className="text-gray-500">Your payment information is processed securely by Flutterwave with a verified checkout experience.</p>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white dark:bg-[#1e293b] p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
               <h3 className="font-bold">⚡ Instant Credits</h3>
               <p className="text-gray-500">Payments are verified and your wallet is credited within seconds. Use your balance immediately for services.</p>
             </motion.div>

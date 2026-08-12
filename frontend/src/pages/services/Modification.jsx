@@ -331,7 +331,7 @@ export default function Modification() {
           value={formData[field.name] || ""}
           onChange={handleChange}
           placeholder={field.placeholder || ""}
-          className="w-full p-4 rounded-2xl border border-slate-200 bg-slate-50 dark:bg-[#0B1120] dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full p-4 rounded-2xl border border-slate-200 bg-slate-50 dark:bg-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
     );
@@ -360,7 +360,7 @@ export default function Modification() {
             className={`text-left rounded-3xl border-2 p-6 transition-all ${
               selectedType === s.key
                 ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                : "bg-white dark:bg-[#111827] border-transparent shadow-sm"
+                : "bg-white dark:bg-slate-900 border-transparent shadow-sm"
             }`}
           >
             <div className="text-blue-600 mb-4">{s.icon}</div>
@@ -373,7 +373,7 @@ export default function Modification() {
 
       {selectedType && (
         <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 bg-white dark:bg-[#111827] rounded-[2rem] p-8 shadow-sm border space-y-6">
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-[2rem] p-8 shadow-sm border space-y-6">
             <h2 className="text-2xl font-bold dark:text-white">{services.find((s) => s.key === selectedType)?.label}</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
               Complete the required fields for the selected modification type. Fields marked as required must be filled before submission.
@@ -384,7 +384,7 @@ export default function Modification() {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white dark:bg-[#111827] rounded-[2rem] p-8 shadow-xl border">
+            <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 shadow-xl border">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="font-bold text-lg dark:text-white">Payment Summary</h3>
@@ -396,7 +396,7 @@ export default function Modification() {
               <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
                 Wallet balance: {formatNaira(user?.walletBalance || 0)}
               </p>
-              <div className="mt-4 rounded-2xl bg-slate-50 dark:bg-[#0B1120] p-4 text-sm text-slate-600 dark:text-slate-300">
+              <div className="mt-4 rounded-2xl bg-slate-50 dark:bg-slate-900 p-4 text-sm text-slate-600 dark:text-slate-300">
                 <p className="font-semibold">Important:</p>
                 <p className="mt-2">Submit your request only after preparing your photos and a new email account for NIMC communication.</p>
               </div>

@@ -92,7 +92,7 @@ export default function SelfServiceForm() {
         </div>
       </div>
 
-      <div className="flex max-w-md bg-gray-100 dark:bg-[#111827] p-1.5 rounded-2xl mb-8 border dark:border-gray-800">
+      <div className="flex max-w-md bg-gray-100 dark:bg-slate-900 p-1.5 rounded-2xl mb-8 border dark:border-gray-800">
         <button onClick={() => setActiveTab("email")} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-semibold transition ${activeTab === "email" ? "bg-purple-600 text-white" : "text-gray-500"}`}>
           <Mail size={15} /> Email Retrieval
         </button>
@@ -102,14 +102,14 @@ export default function SelfServiceForm() {
       </div>
 
       <div className="grid lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-7 bg-white dark:bg-[#111827] border dark:border-gray-800 rounded-[2rem] shadow-sm p-8">
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 border dark:border-gray-800 rounded-[2rem] shadow-sm p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
-            <input name="fullName" value={formData.fullName} onChange={handleInputChange} placeholder="Full Name" className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-xl p-4 text-sm dark:text-white" required />
+            <input name="fullName" value={formData.fullName} onChange={handleInputChange} placeholder="Full Name" className="w-full bg-gray-50 dark:bg-slate-900 border rounded-xl p-4 text-sm dark:text-slate-100" required />
             <div className="grid md:grid-cols-2 gap-5">
-              <input name="nin" value={formData.nin} onChange={handleInputChange} maxLength={11} placeholder="11-digit NIN" className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-xl p-4 text-sm dark:text-white" required />
-              <input name="phoneNumber" value={formData.phoneNumber} onChange={handleInputChange} placeholder="Phone Number" className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-xl p-4 text-sm dark:text-white" required />
+              <input name="nin" value={formData.nin} onChange={handleInputChange} maxLength={11} placeholder="11-digit NIN" className="w-full bg-gray-50 dark:bg-slate-900 border rounded-xl p-4 text-sm dark:text-slate-100" required />
+              <input name="phoneNumber" value={formData.phoneNumber} onChange={handleInputChange} placeholder="Phone Number" className="w-full bg-gray-50 dark:bg-slate-900 border rounded-xl p-4 text-sm dark:text-slate-100" required />
             </div>
-            <textarea name="additionalInfo" value={formData.additionalInfo} onChange={handleInputChange} rows={3} placeholder="Additional Notes..." className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-xl p-4 text-sm dark:text-white" />
+            <textarea name="additionalInfo" value={formData.additionalInfo} onChange={handleInputChange} rows={3} placeholder="Additional Notes..." className="w-full bg-gray-50 dark:bg-slate-900 border rounded-xl p-4 text-sm dark:text-slate-100" />
             
             <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2">
               {isSubmitting ? <Loader2 className="animate-spin" /> : <><BadgeCheck size={18} /> Confirm & Pay from Wallet</>}
@@ -118,7 +118,7 @@ export default function SelfServiceForm() {
         </div>
 
         <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white dark:bg-[#111827] border dark:border-gray-800 rounded-[2rem] shadow-sm p-8">
+          <div className="bg-white dark:bg-slate-900 border dark:border-gray-800 rounded-[2rem] shadow-sm p-8">
             <h3 className="font-bold mb-4 flex items-center gap-2 dark:text-white"><Wallet className="text-purple-500" /> Wallet Deduction</h3>
             <div className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-6 rounded-2xl text-center">
               <p className="text-xs opacity-80 uppercase">Service Fee</p>

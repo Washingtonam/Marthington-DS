@@ -64,7 +64,7 @@ export default function Profile() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* SIDEBAR: Info & Actions */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-6">
             <h2 className="font-bold text-lg mb-6 flex items-center gap-2"><ShieldCheck className="text-blue-600" /> Account Info</h2>
             <div className="space-y-4">
               <InfoItem label="Email" value={user.email} icon={<Mail size={18} />} />
@@ -73,7 +73,7 @@ export default function Profile() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-6">
             <h2 className="font-bold text-lg mb-6">Quick Actions</h2>
             <div className="space-y-4">
               <ActionButton label="Fund Wallet" sub="Fund your wallet" icon={<CreditCard />} onClick={() => navigate("/wallet")} />
@@ -83,7 +83,7 @@ export default function Profile() {
         </div>
 
         {/* MAIN: Change Password */}
-        <div className="lg:col-span-2 bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-8">
+        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-8">
           <h2 className="text-2xl font-bold mb-8 flex items-center gap-4"><LockKeyhole size={28} className="text-blue-600" /> Change Password</h2>
           <form onSubmit={handleChangePassword} className="space-y-6">
             <PasswordField label="Current Password" value={passwords.current} show={show.current} onToggle={() => setShow({...show, current: !show.current})} onChange={(v) => setPasswords({...passwords, current: v})} />
@@ -102,7 +102,7 @@ export default function Profile() {
 // Sub-components for cleaner code
 function InfoItem({ label, value, icon }) {
   return (
-    <div className="bg-gray-50 dark:bg-[#0B1120] rounded-2xl p-4 flex items-center gap-3">
+    <div className="bg-gray-50 dark:bg-slate-900 rounded-2xl p-4 flex items-center gap-3">
       <div className="text-gray-400">{icon}</div>
       <div>
         <p className="text-xs text-gray-500">{label}</p>
@@ -128,7 +128,7 @@ function PasswordField({ label, value, show, onToggle, onChange }) {
   return (
     <div>
       <label className="text-sm font-medium mb-2 block">{label}</label>
-      <div className="flex items-center gap-3 border dark:border-gray-700 bg-gray-50 dark:bg-[#0B1120] rounded-2xl px-4 py-4">
+      <div className="flex items-center gap-3 border dark:border-gray-700 bg-gray-50 dark:bg-slate-900 rounded-2xl px-4 py-4">
         <LockKeyhole size={18} className="text-gray-400" />
         <input type={show ? "text" : "password"} value={value} onChange={(e) => onChange(e.target.value)} className="bg-transparent outline-none w-full text-sm" />
         <button type="button" onClick={onToggle}>{show ? <EyeOff size={18} /> : <Eye size={18} />}</button>

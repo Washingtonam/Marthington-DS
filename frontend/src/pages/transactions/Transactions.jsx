@@ -87,7 +87,7 @@ export default function Transactions() {
           placeholder="Filter by type or status..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
         />
       </div>
 
@@ -101,13 +101,13 @@ export default function Transactions() {
           <div className="text-center p-12 text-slate-500">No transactions recorded.</div>
         ) : (
           filtered.map((tx) => (
-            <motion.div key={tx._id} layout className="bg-white dark:bg-[#111827] border dark:border-slate-800 rounded-2xl p-6 flex items-center justify-between shadow-sm">
+            <motion.div key={tx._id} layout className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-6 flex items-center justify-between shadow-sm">
               <div>
                 <p className="font-bold">{getTitle(tx)}</p>
                 <p className="text-xs text-slate-500">{new Date(tx.createdAt).toLocaleString()}</p>
               </div>
               <div className="text-right">
-                <p className={`font-black ${tx.amount > 0 ? "text-green-600" : "text-slate-900 dark:text-white"}`}>{getAmount(tx)}</p>
+                <p className={`font-black ${tx.amount > 0 ? "text-green-600" : "text-slate-900 dark:text-slate-100"}`}>{getAmount(tx)}</p>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${statusStyle(tx.status)}`}>{tx.status}</span>
               </div>
             </motion.div>

@@ -113,8 +113,8 @@ export default function Admin() {
 
       {/* LOADING */}
       {loading && (
-        <div className="bg-white dark:bg-[#161616] rounded-3xl p-10 text-center shadow-xl">
-          <p className="text-gray-500 dark:text-gray-400">Loading dashboard...</p>
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-10 text-center shadow-xl">
+          <p className="text-gray-500 dark:text-slate-300">Loading dashboard...</p>
         </div>
       )}
 
@@ -197,7 +197,7 @@ function ActionCard({ title, desc, icon, color, onClick, badge }) {
   return (
     <div
       onClick={onClick}
-      className="bg-white dark:bg-[#161616] rounded-3xl shadow-xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300"
+      className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300"
     >
       <div className={`bg-gradient-to-r ${color} p-6 text-white relative`}>
         {badge > 0 && (
@@ -209,7 +209,7 @@ function ActionCard({ title, desc, icon, color, onClick, badge }) {
         <h3 className="text-xl font-bold">{title}</h3>
       </div>
       <div className="p-6">
-        <p className="text-sm text-gray-500 dark:text-gray-400">{desc}</p>
+        <p className="text-sm text-gray-500 dark:text-slate-300">{desc}</p>
         <div className="mt-5 flex items-center gap-2 text-blue-600 font-semibold">
           Open Section
           <ArrowRight size={18} />

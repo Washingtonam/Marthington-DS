@@ -91,11 +91,11 @@ export default function Validation() {
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border p-8">
+            <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl border p-8">
             <h2 className="text-2xl font-bold mb-6 flex items-center gap-3"><Fingerprint className="text-blue-600" /> Select Service</h2>
             <div className="grid md:grid-cols-2 gap-5">
               {services.map((s) => (
-                <button key={s.key} onClick={() => setSelectedService(s.key)} className={`p-5 rounded-3xl border transition-all ${selectedService === s.key ? "bg-blue-600 text-white border-blue-600 shadow-xl" : "bg-gray-50 dark:bg-[#0B1120] border-gray-100"}`}>
+                  <button key={s.key} onClick={() => setSelectedService(s.key)} className={`p-5 rounded-3xl border transition-all ${selectedService === s.key ? "bg-blue-600 text-white border-blue-600 shadow-xl" : "bg-gray-50 dark:bg-slate-900 border-gray-100"}`}>
                   <div className="flex justify-between items-center">
                     <span className="font-bold">{s.label}</span>
                     <span className="font-black">₦{pricing?.[s.key] || 0}</span>
@@ -105,15 +105,15 @@ export default function Validation() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border p-8">
+          <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl border p-8">
             <h2 className="text-2xl font-bold mb-6">Verification Details</h2>
             <input type="number" placeholder="Enter 11-digit NIN" value={nin} onChange={(e) => setNin(e.target.value.slice(0, 11))} className="w-full bg-gray-50 p-5 rounded-2xl border outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
 
         <div className="space-y-8">
-          <div className="sticky top-5 bg-white dark:bg-[#111827] rounded-[2rem] shadow-2xl border p-8">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-3"><CreditCard className="text-blue-600" /> Summary</h2>
+          <div className="sticky top-5 bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border p-8">
+              <h2 className="text-2xl font-bold mb-6 flex items-center gap-3"><CreditCard className="text-blue-600" /> Summary</h2>
             <div className="space-y-4">
               <div className="flex justify-between text-gray-500"><span>Service Fee</span><span>{formatNaira(basePrice)}</span></div>
               <div className="flex justify-between text-gray-500"><span>Slip Fee</span><span>{formatNaira(extraSlip)}</span></div>

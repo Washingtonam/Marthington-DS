@@ -88,7 +88,7 @@ export default function VerifyResult() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-[#111827] p-10 rounded-[2rem] shadow-xl text-center max-w-sm border">
+        <div className="bg-white dark:bg-slate-900 p-10 rounded-[2rem] shadow-xl text-center max-w-sm border">
           <Loader2 className="animate-spin text-blue-600 mx-auto mb-4" size={48} />
           <h2 className="text-xl font-bold dark:text-white">Loading verification result</h2>
           <p className="text-gray-500 mt-2">Please wait while we retrieve your request.</p>
@@ -100,7 +100,7 @@ export default function VerifyResult() {
   if (!info) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-[#111827] p-10 rounded-[2rem] shadow-xl text-center max-w-sm border">
+        <div className="bg-white dark:bg-slate-900 p-10 rounded-[2rem] shadow-xl text-center max-w-sm border">
           <Fingerprint size={48} className="text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold dark:text-white">No Result Found</h2>
           <p className="text-gray-500 mt-2">Please perform a new verification.</p>
@@ -142,7 +142,7 @@ export default function VerifyResult() {
 
       {/* GRID */}
       <div className="grid lg:grid-cols-3 gap-8">
-        <div className="bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-lg border flex flex-col items-center">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-lg border flex flex-col items-center">
           {info.photo ? (
             <img src={`data:image/png;base64,${info.photo}`} alt="User" className="w-48 h-48 rounded-2xl object-cover border-4 border-blue-50" />
           ) : (
@@ -151,14 +151,14 @@ export default function VerifyResult() {
           <h2 className="text-xl font-bold mt-6 text-center">{`${info.firstname} ${info.surname}`}</h2>
         </div>
 
-        <div className="lg:col-span-2 bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-lg border">
+        <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-lg border">
           <div className="grid md:grid-cols-2 gap-4">
             {[ { icon: User, label: "Full Name", val: `${info.firstname} ${info.middlename || ""} ${info.surname}` },
                { icon: Calendar, label: "DOB", val: info.birthdate },
                { icon: Phone, label: "Phone", val: info.telephoneno || "N/A" },
                { icon: MapPin, label: "Address", val: info.residence_address || "N/A" }
             ].map((item, i) => (
-              <div key={i} className="bg-gray-50 dark:bg-[#0B1120] p-4 rounded-2xl">
+              <div key={i} className="bg-gray-50 dark:bg-slate-900 p-4 rounded-2xl text-slate-900 dark:text-slate-100">
                 <div className="flex items-center gap-2 text-blue-600 mb-1"><item.icon size={16} /> <span className="text-xs font-bold uppercase">{item.label}</span></div>
                 <p className="font-semibold">{item.val}</p>
               </div>
@@ -174,7 +174,7 @@ export default function VerifyResult() {
             key={type} 
             onClick={() => downloadSlip(type)} 
             disabled={!!loadingType}
-            className="bg-white dark:bg-[#111827] p-6 rounded-[2rem] border shadow hover:shadow-xl transition flex items-center justify-between"
+            className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border shadow hover:shadow-xl transition flex items-center justify-between"
           >
             <span className="font-bold capitalize">{type} Slip</span>
             {loadingType === type ? <Loader2 className="animate-spin" /> : <Download size={20} className="text-blue-600" />}

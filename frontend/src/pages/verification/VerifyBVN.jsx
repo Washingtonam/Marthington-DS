@@ -70,13 +70,13 @@ export default function VerifyBVN() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-[#111827] p-8 rounded-[2rem] border shadow-xl">
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border shadow-xl">
         <input
           type="number"
           placeholder="Enter 11-digit BVN"
           value={bvn}
           onChange={(e) => setBvn(e.target.value.slice(0, 11))}
-          className="w-full bg-gray-50 dark:bg-[#0B1120] border p-5 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full bg-gray-50 dark:bg-slate-900 border p-5 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-blue-500 dark:text-slate-100"
         />
 
         <button
@@ -90,7 +90,7 @@ export default function VerifyBVN() {
       </div>
 
       {info && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-8 bg-white dark:bg-[#111827] p-8 rounded-[2rem] border shadow-xl">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-8 bg-white dark:bg-slate-900 p-8 rounded-[2rem] border shadow-xl">
           <h2 className="font-bold text-xl mb-6 flex items-center gap-2">
             <User className="text-blue-600" /> Result Details
           </h2>

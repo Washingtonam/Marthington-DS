@@ -75,12 +75,12 @@ export default function Personalization() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl p-8 border">
+      <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl p-8 border">
         <form onSubmit={handleSearch} className="space-y-6">
           <input 
             required 
             placeholder="e.g. R-12345678-ABCD-EFGH" 
-            className="w-full bg-gray-50 dark:bg-[#0B1120] border rounded-2xl p-4 uppercase dark:text-white"
+            className="w-full bg-gray-50 dark:bg-slate-900 border rounded-2xl p-4 uppercase dark:text-slate-100"
             value={trackingId} 
             onChange={(e) => setTrackingId(e.target.value)} 
           />

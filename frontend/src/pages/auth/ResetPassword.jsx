@@ -33,7 +33,7 @@ export default function ResetPassword() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 px-4">
-      <div className="bg-white dark:bg-[#161616] p-10 rounded-3xl shadow-2xl w-full max-w-md border border-white/10">
+      <div className="bg-white dark:bg-slate-900 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-white/10">
         
         {success ? (
           <div className="text-center animate-in fade-in zoom-in duration-300">

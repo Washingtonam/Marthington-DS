@@ -143,7 +143,7 @@ export default function VerifyNIN() {
           { key: "phone", label: "Phone", icon: Phone },
           { key: "demographic", label: "Demographic", icon: UserSearch },
         ].map((m) => (
-          <button key={m.key} type="button" onClick={() => setMethod(m.key)} className={`p-6 rounded-[2rem] transition border text-left ${method === m.key ? "bg-blue-600 text-white border-blue-600 shadow-xl" : "bg-white dark:bg-[#111827] border-gray-200"}`}>
+          <button key={m.key} type="button" onClick={() => setMethod(m.key)} className={`p-6 rounded-[2rem] transition border text-left ${method === m.key ? "bg-blue-600 text-white border-blue-600 shadow-xl" : "bg-white dark:bg-slate-900 border-gray-200"}`}>
             <m.icon size={28} className={method === m.key ? "text-white" : "text-blue-600"} />
             <h2 className="font-bold mt-4">{m.label}</h2>
           </button>
@@ -151,7 +151,7 @@ export default function VerifyNIN() {
       </div>
 
       {/* Dynamic Form */}
-      <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border p-8">
+      <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl border p-8">
         <AnimatePresence mode="wait">
           {method === "nin" && (
             <div className="relative mb-4">

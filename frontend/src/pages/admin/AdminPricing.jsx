@@ -234,7 +234,7 @@ export default function AdminPricing() {
             <select
               value={mode}
               onChange={(e) => setMode(e.target.value)}
-              className="w-full border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#101010] dark:text-white p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition"
+              className="w-full border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-slate-900 dark:text-slate-100 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition"
             >
               <option value="bundle">Bundle Mode (Bulk Account Rate Matrix)</option>
               <option value="single">Single Mode (Individual Hits Extraction)</option>
@@ -367,7 +367,7 @@ export default function AdminPricing() {
 
 function PricingCard({ title, subtitle, icon, children }) {
   return (
-    <div className="bg-white dark:bg-[#121212] rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden transition">
+    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden transition">
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
         <div className="flex items-center gap-4">
           <div className="bg-white/20 p-3.5 rounded-2xl">{icon}</div>
@@ -392,7 +392,7 @@ function Input({ label, value, set }) {
           type="number"
           value={value ?? ""}
           onChange={(e) => set(e.target.value)}
-          className="w-full border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616] dark:text-white rounded-xl p-3.5 pl-11 outline-none focus:ring-2 focus:ring-blue-500 transition font-medium"
+          className="w-full border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-slate-900 dark:text-slate-100 rounded-xl p-3.5 pl-11 outline-none focus:ring-2 focus:ring-blue-500 transition font-medium"
         />
       </div>
     </div>

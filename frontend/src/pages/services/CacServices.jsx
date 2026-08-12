@@ -148,7 +148,7 @@ export default function CacServices() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#020617] text-gray-900 dark:text-gray-100 p-6 md:p-12">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-6 md:p-12">
       <div className="max-w-6xl mx-auto space-y-10">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>

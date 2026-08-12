@@ -55,7 +55,7 @@ export default function Maintenance() {
           <Loader2 className="animate-spin" size={32} />
         </div>
       ) : (
-        <div className="bg-white dark:bg-[#161616] p-8 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800">
           
           {/* TOGGLE */}
           <div className="flex items-center justify-between mb-8">

@@ -79,8 +79,7 @@ export default function IPEClearance() {
             {services.map((s) => (
               <button
                 key={s.key}
-                onClick={() => setSelectedType(s.key)}
-                className={`text-left rounded-3xl border-2 p-6 transition-all ${selectedType === s.key ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "bg-white dark:bg-[#111827] border-transparent shadow-sm"}`}
+                className={`text-left rounded-3xl border-2 p-6 transition-all ${selectedType === s.key ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "bg-white dark:bg-slate-900 border-transparent shadow-sm"}`}
               >
                 <div className="text-blue-600 mb-2">{s.icon}</div>
                 <h2 className="font-bold text-lg dark:text-white">{s.label}</h2>
@@ -90,9 +89,9 @@ export default function IPEClearance() {
             ))}
           </div>
 
-          <div className="bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-sm border">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border">
             <input 
-              className="w-full p-4 rounded-2xl border bg-gray-50 dark:bg-[#0B1120] dark:text-white outline-none focus:ring-2 focus:ring-blue-500" 
+              className="w-full p-4 rounded-2xl border bg-gray-50 dark:bg-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter 11-digit NIN" 
               value={nin} 
               onChange={(e) => setNin(e.target.value.replace(/\D/g, '').slice(0, 11))} 
@@ -100,7 +99,7 @@ export default function IPEClearance() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-[#111827] p-8 rounded-[2rem] shadow-xl h-fit sticky top-6 border">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl h-fit sticky top-6 border">
           <h3 className="font-bold text-xl mb-6 dark:text-white flex items-center gap-2">
             <Wallet className="text-blue-600" /> Payment Summary
           </h3>
