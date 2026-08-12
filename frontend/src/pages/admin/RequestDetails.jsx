@@ -181,7 +181,17 @@ export default function RequestDetails({
                 Comment/Resolution Note
                 {modalStatus === 'rejected' && <span className="text-red-600 ml-1">*Required for rejection</span>}
               </label>
-              <textarea value={modalComment} onChange={(e) => setModalComment(e.target.value)} placeholder={modalStatus === 'rejected' ? "Explain why this request was rejected..." : "Add a resolution note or comment..."} className="w-full p-3 rounded-xl border border-blue-300 mt-2 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+              <textarea
+                value={modalComment}
+                onChange={(e) => setModalComment(e.target.value)}
+                onKeyDown={(e) => {
+                  // Prevent parent/document key handlers from stealing focus while typing in the textarea
+                  e.stopPropagation();
+                  if (e.nativeEvent && e.nativeEvent.stopImmediatePropagation) e.nativeEvent.stopImmediatePropagation();
+                }}
+                placeholder={modalStatus === 'rejected' ? "Explain why this request was rejected..." : "Add a resolution note or comment..."}
+                className="w-full p-3 rounded-xl border border-blue-300 mt-2 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
             </div>
 
             <div className="flex gap-2 pt-2">
