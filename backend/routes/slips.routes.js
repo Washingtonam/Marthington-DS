@@ -97,14 +97,14 @@ function generateDataHTML(data) {
   <div style="padding:25px 40px;">
 
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <img src="https://github.com/Washingtonam/Marthington-DS/blob/main/frontend/public/assets/coat.png" width="55"/>
+      <img src="https://ds.marthington.com.ng/assets/coat.png" width="55"/>
       
       <div style="text-align:center;">
         <div style="font-size:22px; color:#666;">Federal Republic of Nigeria</div>
         <div style="font-size:22px; font-weight:bold;">Verified NIN Details</div>
       </div>
 
-      <img src="https://github.com/Washingtonam/Marthington-DS/blob/main/frontend/public/assets/nimc-logo.png" width="70"/>
+      <img src="https://ds.marthington.com.ng/assets/nimc-logo.png" width="70"/>
     </div>
 
     <div style="display:flex; margin-top:20px;">
@@ -190,7 +190,7 @@ async function generatePremiumSlipHTML(data) {
       }
 
       .front {
-        background: url('https://github.com/Washingtonam/Marthington-DS/blob/main/frontend/public/assets/premium-bg.png') no-repeat center/cover;
+        background: url('https://ds.marthington.com.ng/assets/premium-bg.png') no-repeat center/cover;
       }
 
       .back {
@@ -453,7 +453,7 @@ function generateLongHTML(data) {
       padding-bottom:6px;
     ">
 
-      <img src="https://github.com/Washingtonam/Marthington-DS/blob/main/frontend/public/assets/coat.png" style="width:55px"/>
+      <img src="https://ds.marthington.com.ng/assets/coat.png" style="width:55px"/>
 
       <div style="text-align:center;">
         <div style="font-size:20px; font-weight:700;">
@@ -467,7 +467,7 @@ function generateLongHTML(data) {
         </div>
       </div>
 
-      <img src="https://github.com/Washingtonam/Marthington-DS/blob/main/frontend/public/assets/nimc-logo.png" style="width:75px"/>
+      <img src="https://ds.marthington.com.ng/assets/nimc-logo.png" style="width:75px"/>
     </div>
 
     <!-- ================= MAIN GRID ================= -->
@@ -587,23 +587,23 @@ function generateLongHTML(data) {
       <tr>
 
         <td style="border:2px solid #000; text-align:center; padding:8px;">
-          <img src="https://github.com/Washingtonam/Marthington-DS/blob/main/frontend/public/assets/icon-email.png" width="22"/><br/>
+          <img src="https://ds.marthington.com.ng/assets/icon-email.png" width="22"/><br/>
           helpdesk@nimc.gov.ng
         </td>
 
         <td style="border:2px solid #000; text-align:center; padding:8px;">
-          <img src="https://github.com/Washingtonam/Marthington-DS/blob/main/frontend/public/assets/icon-web.png" width="22"/><br/>
+          <img src="https://ds.marthington.com.ng/assets/icon-web.png" width="22"/><br/>
           www.nimc.gov.ng
         </td>
 
         <td style="border:2px solid #000; text-align:center; padding:8px;">
-          <img src="https://github.com/Washingtonam/Marthington-DS/blob/main/frontend/public/assets/icon-phone.png" width="22"/><br/>
+          <img src="https://ds.marthington.com.ng/assets/icon-phone.png" width="22"/><br/>
           0700-CALL NIMC<br/>
           (0700-2255-6462)
         </td>
 
         <td style="border:2px solid #000; text-align:center; padding:8px;">
-          <img src="https://github.com/Washingtonam/Marthington-DS/blob/main/frontend/public/assets/icon-location.png" width="22"/><br/>
+          <img src="https://ds.marthington.com.ng/assets/icon-location.png" width="22"/><br/>
           National Identity Management Commission<br/>
           11, Sokode Crescent,<br/>
           Zone 5 Wuse, Abuja Nigeria
