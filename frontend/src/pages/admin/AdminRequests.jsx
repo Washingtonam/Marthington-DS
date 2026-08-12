@@ -401,9 +401,9 @@ export default function AdminRequests() {
         </div>
       ) : (
         viewMode === 'table' ? (
-          <div className="overflow-auto bg-white rounded-2xl border">
+          <div className="overflow-auto bg-white dark:bg-slate-900 rounded-2xl border dark:border-slate-800">
             {selectedIds.size > 0 && (
-              <div className="p-3 bg-slate-50 border-b flex items-center justify-between">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <div>{selectedIds.size} selected</div>
                 <div className="flex gap-2">
                   <button onClick={() => performBulkAction('approve')} className="px-3 py-2 rounded-xl bg-emerald-600 text-white">Bulk Approve</button>
@@ -412,8 +412,8 @@ export default function AdminRequests() {
                 </div>
               </div>
             )}
-            <table className="min-w-full text-sm">
-              <thead className="text-xs text-slate-500 uppercase bg-slate-100">
+            <table className="min-w-full text-sm text-slate-900 dark:text-slate-100">
+              <thead className="text-xs text-slate-500 uppercase bg-slate-100 dark:bg-slate-800 dark:text-slate-300">
                 <tr>
                   <th className="p-3"><input type="checkbox" onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }} checked={selectedIds.size > 0 && selectedIds.size === displayedRequests.length} /></th>
                   <th className="p-3 cursor-pointer" onClick={() => { setSortBy('createdAt'); setOrder(order === 'asc' ? 'desc' : 'asc'); fetchRequests(1); }}>Created</th>
@@ -428,7 +428,7 @@ export default function AdminRequests() {
               </thead>
               <tbody>
                 {displayedRequests.map((r) => (
-                  <tr key={r._id} className="border-b">
+                  <tr key={r._id} className="border-b border-slate-200 dark:border-slate-700">
                     <td className="p-3"><input type="checkbox" checked={selectedIds.has(r._id)} onChange={() => toggleSelect(r._id)} /></td>
                     <td className="p-3">{formatDateShort(r.createdAt)}</td>
                     <td className="p-3">{r.userId?.email || '-'}</td>

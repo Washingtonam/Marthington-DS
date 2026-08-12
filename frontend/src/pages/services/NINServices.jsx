@@ -41,13 +41,13 @@ export default function NINServices() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {serviceList.map((svc) => (
-          <motion.div key={svc.id} whileHover={{ y: -5 }} className="bg-white p-6 rounded-[2rem] shadow-lg border border-gray-100 flex flex-col">
+          <motion.div key={svc.id} whileHover={{ y: -5 }} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-6 rounded-[2rem] shadow-lg border border-gray-100 dark:border-slate-800 flex flex-col">
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-5 text-white ${svc.color} relative`}>
               {svc.icon}
               {svc.badge && <span className="absolute -top-1 -right-1 text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">{svc.badge}</span>}
             </div>
             <h2 className="text-xl font-bold mb-2">{svc.title}</h2>
-            <p className="text-gray-500 text-xs mb-6 flex-grow">{svc.desc}</p>
+            <p className="text-gray-600 dark:text-slate-300 text-xs mb-6 flex-grow">{svc.desc}</p>
             
             <button onClick={() => navigate(svc.route)} className="w-full bg-slate-900 text-white py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-blue-800 transition">
               Launch Service <ArrowRight size={16} />
