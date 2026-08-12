@@ -41,6 +41,10 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
   const [totalUserCount, setTotalUserCount] = useState(0);
+  const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
   // Modal states
   const [selectedUser, setSelectedUser] = useState(null);
@@ -62,6 +66,8 @@ export default function AdminUsers() {
       if (search.trim()) {
         params.search = search.trim();
       }
+      if (roleFilter) params.role = roleFilter;
+      if (statusFilter) params.status = statusFilter;
 
       const response = await api.get("/api/admin/users", { params });
       setUsers(response.data.data || []);
@@ -114,6 +120,12 @@ export default function AdminUsers() {
   }, [searchQuery]);
 
   useEffect(() => {
+    // refetch when filters change
+    setPage(1);
+    fetchUsers(1, currentSearch);
+  }, [roleFilter, statusFilter]);
+
+  useEffect(() => {
     if (page !== 1) {
       fetchUsers(page, currentSearch);
     }
@@ -121,6 +133,116 @@ export default function AdminUsers() {
 
   const handleSearch = () => {
     setSearchQuery(searchTerm.trim());
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+  };
+
+  const selectAllVisible = () => {
+    const ids = sortedAndFilteredUsers.map((u) => u._id);
+    setSelectedIds(new Set(ids));
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const exportSelectedCsv = () => {
+    const rows = (sortedAndFilteredUsers.filter((u) => selectedIds.size === 0 || selectedIds.has(u._id))).map((u) => ({
+      email: u.email,
+      firstName: u.firstName || u.firstname || "",
+      lastName: u.lastName || u.lastname || "",
+      role: u.role || "user",
+      status: u.status || "active",
+      balance: ((u.walletBalanceKobo || 0) / 100).toFixed(2),
+      registeredAt: u.createdAt ? new Date(u.createdAt).toISOString() : "",
+      lastLogin: u.lastLoginAt || u.lastLogin || u.lastSeen || "",
+    }));
+
+    if (rows.length === 0) {
+      setMessage({ type: "error", text: "No users selected or visible to export." });
+      setTimeout(() => setMessage({ type: "", text: "" }), 3000);
+      return;
+    }
+
+    const header = Object.keys(rows[0]).join(",");
+    const csv = [header]
+      .concat(rows.map((r) => Object.values(r).map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `users_export_${new Date().toISOString()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const performBulkAction = async (action) => {
+    if (selectedIds.size === 0) {
+      setMessage({ type: "error", text: "No users selected." });
+      setTimeout(() => setMessage({ type: "", text: "" }), 3000);
+      return;
+    }
+
+    if (action === "delete" && !window.confirm("Delete selected users? This action cannot be undone.")) return;
+
+    const ids = Array.from(selectedIds);
+    setLoading(true);
+    try {
+      // For large selections use background job
+      if (ids.length > 50) {
+        const resp = await api.post("/api/admin/users/bulk-job", { ids, action });
+        const jobId = resp.data?.jobId;
+        setMessage({ type: "info", text: `Background job started (ID: ${jobId}). Monitoring progress...` });
+
+        // poll job status
+        let intervalId;
+        const poll = async () => {
+          try {
+            const r = await api.get(`/api/admin/users/bulk-job/${jobId}`);
+            const job = r.data?.data;
+            if (job) {
+              setMessage({ type: job.status === 'failed' ? 'error' : 'info', text: `Job ${job.status}: ${job.processed || 0}/${job.total || 0}` });
+              if (job.status === 'completed' || job.status === 'failed') {
+                clearInterval(intervalId);
+                clearSelection();
+                await fetchUsers(page, currentSearch);
+                await fetchStats();
+                setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+              }
+            }
+          } catch (pe) {
+            console.error('Job poll error', pe);
+          }
+        };
+
+        intervalId = setInterval(poll, 2000);
+        // initial immediate poll
+        await poll();
+      } else {
+        const response = await api.post("/api/admin/users/bulk", { ids, action });
+        setMessage({ type: "success", text: response.data?.message || `Bulk ${action} completed.` });
+        setTimeout(() => setMessage({ type: "", text: "" }), 3000);
+        clearSelection();
+        await fetchUsers(page, currentSearch);
+        await fetchStats();
+      }
+    } catch (err) {
+      console.error("Bulk action error:", err);
+      const errMsg = err.response?.data?.message || "Bulk action failed.";
+      setMessage({ type: "error", text: errMsg });
+      setTimeout(() => setMessage({ type: "", text: "" }), 4000);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredUsers = useMemo(() => {
@@ -181,6 +303,10 @@ export default function AdminUsers() {
         setShowFundModal(false);
         setFundAmount("");
         setFundNote("");
+
+        // show a success message in the top alert and auto-clear it
+        setMessage({ type: "success", text: "User account funded successfully!" });
+        setTimeout(() => setMessage({ type: "", text: "" }), 4000);
 
         await fetchStats();
       } else {
@@ -405,6 +531,39 @@ export default function AdminUsers() {
             <option value="balance">Highest Balance</option>
             <option value="alphabetical">Name</option>
           </select>
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="ml-3 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white text-sm"
+          >
+            <option value="">All roles</option>
+            <option value="super_admin">Super Admin</option>
+            <option value="admin">Admin</option>
+            <option value="user">User</option>
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="ml-3 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white text-sm"
+          >
+            <option value="">All status</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+          </select>
+          <div className="ml-3 flex items-center gap-2">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`px-3 py-2 rounded-lg text-sm ${viewMode === "grid" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-300"}`}
+            >
+              Grid
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`px-3 py-2 rounded-lg text-sm ${viewMode === "list" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-300"}`}
+            >
+              List
+            </button>
+          </div>
         </div>
       </div>
 
@@ -419,119 +578,187 @@ export default function AdminUsers() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
-            {sortedAndFilteredUsers.map((u) => (
-              <div
-                key={u._id}
-                className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition"
-              >
-                {/* User Header */}
-                <div className="mb-4">
-                  <p className="text-sm text-slate-400 mb-1">Email</p>
-                  <p className="text-white font-semibold break-words">{u.email}</p>
-                </div>
+          {viewMode === "grid" ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+              {sortedAndFilteredUsers.map((u) => (
+                <div
+                  key={u._id}
+                  className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition"
+                >
+                  {/* User Header */}
+                  <div className="mb-4 flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-semibold">{(u.firstName || u.firstname || u.email || "").charAt(0).toUpperCase()}</div>
+                      <div>
+                        <p className="text-sm text-slate-400 mb-1">Email</p>
+                        <p className="text-white font-semibold break-words">{u.email}</p>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(u._id)}
+                        onChange={() => toggleSelect(u._id)}
+                        className="w-4 h-4 mt-1"
+                      />
+                    </div>
+                  </div>
 
-                {/* Role and Status Badges */}
-                <div className="flex gap-2 mb-4">
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      u.role === "super_admin"
-                        ? "bg-red-600/30 text-red-200"
-                        : u.role === "admin"
-                        ? "bg-purple-600/30 text-purple-200"
-                        : "bg-blue-600/30 text-blue-200"
-                    }`}
-                  >
-                    {u.role || "user"}
-                  </span>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      u.status === "active"
-                        ? "bg-green-600/30 text-green-200"
-                        : "bg-orange-600/30 text-orange-200"
-                    }`}
-                  >
-                    {u.status || "active"}
-                  </span>
-                </div>
-
-                {/* Balance */}
-                <div className="mb-6 p-3 bg-slate-900/50 rounded-lg">
-                  <p className="text-xs text-slate-400 mb-1">Wallet Balance</p>
-                  <p className="text-xl font-bold text-green-400">
-                    ₦{(u.walletBalanceKobo / 100 || 0).toLocaleString("en-NG", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="space-y-2">
-                  <button onClick={() => navigate(`/admin/user/${u._id}/details`)} className="w-full px-3 py-2 bg-slate-700/30 hover:bg-slate-700/50 text-white rounded-lg text-sm font-medium transition">View Details</button>
-                  {/* Fund Adjustment */}
-                  <button
-                    onClick={() => openFundModal(u)}
-                    className="w-full px-3 py-2 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
-                  >
-                    <Plus size={16} />
-                    Add/Remove Funds
-                  </button>
-
-                  {/* Suspend/Activate */}
-                  {u.status === "active" ? (
-                    <button
-                      onClick={() => handleSuspend(u._id)}
-                      className="w-full px-3 py-2 bg-orange-600/30 hover:bg-orange-600/50 text-orange-200 rounded-lg text-sm font-medium transition"
+                  {/* Role and Status Badges */}
+                  <div className="flex gap-2 mb-4">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        u.role === "super_admin"
+                          ? "bg-red-600/30 text-red-200"
+                          : u.role === "admin"
+                          ? "bg-purple-600/30 text-purple-200"
+                          : "bg-blue-600/30 text-blue-200"
+                      }`}
                     >
-                      Suspend
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleActivate(u._id)}
-                      className="w-full px-3 py-2 bg-green-600/30 hover:bg-green-600/50 text-green-200 rounded-lg text-sm font-medium transition"
+                      {u.role || "user"}
+                    </span>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        u.status === "active"
+                          ? "bg-green-600/30 text-green-200"
+                          : "bg-orange-600/30 text-orange-200"
+                      }`}
                     >
-                      Activate
-                    </button>
-                  )}
+                      {u.status || "active"}
+                    </span>
+                  </div>
 
-                  {/* Role Management (Super Admin Only) */}
-                  {isSuperAdmin && u.role !== "super_admin" && (
-                    <>
-                      {u.role !== "admin" ? (
-                        <button
-                          onClick={() => handlePromote(u._id)}
-                          className="w-full px-3 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
-                        >
-                          <Shield size={16} />
-                          Make Admin
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleDemote(u._id)}
-                          className="w-full px-3 py-2 bg-slate-600/30 hover:bg-slate-600/50 text-slate-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
-                        >
-                          <ShieldOff size={16} />
-                          Remove Admin
-                        </button>
-                      )}
-                    </>
-                  )}
+                  <div className="text-xs text-slate-400 mt-3">
+                    <div>Registered: {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</div>
+                    <div>Last login: { (u.lastLoginAt || u.lastLogin || u.lastSeen) ? new Date(u.lastLoginAt || u.lastLogin || u.lastSeen).toLocaleString() : '—' }</div>
+                  </div>
 
-                  {/* Delete User (Super Admin Only) */}
-                  {isSuperAdmin && u.role !== "super_admin" && (
+                  {/* Balance */}
+                  <div className="mb-6 p-3 bg-slate-900/50 rounded-lg">
+                    <p className="text-xs text-slate-400 mb-1">Wallet Balance</p>
+                    <p className="text-xl font-bold text-green-400">
+                      ₦{(u.walletBalanceKobo / 100 || 0).toLocaleString("en-NG", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-2">
+                    <button onClick={() => navigate(`/admin/user/${u._id}/details`)} className="w-full px-3 py-2 bg-slate-700/30 hover:bg-slate-700/50 text-white rounded-lg text-sm font-medium transition">View Details</button>
+                    {/* Fund Adjustment */}
                     <button
-                      onClick={() => handleDelete(u._id)}
-                      className="w-full px-3 py-2 bg-red-600/30 hover:bg-red-600/50 text-red-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+                      onClick={() => openFundModal(u)}
+                      className="w-full px-3 py-2 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
                     >
-                      <Trash2 size={16} />
-                      Delete
+                      <Plus size={16} />
+                      Add/Remove Funds
                     </button>
-                  )}
+
+                    {/* Suspend/Activate */}
+                    {u.status === "active" ? (
+                      <button
+                        onClick={() => handleSuspend(u._id)}
+                        className="w-full px-3 py-2 bg-orange-600/30 hover:bg-orange-600/50 text-orange-200 rounded-lg text-sm font-medium transition"
+                      >
+                        Suspend
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleActivate(u._id)}
+                        className="w-full px-3 py-2 bg-green-600/30 hover:bg-green-600/50 text-green-200 rounded-lg text-sm font-medium transition"
+                      >
+                        Activate
+                      </button>
+                    )}
+
+                    {/* Role Management (Super Admin Only) */}
+                    {isSuperAdmin && u.role !== "super_admin" && (
+                      <>
+                        {u.role !== "admin" ? (
+                          <button
+                            onClick={() => handlePromote(u._id)}
+                            className="w-full px-3 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+                          >
+                            <Shield size={16} />
+                            Make Admin
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleDemote(u._id)}
+                            className="w-full px-3 py-2 bg-slate-600/30 hover:bg-slate-600/50 text-slate-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+                          >
+                            <ShieldOff size={16} />
+                            Remove Admin
+                          </button>
+                        )}
+                      </>
+                    )}
+
+                    {/* Delete User (Super Admin Only) */}
+                    {isSuperAdmin && u.role !== "super_admin" && (
+                      <button
+                        onClick={() => handleDelete(u._id)}
+                        className="w-full px-3 py-2 bg-red-600/30 hover:bg-red-600/50 text-red-200 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+                      >
+                        <Trash2 size={16} />
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mb-8 overflow-x-auto bg-slate-900/40 rounded-lg p-4">
+              <table className="min-w-full text-left text-sm">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={sortedAndFilteredUsers.length > 0 && selectedIds.size === sortedAndFilteredUsers.length}
+                        onChange={(e) => (e.target.checked ? selectAllVisible() : clearSelection())}
+                        className="w-4 h-4"
+                      />
+                    </th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Balance</th>
+                    <th className="px-4 py-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {sortedAndFilteredUsers.map((u) => (
+                    <tr key={u._id} className="hover:bg-slate-800/30">
+                      <td className="px-4 py-3 align-top text-slate-200">
+                        <input type="checkbox" checked={selectedIds.has(u._id)} onChange={() => toggleSelect(u._id)} className="w-4 h-4" />
+                      </td>
+                      <td className="px-4 py-3 align-top text-slate-200">{u.email}</td>
+                      <td className="px-4 py-3 align-top text-slate-300">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white font-medium">{(u.firstName || u.firstname || u.email || "").charAt(0).toUpperCase()}</div>
+                          <div>{`${u.firstName || u.firstname || ""} ${u.lastName || ""}`}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-top text-slate-200">{u.role || "user"}</td>
+                      <td className="px-4 py-3 align-top text-slate-200">{u.status || "active"}</td>
+                      <td className="px-4 py-3 align-top text-right font-semibold text-green-400">₦{(u.walletBalanceKobo / 100 || 0).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="flex gap-2">
+                          <button onClick={() => navigate(`/admin/user/${u._id}/details`)} className="px-3 py-1 bg-slate-700/30 rounded-md text-sm text-white">Details</button>
+                          <button onClick={() => openFundModal(u)} className="px-3 py-1 bg-emerald-600/30 rounded-md text-sm text-emerald-200">Fund</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {activityModalOpen && (
             <div className="fixed inset-0 z-50 flex items-start justify-center p-6 bg-black/50">
               <div className="w-full max-w-4xl bg-slate-950 rounded-3xl border border-slate-700 shadow-2xl overflow-hidden">
@@ -592,24 +819,34 @@ export default function AdminUsers() {
 
           {/* Pagination */}
           <div className="flex items-center justify-between">
-            <div className="text-slate-400 text-sm">
-              Showing {users.length} of {totalUserCount} users (Page {page} of {totalPages})
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => fetchUsers(page - 1, currentSearch)}
-                disabled={page <= 1 || loading}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg transition"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => fetchUsers(page + 1, currentSearch)}
-                disabled={page >= totalPages || loading}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg transition"
-              >
-                Next
-              </button>
+            <div className="text-slate-400 text-sm">Showing {users.length} of {totalUserCount} users (Page {page} of {totalPages})</div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button onClick={() => selectAllVisible()} className="px-3 py-1 bg-slate-700 rounded text-sm text-white">Select All</button>
+                <button onClick={() => clearSelection()} className="px-3 py-1 bg-slate-700 rounded text-sm text-white">Clear</button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => performBulkAction('suspend')} className="px-3 py-1 bg-orange-600 rounded text-sm text-white">Suspend Selected</button>
+                <button onClick={() => performBulkAction('activate')} className="px-3 py-1 bg-green-600 rounded text-sm text-white">Activate Selected</button>
+                <button onClick={() => performBulkAction('delete')} className="px-3 py-1 bg-red-600 rounded text-sm text-white">Delete Selected</button>
+                <button onClick={exportSelectedCsv} className="px-3 py-1 bg-blue-600 rounded text-sm text-white">Export CSV</button>
+              </div>
+              <div>
+                <button
+                  onClick={() => fetchUsers(page - 1, currentSearch)}
+                  disabled={page <= 1 || loading}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg transition"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => fetchUsers(page + 1, currentSearch)}
+                  disabled={page >= totalPages || loading}
+                  className="ml-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg transition"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </>

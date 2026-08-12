@@ -6,6 +6,7 @@ const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
 const Pricing = require("../models/Pricing.model");
+const BulkJob = require("../models/BulkJob.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
 const { normalizeServiceType } = require("../config/serviceTypes");
 const { awardCommissionIfEligible } = require("../services/commission.service");
@@ -832,7 +833,7 @@ router.post("/payments/:id/reject", isAdmin, async (req, res) => {
 // 👥 PAGINATED USERS REGISTRY DIRECTORY
 router.get("/users", isSuperAdmin, async (req, res) => {
   try {
-    let { page = 1, limit = 20, search = "" } = req.query;
+    let { page = 1, limit = 20, search = "", role = "", status = "" } = req.query;
     page = Math.max(1, parseInt(page));
     limit = Math.max(1, parseInt(limit));
 
@@ -846,6 +847,16 @@ router.get("/users", isSuperAdmin, async (req, res) => {
           ]
         }
       : {};
+
+    // Role & status filters
+    const roleTerm = String(role || "").trim();
+    const statusTerm = String(status || "").trim();
+    if (roleTerm) {
+      query.role = roleTerm;
+    }
+    if (statusTerm) {
+      query.status = statusTerm;
+    }
 
     const total = await User.countDocuments(query);
     const users = await User.find(query)
@@ -862,6 +873,54 @@ router.get("/users", isSuperAdmin, async (req, res) => {
   } catch (err) {
     console.error("FETCH USERS ERROR:", err);
     res.status(500).json({ message: "Error mapping client network infrastructure logs." });
+  }
+});
+
+// Server-side CSV export for large datasets (streaming)
+router.get('/users/export', isSuperAdmin, async (req, res) => {
+  try {
+    let { search = '', role = '', status = '' } = req.query;
+    const query = search
+      ? {
+          $or: [
+            { email: { $regex: String(search), $options: 'i' } },
+            { firstName: { $regex: String(search), $options: 'i' } },
+            { lastName: { $regex: String(search), $options: 'i' } },
+            { phoneNumber: { $regex: String(search), $options: 'i' } }
+          ]
+        }
+      : {};
+    if (role) query.role = String(role).trim();
+    if (status) query.status = String(status).trim();
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="users_export_${Date.now()}.csv"`);
+
+    // write header
+    res.write('email,firstName,lastName,role,status,balance,registeredAt,lastLogin\n');
+
+    const cursor = User.find(query).select('-password').lean().cursor();
+    for await (const u of cursor) {
+      const row = [
+        u.email || '',
+        u.firstName || u.firstname || '',
+        u.lastName || u.lastname || '',
+        u.role || '',
+        u.status || '',
+        ((u.walletBalanceKobo || 0) / 100).toFixed(2),
+        u.createdAt ? new Date(u.createdAt).toISOString() : '',
+        (u.lastLoginAt || u.lastLogin || u.lastSeen) || ''
+      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',') + '\n';
+      if (!res.write(row)) {
+        // backpressure
+        await new Promise((resolve) => res.once('drain', resolve));
+      }
+    }
+
+    res.end();
+  } catch (err) {
+    console.error('EXPORT USERS ERROR:', err);
+    if (!res.headersSent) res.status(500).json({ message: 'Failed to export users' });
   }
 });
 
@@ -1131,6 +1190,134 @@ router.post("/user/:id/units", isSuperAdmin, async (req, res) => {
   } catch (err) {
     console.error("UNITS ERROR:", err);
     res.status(500).json({ message: "Error mutating targeted allocation balance value arrays" });
+  }
+});
+
+// =========================================================================
+// 🚀 Bulk user actions (suspend / activate / delete) - server-side batch
+// Requires super admin privileges. Excludes users with role 'super_admin'.
+// Body: { ids: ["id1","id2"], action: 'suspend' | 'activate' | 'delete' }
+// =========================================================================
+router.post("/users/bulk", isSuperAdmin, async (req, res) => {
+  try {
+    const { ids, action } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "ids array is required" });
+    }
+    if (!["suspend", "activate", "delete"].includes(action)) {
+      return res.status(400).json({ message: "action must be one of: suspend, activate, delete" });
+    }
+
+    // Load users and filter out super_admins
+    const targetUsers = await User.find({ _id: { $in: ids } }).select("_id role").lean();
+    const eligibleIds = targetUsers.filter((u) => u.role !== "super_admin").map((u) => u._id.toString());
+
+    if (eligibleIds.length === 0) {
+      return res.status(400).json({ message: "No eligible users to modify" });
+    }
+
+    if (action === "suspend") {
+      const result = await User.updateMany({ _id: { $in: eligibleIds } }, { $set: { status: "suspended" } });
+      return res.json({ message: "Bulk suspend completed", modified: result.modifiedCount || result.nModified || 0 });
+    }
+
+    if (action === "activate") {
+      const result = await User.updateMany({ _id: { $in: eligibleIds } }, { $set: { status: "active" } });
+      return res.json({ message: "Bulk activate completed", modified: result.modifiedCount || result.nModified || 0 });
+    }
+
+    if (action === "delete") {
+      // Remove transactions first, then users
+      await Transaction.deleteMany({ userId: { $in: eligibleIds } });
+      const result = await User.deleteMany({ _id: { $in: eligibleIds } });
+      return res.json({ message: "Bulk delete completed", deleted: result.deletedCount || result.n || 0 });
+    }
+
+    res.status(400).json({ message: "Unhandled action" });
+  } catch (err) {
+    console.error("BULK USERS ACTION ERROR:", err);
+    res.status(500).json({ message: "Failed to perform bulk action" });
+  }
+});
+
+// =========================================================================
+// 🔁 Background bulk job creation and status
+// POST /users/bulk-job  -> { ids: [], action }
+// GET  /users/bulk-job/:id -> job status
+// =========================================================================
+router.post('/users/bulk-job', isSuperAdmin, async (req, res) => {
+  try {
+    const { ids, action } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: 'ids array required' });
+    if (!['suspend', 'activate', 'delete'].includes(action)) return res.status(400).json({ message: 'invalid action' });
+
+    const job = await BulkJob.create({ action, ids, total: ids.length, status: 'pending', createdBy: req.user._id });
+
+    // start worker asynchronously (don't await)
+    (async function processJob(jobId) {
+      try {
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'processing', startedAt: new Date() });
+        const j = await BulkJob.findById(jobId).lean();
+        const allIds = (j.ids || []).map((v) => v.toString());
+        const batchSize = 100;
+        let processed = 0;
+        const errors = [];
+
+        for (let i = 0; i < allIds.length; i += batchSize) {
+          const batch = allIds.slice(i, i + batchSize);
+          try {
+            // exclude super_admins within the batch
+            const users = await User.find({ _id: { $in: batch } }).select('_id role').lean();
+            const eligibleIds = users.filter((u) => u.role !== 'super_admin').map((u) => u._id);
+            if (eligibleIds.length === 0) {
+              processed += batch.length;
+              await BulkJob.findByIdAndUpdate(jobId, { processed, errors });
+              continue;
+            }
+
+            if (action === 'suspend') {
+              await User.updateMany({ _id: { $in: eligibleIds } }, { $set: { status: 'suspended' } });
+            } else if (action === 'activate') {
+              await User.updateMany({ _id: { $in: eligibleIds } }, { $set: { status: 'active' } });
+            } else if (action === 'delete') {
+              await Transaction.deleteMany({ userId: { $in: eligibleIds } });
+              await User.deleteMany({ _id: { $in: eligibleIds } });
+            }
+
+            processed += batch.length;
+            await BulkJob.findByIdAndUpdate(jobId, { processed, errors });
+          } catch (batchErr) {
+            console.error('BULK JOB BATCH ERROR:', batchErr);
+            errors.push(String(batchErr.message || batchErr));
+            processed += batch.length;
+            await BulkJob.findByIdAndUpdate(jobId, { processed, errors });
+          }
+        }
+
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'completed', processed: allIds.length, finishedAt: new Date(), errors });
+      } catch (procErr) {
+        console.error('BULK JOB PROCESS ERROR:', procErr);
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'failed', finishedAt: new Date(), $push: { errors: String(procErr.message || procErr) } });
+      }
+    })(job._id).catch((e) => console.error('JOB START ERROR:', e));
+
+    res.json({ message: 'Bulk job created', jobId: job._id });
+  } catch (err) {
+    console.error('CREATE BULK JOB ERROR:', err);
+    res.status(500).json({ message: 'Failed to create bulk job' });
+  }
+});
+
+router.get('/users/bulk-job/:id', isSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid job id' });
+    const job = await BulkJob.findById(id).lean();
+    if (!job) return res.status(404).json({ message: 'Job not found' });
+    res.json({ data: job });
+  } catch (err) {
+    console.error('GET BULK JOB ERROR:', err);
+    res.status(500).json({ message: 'Failed to fetch job' });
   }
 });
 
