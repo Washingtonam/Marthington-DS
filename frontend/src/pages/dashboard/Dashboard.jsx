@@ -23,6 +23,11 @@ import StatCard from "../../components/ui/StatCard";
 import PageHeader from "../../components/ui/PageHeader";
 import Button from "../../components/ui/Button";
 import ActionButton from "../../components/ui/ActionButton";
+import Card from "../../components/ui/Card";
+import Grid from "../../components/ui/Grid";
+import Section from "../../components/ui/Section";
+import Badge from "../../components/ui/Badge";
+import ActivityCard from "./ActivityCard";
 
 const FILTER_OPTIONS = ["All", "NIN", "CAC", "NIMC"];
 
@@ -159,12 +164,12 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-5 mb-10">
+      <Grid cols="4" gap="5" className="mb-10">
         <StatCard title="Total Requests" value={stats.total} icon={<FileText size={20} />} color="blue" />
         <StatCard title="Completed" value={stats.completed} icon={<ShieldCheck size={20} />} color="green" />
         <StatCard title="Pending" value={stats.pending} icon={<CreditCard size={20} />} color="red" />
         <StatCard title="Wallet Balance" value={formatNaira(walletBalanceLocal)} icon={<Wallet size={20} />} color="purple" />
-      </div>
+      </Grid>
 
       {/* Quick Actions Grid */}
       <motion.div
@@ -251,50 +256,22 @@ export default function Dashboard() {
                   ? "Failed"
                   : activity.status || "Unknown";
                 const statusBadge = statusLabel === "Completed"
-                  ? "bg-green-100 text-green-800"
+                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
                   : statusLabel === "Pending"
-                  ? "bg-yellow-100 text-yellow-800"
+                  ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
                   : statusLabel === "Processing"
-                  ? "bg-blue-100 text-blue-800"
-                  : "bg-red-100 text-red-800";
+                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
                 const statusIcon = statusLabel === "Completed" ? "✅" : statusLabel === "Pending" ? "⏳" : statusLabel === "Processing" ? "⚙️" : "❌";
-                const latestNote = latestUpdate?.note || activity.status || "No update yet";
 
                 return (
-                  <motion.div
+                  <ActivityCard
                     key={activity._id || activity.id}
-                    whileHover={{ x: 4 }}
-                    className="flex flex-col gap-4 p-4 rounded-2xl bg-slate-50/80 hover:bg-slate-100/80 transition-colors cursor-pointer dark:bg-slate-800/70 dark:hover:bg-slate-700/70"
-                    onClick={() => navigate(`/verify-result/${activity._id}`)}
-                  >
-                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                      <div className="min-w-0">
-                        <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate">{activity.service || activity.type || "Service Request"}</h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 truncate">{activity.nin ? `NIN: ${activity.nin}` : activity.serviceCategory || activity.category || "NIMC"}</p>
-                        <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                          <span>{statusIcon}</span>
-                          <span>{statusLabel}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{new Date(activity.createdAt || activity.updatedAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-2xl bg-white dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-700">
-                        <p className="text-xs text-slate-500">Amount</p>
-                        <p className="font-semibold mt-1">₦{Number(activity.amount || 0).toLocaleString()}</p>
-                      </div>
-                      <div className="rounded-2xl bg-white dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-700">
-                        <p className="text-xs text-slate-500">Pipeline</p>
-                        <p className="font-semibold mt-1">{activity.serviceCategory || activity.category || "NIMC"}</p>
-                      </div>
-                      <div className="rounded-2xl bg-white dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-700">
-                        <p className="text-xs text-slate-500">Latest Log</p>
-                        <p className="font-semibold mt-1 truncate">{latestNote}</p>
-                      </div>
-                    </div>
-                  </motion.div>
+                    activity={activity}
+                    statusLabel={statusLabel}
+                    statusBadgeColor={statusBadge}
+                    statusIcon={statusIcon}
+                  />
                 );
               })}
             </>
@@ -319,29 +296,30 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className="mt-10 grid md:grid-cols-3 gap-5"
       >
-        <StatCard
-          glassEffect
-          title="Success Rate"
-          value="98.5%"
-          icon={<TrendingUp size={20} className="text-blue-600" />}
-          subtitle="Last 30 days"
-        />
-        <StatCard
-          glassEffect
-          title="Avg Processing Time"
-          value="2.4h"
-          icon={<Clock size={20} className="text-blue-600" />}
-          subtitle="Per request"
-        />
-        <StatCard
-          glassEffect
-          title="Total Saved"
-          value={formatNaira(walletBalanceLocal * 0.02)}
-          icon={<TrendingUp size={20} className="text-blue-600" />}
-          subtitle="Promotional credits"
-        />
+        <Grid cols="3" gap="5" className="mt-10">
+          <StatCard
+            glassEffect
+            title="Success Rate"
+            value="98.5%"
+            icon={<TrendingUp size={20} className="text-blue-600" />}
+            subtitle="Last 30 days"
+          />
+          <StatCard
+            glassEffect
+            title="Avg Processing Time"
+            value="2.4h"
+            icon={<Clock size={20} className="text-blue-600" />}
+            subtitle="Per request"
+          />
+          <StatCard
+            glassEffect
+            title="Total Saved"
+            value={formatNaira(walletBalanceLocal * 0.02)}
+            icon={<TrendingUp size={20} className="text-blue-600" />}
+            subtitle="Promotional credits"
+          />
+        </Grid>
       </motion.div>
         </>
       )}
