@@ -2,9 +2,9 @@ import { Search, FileText, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import api from '../../../lib/axios';
+import api from '../../../../lib/axios';
 import { toast } from 'sonner';
-import Card from '../../../components/ui/Card';
+import Card from '../../../../components/ui/Card';
 
 /**
  * ToolsTab - Quick verification tools and NIN lookup
