@@ -46,7 +46,7 @@ const isSuperAdmin = (req, res, next) => {
 // Handles pagination, matching statuses (pending, approved, completed), and coordinates cross-model streams.
 router.get("/requests", isAdmin, async (req, res) => {
   try {
-    let { page = 1, limit = 20, status, category, serviceType, search, nin, userRole } = req.query;
+    let { page = 1, limit = 20, status, category, serviceType, search, nin, userRole, fromDate, toDate, minAmount, maxAmount, sortBy = 'createdAt', order = 'desc' } = req.query;
     page = Math.max(1, parseInt(page) || 1);
     limit = Math.max(1, Math.min(100, parseInt(limit) || 20));
 
@@ -83,19 +83,56 @@ router.get("/requests", isAdmin, async (req, res) => {
     }
 
     if (normalizedServiceType) {
-      const escapedType = escapeRegex(normalizedServiceType);
-      serviceQuery.$or = [
-        ...(serviceQuery.$or || []),
-        { service: { $regex: escapedType, $options: "i" } },
-        { type: { $regex: escapedType, $options: "i" } }
-      ];
-      cacQuery.serviceType = { $regex: escapedType, $options: "i" };
+      // support comma-separated multi-select values
+      const parts = String(serviceType || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        const ors = parts.map(p => ({ service: { $regex: escapeRegex(p), $options: 'i' } }));
+        serviceQuery.$or = [ ...(serviceQuery.$or || []), ...ors ];
+        cacQuery.$or = [ ...(cacQuery.$or || []), ...parts.map(p => ({ serviceType: { $regex: escapeRegex(p), $options: 'i' } })) ];
+      } else {
+        const escapedType = escapeRegex(normalizedServiceType);
+        serviceQuery.$or = [
+          ...(serviceQuery.$or || []),
+          { service: { $regex: escapedType, $options: "i" } },
+          { type: { $regex: escapedType, $options: "i" } }
+        ];
+        cacQuery.serviceType = { $regex: escapedType, $options: "i" };
+      }
     }
 
     if (ninTerm) {
       const escapedNin = escapeRegex(ninTerm);
       serviceQuery.nin = { $regex: escapedNin, $options: "i" };
       cacQuery.nin = { $regex: escapedNin, $options: "i" };
+    }
+
+    // Date range filter
+    if (fromDate || toDate) {
+      const gte = fromDate ? new Date(fromDate) : null;
+      const lte = toDate ? new Date(toDate) : null;
+      const dateRange = {};
+      if (gte && !isNaN(gte)) dateRange.$gte = gte;
+      if (lte && !isNaN(lte)) dateRange.$lte = lte;
+      if (Object.keys(dateRange).length > 0) {
+        serviceQuery.createdAt = dateRange;
+        cacQuery.createdAt = dateRange;
+      }
+    }
+
+    // Amount range filter
+    if (minAmount || maxAmount) {
+      const mn = minAmount ? Number(minAmount) : null;
+      const mx = maxAmount ? Number(maxAmount) : null;
+      const amtRange = {};
+      if (mn !== null && !isNaN(mn)) amtRange.$gte = mn;
+      if (mx !== null && !isNaN(mx)) amtRange.$lte = mx;
+      if (Object.keys(amtRange).length > 0) {
+        // apply to both amount and amountCharged by using $or in query
+        serviceQuery.$and = serviceQuery.$and || [];
+        serviceQuery.$and.push({ $or: [{ amount: amtRange }, { amountCharged: amtRange }] });
+        cacQuery.$and = cacQuery.$and || [];
+        cacQuery.$and.push({ $or: [{ amount: amtRange }, { amountCharged: amtRange }] });
+      }
     }
 
     if (searchTerm) {
@@ -130,37 +167,73 @@ router.get("/requests", isAdmin, async (req, res) => {
       }
     }
 
-    const [nimcRequests, cacRequests] = await Promise.all([
-      ServiceRequest.find(serviceQuery)
-        .populate("userId", "email firstName lastName phoneNumber role")
-        .lean(),
-      CACRequest.find(cacQuery)
-        .populate("userId", "email firstName lastName phoneNumber role")
-        .lean()
-    ]);
+    // ensure common indexes for performant queries (idempotent)
+    try {
+      ServiceRequest.collection.createIndex({ createdAt: -1 });
+      ServiceRequest.collection.createIndex({ status: 1 });
+      ServiceRequest.collection.createIndex({ serviceType: 1 });
+      ServiceRequest.collection.createIndex({ nin: 1 });
+      CACRequest.collection.createIndex({ createdAt: -1 });
+      CACRequest.collection.createIndex({ status: 1 });
+      CACRequest.collection.createIndex({ serviceType: 1 });
+      CACRequest.collection.createIndex({ nin: 1 });
+    } catch (idxErr) {
+      // non-fatal
+      console.warn('Index ensure skipped:', idxErr.message);
+    }
 
-    const normalizedNimc = nimcRequests.map((r) => ({ ...r, pipelineSource: "nimc" }));
-    const normalizedCac = cacRequests.map((r) => ({ ...r, pipelineSource: "cac" }));
+    // Use aggregation with $unionWith to avoid loading all documents into memory.
+    const serviceColl = ServiceRequest.collection.name;
+    const cacColl = CACRequest.collection.name;
+    const sortField = String(sortBy || 'createdAt');
+    const sortOrder = (String(order || 'desc').toLowerCase() === 'asc') ? 1 : -1;
 
-    const combinedCollection = [...normalizedNimc, ...normalizedCac].sort(
-      (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
-    );
+    const serviceMatch = serviceQuery;
+    const cacMatch = cacQuery;
 
-    const totalRecords = combinedCollection.length;
-    const totalPages = Math.ceil(totalRecords / limit);
     const startIndex = (page - 1) * limit;
-    const paginatedSlice = combinedCollection.slice(startIndex, startIndex + limit);
 
-    res.json({
-      success: true,
-      data: paginatedSlice,
-      pagination: {
-        total: totalRecords,
-        page,
-        pages: totalPages,
-        limit
+    const agg = [
+      { $match: serviceMatch },
+      { $addFields: { pipelineSource: 'nimc' } },
+      { $project: { __v: 0 } },
+      { $unionWith: { coll: cacColl, pipeline: [ { $match: cacMatch }, { $addFields: { pipelineSource: 'cac' } }, { $project: { __v: 0 } } ] } },
+      { $sort: { [sortField]: sortOrder } },
+      { $facet: {
+        data: [ { $skip: startIndex }, { $limit: limit } ],
+        meta: [ { $count: 'total' } ]
+      } }
+    ];
+
+    const aggResult = await ServiceRequest.aggregate(agg).allowDiskUse(true);
+    const pageData = (aggResult[0] && aggResult[0].data) || [];
+    const exactTotal = (aggResult[0] && aggResult[0].meta && aggResult[0].meta[0] && aggResult[0].meta[0].total) ? aggResult[0].meta[0].total : null;
+
+    let totalRecords;
+    if (exactTotal !== null) {
+      totalRecords = exactTotal;
+    } else {
+      // fallback to approximate counts if exact total not computed (large dataset)
+      try {
+        const [est1, est2] = await Promise.all([ServiceRequest.estimatedDocumentCount(), CACRequest.estimatedDocumentCount()]);
+        totalRecords = est1 + est2; // approximate
+      } catch (estErr) {
+        totalRecords = pageData.length; // best-effort
       }
-    });
+    }
+
+    // Populate user data for returned page items
+    const userIds = Array.from(new Set(pageData.map(d => d.userId).filter(Boolean).map(String)));
+    let users = [];
+    if (userIds.length > 0) {
+      users = await User.find({ _id: { $in: userIds } }).select('email firstName lastName phoneNumber role').lean();
+    }
+    const userMap = users.reduce((acc, u) => { acc[String(u._id)] = u; return acc; }, {});
+    const populated = pageData.map((d) => ({ ...d, userId: d.userId ? (userMap[String(d.userId)] || { _id: d.userId }) : null }));
+
+    const totalPages = Math.max(1, Math.ceil((totalRecords || populated.length) / limit));
+
+    res.json({ success: true, data: populated, pagination: { total: totalRecords, page, pages: totalPages, limit, approximate: exactTotal === null } });
   } catch (error) {
     console.error("🔥 CENTRAL PIPELINE REQUEST STREAM ERROR:", error);
     res.status(500).json({ success: false, message: "Failed to assemble systemic registration requests pipeline." });
@@ -921,6 +994,179 @@ router.get('/users/export', isSuperAdmin, async (req, res) => {
   } catch (err) {
     console.error('EXPORT USERS ERROR:', err);
     if (!res.headersSent) res.status(500).json({ message: 'Failed to export users' });
+  }
+});
+
+// =========================================================================
+// Requests: server-side CSV export (streaming)
+// =========================================================================
+router.get('/requests/export', isAdmin, async (req, res) => {
+  try {
+    let { search = '', category = '', serviceType = '', status = '', userRole = '', sortBy = 'createdAt', order = 'desc' } = req.query;
+
+    // build queries for both collections
+    const baseQuery = (isCAC) => {
+      const q = {};
+      if (status) q.status = status;
+      if (serviceType) q.serviceType = serviceType;
+      if (search) {
+        const esc = String(search).trim();
+        q.$or = [
+          { _id: { $regex: esc, $options: 'i' } },
+          { 'formData.nin': { $regex: esc, $options: 'i' } },
+          { nin: { $regex: esc, $options: 'i' } },
+          { service: { $regex: esc, $options: 'i' } },
+        ];
+      }
+      if (userRole && userRole !== 'all') {
+        // join via user role filter later by populating and filtering
+      }
+      return q;
+    };
+
+    // For predictable ordering we load both collections, normalize, sort, then stream.
+    const [nimcRequests, cacRequests] = await Promise.all([
+      ServiceRequest.find(baseQuery(false)).populate('userId', 'email role').lean(),
+      CACRequest.find(baseQuery(true)).populate('userId', 'email role').lean(),
+    ]);
+
+    const normalizedNimc = (nimcRequests || []).map((r) => ({ ...r, pipelineSource: 'nimc' }));
+    const normalizedCac = (cacRequests || []).map((r) => ({ ...r, pipelineSource: 'cac' }));
+    const combined = [...normalizedNimc, ...normalizedCac];
+
+    const sortField = String(sortBy || 'createdAt');
+    const sortOrder = (String(order || 'desc').toLowerCase() === 'asc') ? 1 : -1;
+    combined.sort((a, b) => {
+      const av = a[sortField];
+      const bv = b[sortField];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1 * sortOrder;
+      if (bv == null) return -1 * sortOrder;
+      if (sortField === 'createdAt' || sortField === 'amount' || sortField === 'amountCharged') {
+        return (new Date(av) - new Date(bv)) * sortOrder;
+      }
+      return String(av).localeCompare(String(bv)) * sortOrder;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="requests_export_${Date.now()}.csv"`);
+    res.write('id,email,service,amount,status,createdAt,category\n');
+
+    for (const r of combined) {
+      if (userRole && userRole !== 'all') {
+        if (!r.userId || String(r.userId.role) !== String(userRole)) continue;
+      }
+      const row = [r._id, r.userId?.email || '', r.service || r.serviceType || r.businessName1 || '', r.amount || r.amountCharged || 0, r.status || '', r.createdAt ? new Date(r.createdAt).toISOString() : '', r.pipelineSource || '']
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',') + '\n';
+      if (!res.write(row)) await new Promise((resolve) => res.once('drain', resolve));
+    }
+
+    res.end();
+  } catch (err) {
+    console.error('EXPORT REQUESTS ERROR:', err);
+    if (!res.headersSent) res.status(500).json({ message: 'Failed to export requests' });
+  }
+});
+
+// Immediate bulk for requests (approve/reject/status change)
+router.post('/requests/bulk', isAdmin, async (req, res) => {
+  try {
+    const { ids, action, note } = req.body; // action: approve | reject | set_status
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: 'ids required' });
+    if (!['approve', 'reject', 'set_status'].includes(action)) return res.status(400).json({ message: 'invalid action' });
+
+    const statusToSet = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : (req.body.status || null);
+
+    // Update both collections where id in ids
+    const updateObj = { status: statusToSet };
+    // push a statusHistory entry (same note for all)
+    const historyEntry = { status: statusToSet, note: note || `Bulk ${action} by admin`, actorRole: req.user?.role || null, createdAt: new Date() };
+
+    const [sRes, cRes] = await Promise.all([
+      ServiceRequest.updateMany({ _id: { $in: ids } }, { $set: updateObj, $push: { statusHistory: historyEntry } }),
+      CACRequest.updateMany({ _id: { $in: ids } }, { $set: updateObj, $push: { statusHistory: historyEntry } })
+    ]);
+
+    res.json({ message: 'Bulk requests updated', modified: (sRes.modifiedCount || sRes.nModified || 0) + (cRes.modifiedCount || cRes.nModified || 0) });
+  } catch (err) {
+    console.error('BULK REQUESTS ERROR:', err);
+    res.status(500).json({ message: 'Failed to perform bulk request action' });
+  }
+});
+
+// Background job for large bulk operations on requests
+router.post('/requests/bulk-job', isAdmin, async (req, res) => {
+  try {
+    const { ids, action, status } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: 'ids required' });
+    if (!['approve', 'reject', 'set_status'].includes(action)) return res.status(400).json({ message: 'invalid action' });
+
+    const job = await BulkJob.create({ action, ids, total: ids.length, status: 'pending', createdBy: req.user._id });
+
+    (async function processRequestJob(jobId) {
+      try {
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'processing', startedAt: new Date() });
+        const j = await BulkJob.findById(jobId).lean();
+        const allIds = (j.ids || []).map((v) => v.toString());
+        const batchSize = 100;
+        let processed = 0;
+        const errors = [];
+        const statusToSet = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : status || null;
+
+        for (let i = 0; i < allIds.length; i += batchSize) {
+          const batch = allIds.slice(i, i + batchSize);
+          try {
+            const historyEntry = { status: statusToSet, note: `Bulk job ${action}`, actorRole: req.user?.role || null, createdAt: new Date() };
+            await ServiceRequest.updateMany({ _id: { $in: batch } }, { $set: { status: statusToSet }, $push: { statusHistory: historyEntry } });
+            await CACRequest.updateMany({ _id: { $in: batch } }, { $set: { status: statusToSet }, $push: { statusHistory: historyEntry } });
+            processed += batch.length;
+            await BulkJob.findByIdAndUpdate(jobId, { processed, errors });
+          } catch (batchErr) {
+            console.error('BULK REQUEST JOB BATCH ERROR:', batchErr);
+            errors.push(String(batchErr.message || batchErr));
+            processed += batch.length;
+            await BulkJob.findByIdAndUpdate(jobId, { processed, errors });
+          }
+        }
+
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'completed', processed: allIds.length, finishedAt: new Date(), errors });
+      } catch (procErr) {
+        console.error('BULK REQUEST JOB ERROR:', procErr);
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'failed', finishedAt: new Date(), $push: { errors: String(procErr.message || procErr) } });
+      }
+    })(job._id).catch((e) => console.error('REQUEST JOB START ERROR:', e));
+
+    res.json({ message: 'Bulk job created', jobId: job._id });
+  } catch (err) {
+    console.error('CREATE BULK REQUEST JOB ERROR:', err);
+    res.status(500).json({ message: 'Failed to create bulk job' });
+  }
+});
+
+router.get('/requests/bulk-job/:id', isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid job id' });
+    const job = await BulkJob.findById(id).lean();
+    if (!job) return res.status(404).json({ message: 'Job not found' });
+    res.json({ data: job });
+  } catch (err) {
+    console.error('GET REQUEST BULK JOB ERROR:', err);
+    res.status(500).json({ message: 'Failed to fetch job' });
+  }
+});
+
+// List recent bulk jobs (for admin job panel)
+router.get('/requests/bulk-jobs', isAdmin, async (req, res) => {
+  try {
+    const { status, limit = 20 } = req.query;
+    const q = {};
+    if (status) q.status = String(status).toLowerCase();
+    const jobs = await BulkJob.find(q).sort({ createdAt: -1 }).limit(Math.min(100, parseInt(limit) || 20)).lean();
+    res.json({ data: jobs });
+  } catch (err) {
+    console.error('LIST BULK JOBS ERROR:', err);
+    res.status(500).json({ message: 'Failed to list bulk jobs' });
   }
 });
 

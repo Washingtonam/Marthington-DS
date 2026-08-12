@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
 const bulkJobSchema = new mongoose.Schema({
-  action: { type: String, enum: ['suspend', 'activate', 'delete'], required: true },
-  ids: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  action: { type: String, required: true },
+  ids: [{ type: mongoose.Schema.Types.ObjectId }],
   status: { type: String, enum: ['pending', 'processing', 'completed', 'failed'], default: 'pending' },
   total: { type: Number, default: 0 },
   processed: { type: Number, default: 0 },

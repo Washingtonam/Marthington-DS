@@ -7,14 +7,24 @@ export default function SlideOver({ isOpen, onClose, title, children }) {
   useEffect(() => {
     if (!isOpen) return;
     const prevActive = document.activeElement;
-    const focusable = panelRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-    focusable?.[0]?.focus();
+    // Prefer input-like elements for initial focus (textarea, input, select) to avoid accidentally focusing the Close button
+    const preferSelectors = 'input, textarea, select, [role="textbox"], [contenteditable]';
+    const fallbackSelectors = 'button, [href], [tabindex]:not([tabindex="-1"])';
+    let focusable = panelRef.current?.querySelectorAll(preferSelectors);
+    if (!focusable || focusable.length === 0) {
+      focusable = panelRef.current?.querySelectorAll(fallbackSelectors);
+    }
+    focusable?.[0]?.focus?.();
 
     const handleKey = (e) => {
       if (e.key === 'Escape') onClose();
       if (e.key === 'Tab') {
-        // simple focus-trap
-        const nodes = Array.from(focusable || []);
+        // recompute focusable nodes to handle dynamic content
+        const preferSelectors = 'input, textarea, select, [role="textbox"], [contenteditable]';
+        const fallbackSelectors = 'button, [href], [tabindex]:not([tabindex="-1"])';
+        let nodes = panelRef.current?.querySelectorAll(preferSelectors) || [];
+        if (!nodes || nodes.length === 0) nodes = panelRef.current?.querySelectorAll(fallbackSelectors) || [];
+        nodes = Array.from(nodes);
         if (nodes.length === 0) return;
         const first = nodes[0];
         const last = nodes[nodes.length - 1];

@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
 import { Calendar, MessageSquare, Shield } from 'lucide-react';
+import { useToast } from "../../context/ToastContext";
+
+const maskNIN = (nin) => {
+  if (!nin || nin === "N/A") return nin;
+  return `${String(nin).slice(0, 4)}*****${String(nin).slice(-2)}`;
+};
 
 export default function RequestDetails({
   selected,
@@ -15,6 +21,7 @@ export default function RequestDetails({
   if (!selected) return null;
 
   const [expandedKeys, setExpandedKeys] = useState({});
+  const { success, error: toastError } = useToast();
 
   const toggleExpand = (key) => {
     setExpandedKeys((s) => ({ ...s, [key]: !s[key] }));
@@ -38,7 +45,29 @@ export default function RequestDetails({
 
   return (
     <div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-4">
+      <div className="flex justify-end mb-3">
+        <button onClick={async () => {
+          try {
+            const textParts = [];
+            textParts.push(`Request ID: ${selected._id || selected.id}`);
+            textParts.push(`Requester: ${selected.userId?.email || 'N/A'} (${selected.userId?.role || 'user'})`);
+            textParts.push(`Status: ${selected.status}`);
+            textParts.push(`Submitted: ${new Date(selected.createdAt).toLocaleString()}`);
+            textParts.push(`Reference: ${selected.nin ? maskNIN(selected.nin) : (selected.businessName1 || selected.serviceType || 'N/A')}`);
+            textParts.push(`Amount: ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(selected.amount || selected.amountCharged || 0)}`);
+            textParts.push('\nForm Data:');
+            const details = getRequestDetails(selected).map(d => `${d.key}: ${typeof d.value === 'object' ? JSON.stringify(d.value) : d.value}`).join('\n');
+            textParts.push(details);
+            const full = textParts.join('\n');
+            await navigator.clipboard.writeText(full);
+            if (success) success('Request copied to clipboard');
+          } catch (err) {
+            console.error('Copy failed', err);
+            if (toastError) toastError('Failed to copy request');
+          }
+        }} className="px-3 py-2 rounded-xl bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100">Copy Request</button>
+      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-4">
         <div>
           <p className="text-xs text-slate-500">Requester</p>
           <p className="font-semibold">{selected.userId?.email} <span className="text-sm font-normal">({selected.userId?.role || 'user'})</span></p>
@@ -49,9 +78,9 @@ export default function RequestDetails({
         </div>
         <div>
           <p className="text-xs text-slate-500">Reference</p>
-          <p className="font-semibold">{selected.nin || selected.businessName1 || selected.serviceType || 'N/A'}</p>
+          <p className="font-semibold">{selected.nin ? maskNIN(selected.nin) : (selected.businessName1 || selected.serviceType || 'N/A')}</p>
           <p className="text-xs text-slate-500 mt-2">Amount</p>
-          <p className="font-semibold">{selected.amount || selected.amountCharged || 0}</p>
+          <p className="font-semibold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(selected.amount || selected.amountCharged || 0)}</p>
           <p className="text-xs text-slate-500 mt-2">Pipeline</p>
           <p className="font-semibold">{selected.pipelineSource}</p>
         </div>
@@ -158,11 +187,13 @@ export default function RequestDetails({
             <div className="flex gap-2 pt-2">
               <button onClick={async () => {
                 if (modalStatus === 'rejected' && (!modalComment || modalComment.trim().length < 5)) {
-                  return alert('Please provide a detailed rejection reason (at least 5 characters).');
+                  if (toastError) toastError('Please provide a detailed rejection reason (at least 5 characters).');
+                  return;
                 }
                 const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : {};
                 if (selected.status === 'pending' && user.role !== 'super_admin') {
-                  return alert('Forbidden: Only Super Admin may modify pending requests.');
+                  if (toastError) toastError('Forbidden: Only Super Admin may modify pending requests.');
+                  return;
                 }
                 try {
                   await handleStatusUpdate(selected._id || selected.id, modalStatus, modalComment);
@@ -171,7 +202,7 @@ export default function RequestDetails({
                   setSelected(null);
                 } catch (err) {
                   console.error(err);
-                  alert('Failed to update status.');
+                  if (toastError) toastError('Failed to update status.');
                 }
               }} className="flex-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">Update Status</button>
               <button onClick={() => { setModalStatus(selected.status || "pending"); setModalComment(""); }} className="px-4 py-2 rounded-xl bg-gray-200 text-gray-800 hover:bg-gray-300 transition">Reset</button>
