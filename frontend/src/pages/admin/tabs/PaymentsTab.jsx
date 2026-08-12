@@ -1,7 +1,7 @@
 import { CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import Card from '../../../../components/ui/Card';
+import Card from '../../../components/ui/Card';
 
 /**
  * PaymentsTab - Displays pending and recent payments
