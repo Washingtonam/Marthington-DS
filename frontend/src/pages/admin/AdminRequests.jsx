@@ -400,7 +400,7 @@ export default function AdminRequests() {
           <p className="mt-2">Try a different filter or search term.</p>
         </div>
       ) : (
-        {viewMode === 'table' ? (
+        viewMode === 'table' ? (
           <div className="overflow-auto bg-white rounded-2xl border">
             {selectedIds.size > 0 && (
               <div className="p-3 bg-slate-50 border-b flex items-center justify-between">
@@ -472,7 +472,7 @@ export default function AdminRequests() {
               </div>
             ))}
           </div>
-        )}
+        )
       )}
 
       <div className="flex justify-center items-center gap-4 mt-10">
