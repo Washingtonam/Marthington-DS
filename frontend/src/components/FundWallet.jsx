@@ -40,8 +40,22 @@ export default function FundWallet({ isOpen, onClose }) {
   };
 
   const handlePayment = async () => {
-    if (!user?.id || !user?.email) {
+    const token = localStorage.getItem("token")?.replace(/[\'"]+/g, "");
+    let storedUser = null;
+    try {
+      storedUser = JSON.parse(localStorage.getItem("user") || "null");
+    } catch {
+      storedUser = null;
+    }
+    const checkoutUser = user || storedUser;
+
+    if (!token) {
       errorToast("Please log in to fund your wallet");
+      return;
+    }
+
+    if (!checkoutUser?.email) {
+      errorToast("Your account email is unavailable. Please refresh and try again.");
       return;
     }
 
@@ -89,8 +103,8 @@ export default function FundWallet({ isOpen, onClose }) {
         currency: "NGN",
         payment_options: "card,banktransfer,ussd",
         customer: {
-          email: user.email,
-          name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user.email,
+          email: checkoutUser.email,
+          name: `${checkoutUser?.firstName || ""} ${checkoutUser?.lastName || ""}`.trim() || checkoutUser.email,
         },
         customizations: {
           title: "Marthington Wallet Funding",
