@@ -7,9 +7,11 @@ const SERVICE_TYPE_ALIASES = {
   'self-service': 'selfService',
   selfservice: 'selfService',
   self_service: 'selfService',
-  selfservice: 'selfService',
   nimc: 'nimc',
-  cac: 'cac'
+  nin: 'nimc',
+  cac: 'cac',
+  jamb: 'jamb',
+  cse: 'cse'
 };
 
 const SERVICE_TYPE_OPTIONS = [
@@ -20,7 +22,9 @@ const SERVICE_TYPE_OPTIONS = [
   { value: 'ipe', label: 'IPE' },
   { value: 'selfService', label: 'Self Service' },
   { value: 'nimc', label: 'NIMC' },
-  { value: 'cac', label: 'CAC' }
+  { value: 'cac', label: 'CAC' },
+  { value: 'jamb', label: 'JAMB' },
+  { value: 'cse', label: 'CSE' }
 ];
 
 const normalizeServiceType = (value) => {

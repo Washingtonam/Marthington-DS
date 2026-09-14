@@ -158,11 +158,11 @@ export default function Admin() {
             onClick={() => navigate("/admin/payments")}
           />
           <ActionCard
-            title="Pricing Control"
-            desc="Update pricing, verification and service fees"
+            title="Services Engine"
+            desc="Manage services, prices, and dynamic forms"
             icon="💰"
             color="from-green-600 to-emerald-600"
-            onClick={() => navigate("/admin/pricing")}
+            onClick={() => navigate("/admin/services-engine")}
           />
         </div>
       </div>

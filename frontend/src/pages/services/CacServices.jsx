@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "../../lib/axios";
-import { useUser } from "../../context/UserContext"
+import DynamicServiceForm from "../../components/DynamicServiceForm";
+import { useUser } from "../../context/UserContext";
 import {
   Building2,
   Users,
@@ -10,7 +11,8 @@ import {
   Loader2,
   HelpCircle,
   ChevronDown,
-  ShieldCheck
+  ShieldCheck,
+  ArrowRight
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatNaira } from "../../lib/currency";
@@ -65,6 +67,8 @@ const SECRETARY_FIELDS = [
 export default function CacServices() {
   const { user, refreshBalance, setBalance } = useUser();
   const [service, setService] = useState("");
+  const [catalogServices, setCatalogServices] = useState([]);
+  const [selectedService, setSelectedService] = useState(null);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -82,9 +86,10 @@ export default function CacServices() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [pricingRes, historyRes] = await Promise.all([
+        const [pricingRes, historyRes, catalogRes] = await Promise.all([
           api.get("/api/pricing"),
-          user?.id ? api.get(`/api/cac/user-requests/${user.id}`) : Promise.resolve({ data: [] })
+          user?.id ? api.get(`/api/cac/user-requests/${user.id}`) : Promise.resolve({ data: [] }),
+          api.get("/api/services/catalog?category=CAC")
         ]);
 
         const pricing = pricingRes.data || {};
@@ -95,6 +100,12 @@ export default function CacServices() {
             limited_1m: pricing.cacServices.limited1M || 40000,
             custom_ngo: 0
           });
+        }
+
+        const activeCatalog = Array.isArray(catalogRes.data?.services) ? catalogRes.data.services.filter((entry) => ["active", "paused"].includes(entry.status)) : [];
+        setCatalogServices(activeCatalog);
+        if (activeCatalog[0]) {
+          setSelectedService(activeCatalog[0]);
         }
         setHistory(historyRes.data || []);
       } catch (err) {
@@ -150,6 +161,22 @@ export default function CacServices() {
     }
   };
 
+  const handleDynamicSubmit = async (payload) => {
+    try {
+      const response = await api.post("/api/services/request", {
+        ...payload,
+        paymentSource: "main",
+        nin: payload.nin || "N/A",
+      });
+      if (response.data?.success) {
+        alert("Your CAC service request has been submitted successfully.");
+      }
+    } catch (err) {
+      console.error("CAC dynamic submission error:", err);
+      alert(err?.response?.data?.message || "Unable to submit service request.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-6 md:p-12">
       <div className="max-w-6xl mx-auto space-y-10">
@@ -165,7 +192,19 @@ export default function CacServices() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          {SERVICE_OPTIONS.map((option) => (
+          {catalogServices.length ? catalogServices.map((option) => (
+            <motion.button key={option.serviceCode} type="button" onClick={() => setSelectedService(option)} whileHover={{ y: -2 }}
+              className={`group rounded-3xl border p-6 text-left transition ${selectedService?.serviceCode === option.serviceCode ? "border-blue-500 bg-blue-500/10 shadow-xl" : "border-slate-200 bg-white dark:bg-slate-900"}`}
+            >
+              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500 text-white"><Briefcase /></div>
+              <h2 className="text-xl font-semibold">{option.name}</h2>
+              <p className="mt-3 text-sm text-slate-500">{option.metadata?.description || "Dynamic CAC service."}</p>
+              <div className="mt-4 flex items-center justify-between text-sm font-semibold text-blue-600">
+                <span>₦{Number(option.price || 0).toLocaleString()}</span>
+                <ArrowRight size={16} />
+              </div>
+            </motion.button>
+          )) : SERVICE_OPTIONS.map((option) => (
             <motion.button key={option.key} type="button" onClick={() => setService(option.key)} whileHover={{ y: -2 }}
               className={`group rounded-3xl border p-6 text-left transition ${service === option.key ? "border-blue-500 bg-blue-500/10 shadow-xl" : "border-slate-200 bg-white dark:bg-slate-900"}`}
             >
@@ -176,7 +215,19 @@ export default function CacServices() {
           ))}
         </div>
 
-        {service && service !== "custom_ngo" && (
+        {selectedService && (
+          <div className="rounded-3xl border bg-white p-8 shadow-sm dark:bg-slate-950">
+            <div className="flex justify-between pb-4 border-b">
+              <h2 className="text-2xl font-bold">{selectedService.name}</h2>
+              <div className="font-bold text-blue-600">₦{Number(selectedService.price || 0).toLocaleString()}</div>
+            </div>
+            <div className="mt-6">
+              <DynamicServiceForm service={selectedService} onSubmit={handleDynamicSubmit} onCancel={() => setSelectedService(null)} />
+            </div>
+          </div>
+        )}
+
+        {service && service !== "custom_ngo" && !selectedService && (
           <form onSubmit={handleSubmit} className="space-y-8">
             <section className="rounded-3xl border bg-white p-8 shadow-sm dark:bg-slate-950">
               <div className="flex justify-between pb-4 border-b">

@@ -203,6 +203,20 @@ export default function Sidebar() {
                 onNavigate={handleNavClick}
               />
               <SidebarNavItem
+                to="/services/jamb"
+                label="JAMB Services"
+                icon={<Briefcase size={18} />}
+                open={open}
+                onNavigate={handleNavClick}
+              />
+              <SidebarNavItem
+                to="/services/cse"
+                label="CSE Services"
+                icon={<Sliders size={18} />}
+                open={open}
+                onNavigate={handleNavClick}
+              />
+              <SidebarNavItem
                 to="/wallet"
                 label="Wallet"
                 icon={<Wallet size={18} />}
@@ -281,8 +295,8 @@ export default function Sidebar() {
                   />
                   {isSuperAdmin && (
                     <SidebarNavItem
-                      to="/admin/pricing"
-                      label="Pricing Engine"
+                      to="/admin/services-engine"
+                      label="Services Engine"
                       icon={<Sliders size={18} />}
                       open={open}
                       onNavigate={handleNavClick}

@@ -1731,12 +1731,23 @@ router.put("/pricing", isSuperAdmin, async (req, res) => {
 
 router.get("/services", isSuperAdmin, async (req, res) => {
   try {
-    const pricing = await Pricing.getPricing();
-    const services = Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length
-      ? pricing.serviceCatalog
-      : Pricing.getDefaultServiceCatalog();
+    const category = String(req.query.category || '').trim();
+    let services = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
 
-    return res.json({ success: true, services });
+    try {
+      const pricing = await Pricing.getPricing();
+      if (Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length) {
+        services = pricing.serviceCatalog;
+      }
+    } catch (dbError) {
+      console.warn('ADMIN_SERVICE_CATALOG_FALLBACK_ACTIVE:', dbError.message);
+    }
+
+    const filteredServices = !category
+      ? services
+      : services.filter((service) => String(service.category || '').toLowerCase() === category.toLowerCase());
+
+    return res.json({ success: true, services: filteredServices, category: category || 'all' });
   } catch (error) {
     console.error('ADMIN SERVICE CATALOG ERROR:', error);
     return res.status(500).json({ success: false, message: 'Failed to load service catalog.' });
@@ -1751,8 +1762,17 @@ router.post("/services", isSuperAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'serviceCode and name are required.' });
     }
 
-    const pricing = await Pricing.getPricing();
-    const catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    let catalog = [];
+    let pricing = null;
+
+    try {
+      pricing = await Pricing.getPricing();
+      catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    } catch (dbError) {
+      console.warn('ADMIN_SERVICE_CREATE_FALLBACK_ACTIVE:', dbError.message);
+      catalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+    }
+
     const exists = catalog.some((service) => service.serviceCode === serviceCode);
 
     if (exists) {
@@ -1769,9 +1789,14 @@ router.post("/services", isSuperAdmin, async (req, res) => {
     };
 
     catalog.push(newService);
-    pricing.serviceCatalog = catalog;
-    pricing.markModified('serviceCatalog');
-    await pricing.save();
+
+    if (pricing) {
+      pricing.serviceCatalog = catalog;
+      pricing.markModified('serviceCatalog');
+      await pricing.save();
+    } else if (typeof Pricing.replaceServiceCatalog === 'function') {
+      Pricing.replaceServiceCatalog(catalog);
+    }
 
     return res.status(201).json({ success: true, service: newService, message: 'Service created successfully.' });
   } catch (error) {
@@ -1783,8 +1808,17 @@ router.post("/services", isSuperAdmin, async (req, res) => {
 router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
   try {
     const { serviceCode } = req.params;
-    const pricing = await Pricing.getPricing();
-    const catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    let pricing = null;
+    let catalog = [];
+
+    try {
+      pricing = await Pricing.getPricing();
+      catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    } catch (dbError) {
+      console.warn('ADMIN_SERVICE_UPDATE_FALLBACK_ACTIVE:', dbError.message);
+      catalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+    }
+
     const target = catalog.find((service) => service.serviceCode === serviceCode);
 
     if (!target) {
@@ -1799,8 +1833,13 @@ router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
     if (req.body.price !== undefined) target.price = Number(req.body.price) || 0;
     if (req.body.metadata !== undefined) target.metadata = { ...(target.metadata || {}), ...req.body.metadata };
 
-    pricing.markModified('serviceCatalog');
-    await pricing.save();
+    if (pricing) {
+      pricing.serviceCatalog = catalog;
+      pricing.markModified('serviceCatalog');
+      await pricing.save();
+    } else if (typeof Pricing.replaceServiceCatalog === 'function') {
+      Pricing.replaceServiceCatalog(catalog);
+    }
 
     return res.json({ success: true, service: target, message: 'Service updated successfully.' });
   } catch (error) {
@@ -1819,8 +1858,17 @@ router.patch("/services/:serviceCode/status", isSuperAdmin, async (req, res) => 
       return res.status(400).json({ success: false, message: 'Invalid status: active, paused, or disabled only.' });
     }
 
-    const pricing = await Pricing.getPricing();
-    const catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    let pricing = null;
+    let catalog = [];
+
+    try {
+      pricing = await Pricing.getPricing();
+      catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    } catch (dbError) {
+      console.warn('ADMIN_SERVICE_STATUS_FALLBACK_ACTIVE:', dbError.message);
+      catalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+    }
+
     const target = catalog.find((service) => service.serviceCode === serviceCode);
 
     if (!target) {
@@ -1828,8 +1876,14 @@ router.patch("/services/:serviceCode/status", isSuperAdmin, async (req, res) => 
     }
 
     target.status = status;
-    pricing.markModified('serviceCatalog');
-    await pricing.save();
+
+    if (pricing) {
+      pricing.serviceCatalog = catalog;
+      pricing.markModified('serviceCatalog');
+      await pricing.save();
+    } else if (typeof Pricing.replaceServiceCatalog === 'function') {
+      Pricing.replaceServiceCatalog(catalog);
+    }
 
     return res.json({ success: true, message: `Service ${serviceCode} updated to ${status}.`, service: target });
   } catch (error) {

@@ -245,7 +245,28 @@ const normalizeServiceCategory = (service) => {
   return normalized;
 };
 
-const resolveServicePrice = (pricing, service, type, slipType) => {
+const findCatalogService = (catalog, serviceIdentifier, typeIdentifier) => {
+  if (!Array.isArray(catalog)) return null;
+  const normalizedService = String(serviceIdentifier || '').trim();
+  const normalizedType = String(typeIdentifier || '').trim();
+
+  return catalog.find((service) => {
+    const serviceCode = String(service?.serviceCode || '').trim();
+    const serviceName = String(service?.name || '').trim();
+    const serviceType = String(service?.type || '').trim();
+    return serviceCode === normalizedService || serviceName === normalizedService || serviceCode === normalizedType || serviceType === normalizedType;
+  }) || null;
+};
+
+const resolveServicePrice = (pricing, service, type, slipType, catalogService) => {
+  const directPrice = Number(catalogService?.price ?? 0);
+  if (catalogService && directPrice > 0) {
+    return {
+      amount: directPrice,
+      amountKobo: Math.round(directPrice * 100)
+    };
+  }
+
   if (!pricing || !pricing.ninServices) return null;
 
   const category = normalizeServiceCategory(service);
@@ -271,21 +292,41 @@ const resolveServicePrice = (pricing, service, type, slipType) => {
   };
 };
 
-const processServiceRequest = async ({ userId, service, type, nin, slipType, proof, passport, formData, paymentSource = 'main' }) => {
+const processServiceRequest = async ({ userId, service, type, nin, slipType, proof, passport, formData, paymentSource = 'main', category }) => {
   const session = await mongoose.startSession();
   let savedRequest = null;
   let walletBalance = 0;
 
   try {
     await session.withTransaction(async () => {
-      const pricing = await Pricing.getPricing();
-      const resolvedPrice = resolveServicePrice(pricing, service, type, slipType);
+      let pricing = null;
+      let catalogService = null;
+
+      try {
+        pricing = await Pricing.getPricing();
+      } catch (dbError) {
+        console.warn('SERVICE_REQUEST_PRICE_FALLBACK_ACTIVE:', dbError.message);
+        pricing = { ninServices: {}, cacServices: {} };
+      }
+
+      const fallbackCatalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+      catalogService = findCatalogService(
+        Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length ? pricing.serviceCatalog : fallbackCatalog,
+        service,
+        type
+      );
+
+      const resolvedPrice = resolveServicePrice(pricing, service, type, slipType, catalogService);
 
       if (!resolvedPrice) {
         throw new Error('Unable to resolve service price from current pricing configuration.');
       }
 
       const { amount, amountKobo } = resolvedPrice;
+      const resolvedCategory = String(catalogService?.category || category || 'NIMC').trim().toUpperCase();
+      const normalizedCategory = ['NIMC', 'CAC', 'JAMB', 'CSE', 'NIN', 'OTHER'].includes(resolvedCategory)
+        ? resolvedCategory
+        : 'OTHER';
 
       const user = await User.findById(userId).session(session);
       if (!user) {
@@ -329,7 +370,7 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
           userId,
           service: String(service),
           type: String(type),
-          serviceCategory: 'NIMC',
+          serviceCategory: normalizedCategory,
           nin: nin ? String(nin) : 'N/A',
           slipType: slipType ? String(slipType) : 'none',
           amount,
@@ -374,7 +415,7 @@ exports.submitServiceRequest = async (req, res) => {
 
   try {
     const userId = req.user.id;
-    const { service, type, nin, slipType, proof, passport, formData, paymentSource } = req.body;
+    const { service, type, nin, slipType, proof, passport, formData, paymentSource, category } = req.body;
 
     const { savedRequest, walletBalance } = await processServiceRequest({
       userId,
@@ -385,7 +426,8 @@ exports.submitServiceRequest = async (req, res) => {
       proof,
       passport,
       formData,
-      paymentSource
+      paymentSource,
+      category
     });
 
     return res.status(200).json({

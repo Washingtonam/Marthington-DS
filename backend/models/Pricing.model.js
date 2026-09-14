@@ -10,6 +10,8 @@ const defaultServiceCatalog = [
   { serviceCode: 'cac-limited-1m', category: 'CAC', name: 'Limited Company', status: 'active', price: 40000 },
 ];
 
+const catalogFallback = [...defaultServiceCatalog];
+
 const pricingSchema = new mongoose.Schema({
   serviceCatalog: {
     type: [{
@@ -135,14 +137,27 @@ pricingSchema.statics.getPricing = async function () {
 };
 
 pricingSchema.statics.getDefaultServiceCatalog = function () {
-  return defaultServiceCatalog;
+  return [...catalogFallback];
+};
+
+pricingSchema.statics.replaceServiceCatalog = function (catalog) {
+  const nextCatalog = Array.isArray(catalog) ? catalog : [...defaultServiceCatalog];
+  catalogFallback.splice(0, catalogFallback.length, ...nextCatalog.map((service) => ({
+    ...service,
+    category: String(service.category || 'NIN').trim() || 'NIN',
+    status: ['active', 'paused', 'disabled'].includes(service.status) ? service.status : 'active',
+    price: Number(service.price) || 0,
+    metadata: service.metadata || {},
+  })));
+  return [...catalogFallback];
 };
 
 pricingSchema.statics.getServiceCatalog = async function () {
   const pricing = await this.getPricing();
-  return pricing.serviceCatalog && pricing.serviceCatalog.length
+  const catalog = Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length
     ? pricing.serviceCatalog
-    : defaultServiceCatalog;
+    : [...catalogFallback];
+  return catalog;
 };
 
 module.exports = mongoose.models.Pricing || mongoose.model("Pricing", pricingSchema);

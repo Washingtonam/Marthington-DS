@@ -196,6 +196,16 @@ export default function Dashboard() {
             onClick={() => navigate("/cac-services")}
           />
           <ActionButton
+            title="JAMB Services"
+            icon={FileText}
+            onClick={() => navigate("/services/jamb")}
+          />
+          <ActionButton
+            title="CSE Services"
+            icon={FileText}
+            onClick={() => navigate("/services/cse")}
+          />
+          <ActionButton
             title="Wallet"
             icon={Wallet}
             onClick={() => navigate("/wallet")}

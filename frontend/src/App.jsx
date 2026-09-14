@@ -33,6 +33,7 @@ import Modification from "./pages/services/Modification";
 import SelfServiceForm from "./pages/services/SelfServiceForm";
 import CacServices from "./pages/services/CacServices";
 import Personalization from "./pages/services/Personalization";
+import CategoryServicesPage from "./pages/services/CategoryServicesPage";
 
 // Admin
 import Admin from "./pages/admin/Admin";
@@ -143,6 +144,12 @@ function AppRoutes() {
 
       {/* Services Routes */}
       <Route path="/nin-services" element={<ProtectedRoute><Layout><NINServices /></Layout></ProtectedRoute>} />
+      <Route path="/services/nin" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
+      <Route path="/services/nimc" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
+      <Route path="/services/cac" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
+      <Route path="/services/jamb" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
+      <Route path="/services/cse" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
+      <Route path="/services/:category" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
       <Route path="/nin-services/validation" element={<ProtectedRoute><Layout><Validation /></Layout></ProtectedRoute>} />
       <Route path="/nin-services/ipe-clearance" element={<ProtectedRoute><Layout><IPEClearance /></Layout></ProtectedRoute>} />
       <Route path="/nin-services/modification" element={<ProtectedRoute><Layout><Modification /></Layout></ProtectedRoute>} />
@@ -157,6 +164,7 @@ function AppRoutes() {
       <Route path="/admin/requests" element={<AdminRoute><Layout><AdminRequests /></Layout></AdminRoute>} />
       <Route path="/admin/verification-requests" element={<AdminRoute><Layout><VerificationRequests /></Layout></AdminRoute>} />
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/services-engine" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/user/:userId/details" element={<SuperAdminRoute><Layout><UserDetailView /></Layout></SuperAdminRoute>} />
 
       {/* Catch all */}
