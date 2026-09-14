@@ -58,7 +58,7 @@ const initialFormData = {
 
 export default function Modification() {
   const navigate = useNavigate();
-  const { user, setBalance } = useUser();
+  const { user, setBalance, refreshBalance } = useUser();
   const [pricing, setPricing] = useState({});
   const [selectedType, setSelectedType] = useState(null);
   const [formData, setFormData] = useState(initialFormData);
@@ -278,9 +278,13 @@ export default function Modification() {
         formData,
       });
 
-      if (response.data?.userWalletBalance !== undefined) {
-        setBalance(response.data.userWalletBalance);
-      }
+      const walletResponse = await refreshBalance();
+      setBalance(
+        walletResponse?.walletBalance ??
+        response.data?.userWalletBalance ??
+        response.data?.walletBalance ??
+        0
+      );
       alert("✅ Modification request submitted successfully!");
       navigate("/my-requests");
     } catch (err) {

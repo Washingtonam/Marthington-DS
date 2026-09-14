@@ -63,7 +63,7 @@ const SECRETARY_FIELDS = [
 ];
 
 export default function CacServices() {
-  const { user, refreshBalance } = useUser();
+  const { user, refreshBalance, setBalance } = useUser();
   const [service, setService] = useState("");
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -133,10 +133,13 @@ export default function CacServices() {
         witness: showWitness ? witness : undefined,
         secretary: includeSecretary ? secretary : undefined
       });
-      // Instantly update wallet from API response (no extra fetch needed)
-      if (response.data?.walletBalance !== undefined) {
-        setBalance(response.data.walletBalance);
-      }
+      const walletResponse = await refreshBalance();
+      setBalance(
+        walletResponse?.walletBalance ??
+        response.data?.walletBalance ??
+        response.data?.userWalletBalance ??
+        0
+      );
       alert("✅ CAC registration submitted.");
       setService("");
       setProprietors([{ fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "" }]);

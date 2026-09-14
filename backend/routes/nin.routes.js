@@ -10,7 +10,7 @@ const ServiceRequest = require("../models/ServiceRequest.model");
 const VerificationRequest = require("../models/VerificationRequest.model");
 const Transaction = require("../models/transaction.model");
 const Pricing = require("../models/Pricing.model");
-const { createVerificationRequestRecord } = require("../services/verification.service");
+const { createVerificationRequestRecord, normalizeVerificationApiPayload, isServiceAvailable } = require("../services/verification.service");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
 const { validateVerification } = require("../shared/validators");
 const {
@@ -37,6 +37,11 @@ router.post("/request", verifyToken, servicesController.submitServiceRequest);
 // 📦 ROUTE 1B: LIST SERVICE REQUESTS WITH SERVER-SIDE FILTERS
 // ==============================================================
 router.get("/requests", verifyToken, servicesController.getServiceRequests);
+
+// ==============================================================
+// 🧩 ROUTE 1C: PUBLIC SERVICE CATALOG
+// ==============================================================
+router.get("/catalog", servicesController.getServiceCatalog);
 
 // ==============================================================
 // ⚡ ROUTE 2: INSTANT AUTOMATED THIRD-PARTY NIN RECOVERY / VERIFY
@@ -147,6 +152,20 @@ router.post("/verify", verifyToken, async (req, res) => {
       user.walletBalanceKobo = updatedUser.walletBalanceKobo;
     }
 
+    const serviceCodeMap = {
+      nin: 'nin-verification',
+      phone: 'phone-verification',
+      tracking: 'tracking-verification',
+      demographic: 'demographic-verification',
+    };
+
+    const serviceConfig = (pricing.serviceCatalog || []).find((service) => service.serviceCode === serviceCodeMap[method]) || { status: 'active' };
+    if (!isServiceAvailable(serviceConfig)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(410).json({ status: 'disabled', message: 'This verification service is temporarily unavailable. Please try again later.' });
+    }
+
     let url = "";
     let payload = {};
     if (method === "nin") { url = NIN_VERIFY_URL; payload = { nin, consent: true }; }
@@ -154,19 +173,36 @@ router.post("/verify", verifyToken, async (req, res) => {
     else if (method === "tracking") { url = NIN_TRACKING_URL; payload = { tracking_id, consent: true }; }
     else if (method === "demographic") { url = NIN_DEMOGRAPHY_URL; payload = { firstname, lastname: surname, gender: gender?.toLowerCase(), dob: birthdate, consent: true }; }
 
-        const response = await axiosPostWithRetry(url, payload, { headers: { "x-api-key": API_KEY, "Content-Type": "application/json" }, timeout: NIN_API_TIMEOUT });
-    
-    // Validate response structure before accessing properties
-    const responseSchema = Joi.object({
-      data: Joi.object().required()
-    }).unknown(true);
-    
-    const { error: responseError } = responseSchema.validate(response.data);
-    if (responseError) {
-      return res.status(502).json({ error: "Invalid response from verification service", code: "INVALID_RESPONSE" });
+    const response = await axiosPostWithRetry(url, payload, { headers: { "x-api-key": API_KEY, "Content-Type": "application/json" }, timeout: NIN_API_TIMEOUT });
+
+    const normalized = normalizeVerificationApiPayload(response.data);
+    if (normalized.status === 'not_found') {
+      const { requestId } = await createVerificationRequestRecord({
+        userId: user._id,
+        method,
+        nin,
+        phone,
+        tracking_id,
+        firstname,
+        surname,
+        gender,
+        birthdate,
+        unitsRequired,
+        costKobo,
+        apiResponseData: null,
+        status: 'failed',
+        resultMessage: normalized.message,
+        VerificationRequestModel: { create: async (docs) => VerificationRequest.create(docs, { session }) },
+        TransactionModel: { create: async (docs) => Transaction.create(docs, { session }) },
+      });
+
+      await session.commitTransaction();
+      session.endSession();
+
+      return res.status(404).json({ status: 'not_found', message: normalized.message, data: null, requestId });
     }
-    
-    const cleanData = response.data?.data?.data || response.data?.data || response.data;
+
+    const cleanData = normalized.data;
 
     const { requestId } = await createVerificationRequestRecord({
       userId: user._id,

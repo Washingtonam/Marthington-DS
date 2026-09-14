@@ -43,18 +43,31 @@ export function UserProvider({ children }) {
 
       if (res.data) {
         if (res.data.units !== undefined) updateUnits(res.data.units);
-        if (res.data.walletBalance !== undefined) updateWalletBalance(res.data.walletBalance);
+
+        const serverWalletBalance =
+          res.data.walletBalance !== undefined
+            ? Number(res.data.walletBalance)
+            : res.data.walletBalanceKobo !== undefined
+              ? Number((Number(res.data.walletBalanceKobo || 0) / 100).toFixed(2))
+              : undefined;
+
+        if (serverWalletBalance !== undefined) {
+          updateWalletBalance(serverWalletBalance);
+        }
+
         if (res.data.commissionBalance !== undefined) {
           setUser((prev) => prev ? { ...prev, commissionBalance: Number(res.data.commissionBalance || 0) } : prev);
         }
       }
+      return res.data;
     } catch (error) {
       console.error("❌ BALANCE SYNC ERROR:", error.response?.status, error.message);
-      
+
       if (retryCount < MAX_RETRIES && (!error.response || error.response.status >= 500)) {
         console.log(`Retrying balance sync... (${retryCount + 1}/${MAX_RETRIES})`);
         setTimeout(() => apiUnits(retryCount + 1), 2000);
       }
+      throw error;
     }
     finally {
       setIsBalanceLoading(false);
@@ -83,9 +96,14 @@ export function UserProvider({ children }) {
         setWalletBalance(normalized.walletBalance);
       }
       localStorage.setItem(SESSION_LAST_ACTIVITY_KEY, String(Date.now()));
-      apiUnits();
+      apiUnits().catch(() => {});
     }
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    apiUnits().catch(() => {});
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -138,9 +156,12 @@ export function UserProvider({ children }) {
     const normalized = normalizeUser(userData);
     setUser(normalized);
     setUnits(normalized.units);
-    setWalletBalance(normalized.walletBalance ?? null);
+    setWalletBalance((prev) => normalized.walletBalance ?? prev ?? null);
     localStorage.setItem("user", JSON.stringify(normalized));
     localStorage.setItem(SESSION_LAST_ACTIVITY_KEY, String(Date.now()));
+    if (normalized?.id) {
+      apiUnits().catch(() => {});
+    }
   };
 
   // =========================
@@ -160,10 +181,11 @@ export function UserProvider({ children }) {
   // UPDATE WALLET BALANCE
   // =========================
   const updateWalletBalance = (newBalance) => {
-    setWalletBalance((prev) => (typeof newBalance === "function" ? newBalance(prev) : newBalance));
+    const nextBalance = typeof newBalance === "function" ? newBalance(walletBalance) : Number(newBalance ?? walletBalance ?? 0);
+    setWalletBalance(Number.isFinite(nextBalance) ? Number(nextBalance.toFixed(2)) : 0);
     setUser((prev) => {
       if (!prev) return prev;
-      const updated = { ...prev, walletBalance: typeof newBalance === "function" ? newBalance(prev?.walletBalance) : newBalance };
+      const updated = { ...prev, walletBalance: Number.isFinite(nextBalance) ? Number(nextBalance.toFixed(2)) : 0 };
       localStorage.setItem("user", JSON.stringify(updated));
       return updated;
     });
@@ -192,6 +214,7 @@ export function UserProvider({ children }) {
         setUnits: updateUnits,
         setUser: updateUser,
         setBalance: updateWalletBalance,
+        updateWalletBalance,
         clearUser,
         isAdmin: user?.isAdmin || false,
         refreshBalance: apiUnits,

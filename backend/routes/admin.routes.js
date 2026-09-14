@@ -1729,4 +1729,113 @@ router.put("/pricing", isSuperAdmin, async (req, res) => {
   }
 });
 
+router.get("/services", isSuperAdmin, async (req, res) => {
+  try {
+    const pricing = await Pricing.getPricing();
+    const services = Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length
+      ? pricing.serviceCatalog
+      : Pricing.getDefaultServiceCatalog();
+
+    return res.json({ success: true, services });
+  } catch (error) {
+    console.error('ADMIN SERVICE CATALOG ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load service catalog.' });
+  }
+});
+
+router.post("/services", isSuperAdmin, async (req, res) => {
+  try {
+    const { serviceCode, category = 'NIN', name, status = 'active', price = 0, metadata = {} } = req.body || {};
+
+    if (!serviceCode || !name) {
+      return res.status(400).json({ success: false, message: 'serviceCode and name are required.' });
+    }
+
+    const pricing = await Pricing.getPricing();
+    const catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    const exists = catalog.some((service) => service.serviceCode === serviceCode);
+
+    if (exists) {
+      return res.status(409).json({ success: false, message: 'A service with this code already exists.' });
+    }
+
+    const newService = {
+      serviceCode,
+      category,
+      name,
+      status: ['active', 'paused', 'disabled'].includes(status) ? status : 'active',
+      price: Number(price) || 0,
+      metadata,
+    };
+
+    catalog.push(newService);
+    pricing.serviceCatalog = catalog;
+    pricing.markModified('serviceCatalog');
+    await pricing.save();
+
+    return res.status(201).json({ success: true, service: newService, message: 'Service created successfully.' });
+  } catch (error) {
+    console.error('ADMIN SERVICE CREATE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create service.' });
+  }
+});
+
+router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
+  try {
+    const { serviceCode } = req.params;
+    const pricing = await Pricing.getPricing();
+    const catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    const target = catalog.find((service) => service.serviceCode === serviceCode);
+
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'Service not found.' });
+    }
+
+    if (req.body.category !== undefined) target.category = req.body.category;
+    if (req.body.name !== undefined) target.name = req.body.name;
+    if (req.body.status !== undefined) {
+      target.status = ['active', 'paused', 'disabled'].includes(req.body.status) ? req.body.status : target.status;
+    }
+    if (req.body.price !== undefined) target.price = Number(req.body.price) || 0;
+    if (req.body.metadata !== undefined) target.metadata = { ...(target.metadata || {}), ...req.body.metadata };
+
+    pricing.markModified('serviceCatalog');
+    await pricing.save();
+
+    return res.json({ success: true, service: target, message: 'Service updated successfully.' });
+  } catch (error) {
+    console.error('ADMIN SERVICE UPDATE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update service.' });
+  }
+});
+
+router.patch("/services/:serviceCode/status", isSuperAdmin, async (req, res) => {
+  try {
+    const { serviceCode } = req.params;
+    const { status } = req.body;
+    const allowed = ['active', 'paused', 'disabled'];
+
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status: active, paused, or disabled only.' });
+    }
+
+    const pricing = await Pricing.getPricing();
+    const catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    const target = catalog.find((service) => service.serviceCode === serviceCode);
+
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'Service not found in catalog.' });
+    }
+
+    target.status = status;
+    pricing.markModified('serviceCatalog');
+    await pricing.save();
+
+    return res.json({ success: true, message: `Service ${serviceCode} updated to ${status}.`, service: target });
+  } catch (error) {
+    console.error('ADMIN SERVICE STATUS ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update service status.' });
+  }
+});
+
 module.exports = router;

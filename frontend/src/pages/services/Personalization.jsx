@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 
 export default function Personalization() {
   const navigate = useNavigate();
-  const { user, setBalance } = useUser();
+  const { user, setBalance, refreshBalance } = useUser();
 
   const [trackingId, setTrackingId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,10 +43,13 @@ export default function Personalization() {
         consent: true,
       });
 
-      // Instantly update wallet from API response (no extra fetch needed)
-      if (response.data?.walletBalance !== undefined) {
-        setBalance(response.data.walletBalance);
-      }
+      const walletResponse = await refreshBalance();
+      setBalance(
+        walletResponse?.walletBalance ??
+        response.data?.walletBalance ??
+        response.data?.userWalletBalance ??
+        0
+      );
       localStorage.setItem("nin_result", JSON.stringify(response.data));
       navigate(`/verify-result/${response.data.requestId || ""}`);
     } catch (err) {

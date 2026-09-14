@@ -14,7 +14,7 @@ const router = express.Router();
 // ==============================
 // 📧 RESEND CONFIG
 // ==============================
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // ==============================
 // 🔐 REGISTER
@@ -258,6 +258,13 @@ router.post("/forgot-password", async (req, res) => {
     user.resetTokenExpiry = Date.now() + 15 * 60 * 1000;
 
     await user.save();
+
+    if (!resend) {
+      console.warn("RESEND_EMAIL_SKIPPED: missing RESEND_API_KEY for password reset.");
+      return res.json({
+        message: "If email exists, reset link has been sent",
+      });
+    }
 
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 

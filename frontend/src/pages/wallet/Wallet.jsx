@@ -6,7 +6,7 @@ import { Wallet2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Wallet() {
-  const { user, setBalance } = useUser();
+  const { user, setBalance, refreshBalance } = useUser();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const gatewayMode = useMemo(() => {
@@ -92,8 +92,8 @@ export default function Wallet() {
         callback: async (response) => {
           try {
             await api.post("/api/payments/verify", { reference: response.tx_ref });
-            const walletResponse = await api.get("/api/users/wallet");
-            setBalance(walletResponse?.data?.walletBalance ?? walletResponse?.data?.data?.walletBalanceNaira ?? 0);
+            const walletResponse = await refreshBalance();
+            setBalance(walletResponse?.walletBalance ?? walletResponse?.data?.walletBalance ?? walletResponse?.data?.data?.walletBalanceNaira ?? 0);
             alert("✅ Payment successful! Your wallet has been updated.");
           } catch (err) {
             console.error("Error fetching updated wallet:", err);

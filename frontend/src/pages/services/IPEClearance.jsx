@@ -14,7 +14,7 @@ import { formatNaira } from "../../lib/currency";
 
 export default function IPEClearance() {
   const navigate = useNavigate();
-  const { user, setBalance } = useUser();
+  const { user, setBalance, refreshBalance } = useUser();
   const [pricing, setPricing] = useState({});
   const [selectedType, setSelectedType] = useState(null);
   const [nin, setNin] = useState("");
@@ -46,10 +46,13 @@ export default function IPEClearance() {
         nin,
       });
 
-      // Instantly update wallet from API response (no extra fetch needed)
-      if (response.data?.userWalletBalance !== undefined) {
-        setBalance(response.data.userWalletBalance);
-      }
+      const walletResponse = await refreshBalance();
+      setBalance(
+        walletResponse?.walletBalance ??
+        response.data?.userWalletBalance ??
+        response.data?.walletBalance ??
+        0
+      );
       alert("✅ Request submitted and wallet deducted successfully!");
       navigate("/my-requests");
     } catch (err) {

@@ -9,10 +9,9 @@ import { motion } from "framer-motion";
 
 export default function NINServices() {
   const navigate = useNavigate();
-  const [pricing, setPricing] = useState({});
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Configuration for all services - easily expandable!
   const serviceList = [
     { id: 'validation', title: 'Validation', icon: <FileCheck />, color: 'bg-blue-500', route: '/nin-services/validation', desc: 'Instant registry sync.' },
     { id: 'ipe', title: 'IPE Clearance', icon: <RefreshCcw />, color: 'bg-indigo-500', route: '/nin-services/ipe-clearance', desc: 'Resolve processing roadblocks.' },
@@ -22,14 +21,20 @@ export default function NINServices() {
   ];
 
   useEffect(() => {
-    const fetchPricing = async () => {
+    const fetchServices = async () => {
       try {
-        const res = await api.get("/api/pricing");
-        setPricing(res.data?.ninServices || {});
-      } catch (err) { console.error("Pricing fetch error:", err); }
-      finally { setLoading(false); }
+        const res = await api.get('/api/services/catalog?category=NIN');
+        const catalog = Array.isArray(res.data?.services) ? res.data.services : [];
+        const activeServices = catalog.filter((service) => ['active', 'paused'].includes(service.status));
+        setServices(activeServices);
+      } catch (err) {
+        console.error('Service catalog fetch error:', err);
+        setServices([]);
+      } finally {
+        setLoading(false);
+      }
     };
-    fetchPricing();
+    fetchServices();
   }, []);
 
   return (
@@ -40,20 +45,35 @@ export default function NINServices() {
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {serviceList.map((svc) => (
-          <motion.div key={svc.id} whileHover={{ y: -5 }} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-6 rounded-[2rem] shadow-lg border border-gray-100 dark:border-slate-800 flex flex-col">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-5 text-white ${svc.color} relative`}>
-              {svc.icon}
-              {svc.badge && <span className="absolute -top-1 -right-1 text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">{svc.badge}</span>}
-            </div>
-            <h2 className="text-xl font-bold mb-2">{svc.title}</h2>
-            <p className="text-gray-600 dark:text-slate-300 text-xs mb-6 flex-grow">{svc.desc}</p>
-            
-            <button onClick={() => navigate(svc.route)} className="w-full bg-slate-900 text-white py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-blue-800 transition">
-              Launch Service <ArrowRight size={16} />
-            </button>
-          </motion.div>
-        ))}
+        {(services.length ? services : serviceList).map((svc) => {
+          const catalogService = typeof svc === 'object' && svc.serviceCode ? svc : null;
+          const card = catalogService
+            ? {
+                id: catalogService.serviceCode,
+                title: catalogService.name,
+                icon: serviceList.find((item) => item.id === catalogService.serviceCode?.replace(/^(nin-|cac-)/, '') || item.id === catalogService.serviceCode)?.icon || <FileCheck />,
+                color: serviceList.find((item) => item.id === catalogService.serviceCode?.replace(/^(nin-|cac-)/, '') || item.id === catalogService.serviceCode)?.color || 'bg-blue-500',
+                route: serviceList.find((item) => item.id === catalogService.serviceCode?.replace(/^(nin-|cac-)/, '') || item.id === catalogService.serviceCode)?.route || '/nin-services',
+                desc: catalogService.metadata?.description || 'Available service.',
+                badge: catalogService.status === 'paused' ? 'PAUSED' : null,
+              }
+            : svc;
+
+          return (
+            <motion.div key={card.id} whileHover={{ y: -5 }} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-6 rounded-[2rem] shadow-lg border border-gray-100 dark:border-slate-800 flex flex-col">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-5 text-white ${card.color} relative`}>
+                {card.icon}
+                {card.badge && <span className="absolute -top-1 -right-1 text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">{card.badge}</span>}
+              </div>
+              <h2 className="text-xl font-bold mb-2">{card.title}</h2>
+              <p className="text-gray-600 dark:text-slate-300 text-xs mb-6 flex-grow">{card.desc}</p>
+
+              <button onClick={() => navigate(card.route)} className="w-full bg-slate-900 text-white py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-blue-800 transition">
+                Launch Service <ArrowRight size={16} />
+              </button>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   );

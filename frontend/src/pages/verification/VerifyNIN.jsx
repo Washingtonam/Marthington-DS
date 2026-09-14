@@ -27,10 +27,11 @@ export default function VerifyNIN() {
   const [pricing, setPricing] = useState(null);
   const [nin, setNin] = useState("");
   const [phone, setPhone] = useState("");
+  const [trackingId, setTrackingId] = useState("");
   const [form, setForm] = useState({ firstname: "", surname: "", gender: "", birthdate: "" });
-  const [touched, setTouched] = useState({ nin: false, phone: false, firstname: false, surname: false, gender: false, birthdate: false });
+  const [touched, setTouched] = useState({ nin: false, phone: false, trackingId: false, firstname: false, surname: false, gender: false, birthdate: false });
 
-  const unitsRequired = useMemo(() => ["phone", "demographic"].includes(method) ? 2 : 1, [method]);
+  const unitsRequired = useMemo(() => ["phone", "demographic", "tracking"].includes(method) ? 2 : 1, [method]);
   const unitPrice = pricing?.nin?.unitPrice ?? 250;
   const costInNaira = unitsRequired * unitPrice;
   const hasEnoughFunds = user?.isAdmin || (walletBalance ?? 0) >= costInNaira;
@@ -39,9 +40,10 @@ export default function VerifyNIN() {
 
   const isNinValid = method !== "nin" || nin.length === 11;
   const isPhoneValid = method !== "phone" || phone.length >= 10;
+  const isTrackingValid = method !== "tracking" || trackingId.trim().length > 0;
   const isDemographicValid =
     method !== "demographic" || Object.values(form).every((value) => value.trim().length > 0);
-  const isFormValid = method === "nin" ? isNinValid : method === "phone" ? isPhoneValid : isDemographicValid;
+  const isFormValid = method === "nin" ? isNinValid : method === "phone" ? isPhoneValid : method === "tracking" ? isTrackingValid : isDemographicValid;
 
   const showError = (message) => {
     error(message, 5000);
@@ -73,6 +75,11 @@ export default function VerifyNIN() {
       if (phone.length < 10) return showError("Enter a valid phone number");
     }
 
+    if (method === "tracking") {
+      setTouched((prev) => ({ ...prev, trackingId: true }));
+      if (!trackingId.trim()) return showError("Enter a valid tracking ID");
+    }
+
     if (method === "demographic") {
       setTouched((prev) => ({ ...prev, firstname: true, surname: true, gender: true, birthdate: true }));
       if (!isDemographicValid) return showError("Please complete all demographic fields");
@@ -91,7 +98,7 @@ export default function VerifyNIN() {
       const payload = {
           method,
           consent: true,
-          ...(method === "nin" ? { nin } : method === "phone" ? { phone } : { firstname: form.firstname, surname: form.surname, gender: form.gender, birthdate: form.birthdate }),
+          ...(method === "nin" ? { nin } : method === "phone" ? { phone } : method === "tracking" ? { tracking_id: trackingId } : { firstname: form.firstname, surname: form.surname, gender: form.gender, birthdate: form.birthdate }),
         };
 
         const res = await api.post("/api/services/verify", payload, {
@@ -141,6 +148,7 @@ export default function VerifyNIN() {
         {[
           { key: "nin", label: "NIN", icon: ShieldCheck },
           { key: "phone", label: "Phone", icon: Phone },
+          { key: "tracking", label: "Tracking ID", icon: BadgeCheck },
           { key: "demographic", label: "Demographic", icon: UserSearch },
         ].map((m) => (
           <button key={m.key} type="button" onClick={() => setMethod(m.key)} className={`p-6 rounded-[2rem] transition border text-left ${method === m.key ? "bg-blue-600 text-white border-blue-600 shadow-xl" : "bg-white dark:bg-slate-900 border-gray-200"}`}>
@@ -192,6 +200,25 @@ export default function VerifyNIN() {
                 </div>
               )}
               {!isPhoneValid && touched.phone && <p className="mt-3 text-sm text-red-600">Enter a valid phone number.</p>}
+            </div>
+          )}
+
+          {method === "tracking" && (
+            <div className="relative mb-4">
+              <input
+                type="text"
+                placeholder="Enter tracking ID"
+                value={trackingId}
+                onChange={(e) => setTrackingId(e.target.value.trim())}
+                onBlur={() => setTouched((prev) => ({ ...prev, trackingId: true }))}
+                className={`w-full bg-gray-50 p-4 rounded-2xl border transition ${touched.trackingId && !isTrackingValid ? "border-red-400 ring-1 ring-red-300 bg-red-50" : "border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"}`}
+              />
+              {(touched.trackingId || trackingId) && (
+                <div className="absolute top-1/2 right-4 -translate-y-1/2">
+                  {isTrackingValid ? <CheckCircle size={20} className="text-green-500" /> : <AlertTriangle size={20} className="text-red-500" />}
+                </div>
+              )}
+              {!isTrackingValid && touched.trackingId && <p className="mt-3 text-sm text-red-600">Enter a valid tracking ID.</p>}
             </div>
           )}
 

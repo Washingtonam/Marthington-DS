@@ -8,7 +8,7 @@ import { Wallet, CreditCard, AlertCircle, Loader2, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function FundWallet({ isOpen, onClose }) {
-  const { user, updateWalletBalance } = useUser();
+  const { user, updateWalletBalance, refreshBalance } = useUser();
   const { success, error: errorToast } = useToast();
 
   const [amount, setAmount] = useState("");
@@ -114,8 +114,8 @@ export default function FundWallet({ isOpen, onClose }) {
         callback: async () => {
           try {
             await api.post("/api/payments/verify", { reference: response.data.reference });
-            const walletResponse = await api.get("/api/users/wallet");
-            updateWalletBalance(walletResponse?.data?.walletBalance ?? 0);
+            const walletResponse = await refreshBalance();
+            updateWalletBalance(walletResponse?.walletBalance ?? walletResponse?.data?.walletBalance ?? 0);
             success("✅ Payment successful! Your wallet has been updated automatically.");
             setAmount("");
             setTimeout(() => onClose(), 1500);

@@ -15,7 +15,7 @@ import { motion } from "framer-motion";
 import { formatNaira } from "../../lib/currency";
 
 export default function Validation() {
-  const { user, units, setBalance } = useUser();
+  const { user, units, setBalance, refreshBalance } = useUser();
   const navigate = useNavigate();
 
   const [pricing, setPricing] = useState({});
@@ -60,10 +60,13 @@ export default function Validation() {
         slipType: slip,
       });
 
-      // Instantly update wallet from API response (no extra fetch needed)
-      if (response.data?.userWalletBalance !== undefined) {
-        setBalance(response.data.userWalletBalance);
-      }
+      const walletResponse = await refreshBalance();
+      setBalance(
+        walletResponse?.walletBalance ??
+        response.data?.userWalletBalance ??
+        response.data?.walletBalance ??
+        0
+      );
       alert("✅ Request submitted successfully. Wallet deducted.");
       navigate("/my-requests");
     } catch (err) {

@@ -7,6 +7,7 @@ const servicesController = require('../controllers/services.controller');
 router.get('/cac', servicesController.getAllCacRequests);
 router.get('/nin', servicesController.getAllNinRequests);
 router.get('/requests', servicesController.getServiceRequests);
+router.get('/catalog', servicesController.getServiceCatalog);
 router.get('/pricing', servicesController.getPricing);
 
 module.exports = router;

@@ -202,6 +202,40 @@ exports.getPricing = async (req, res) => {
   }
 };
 
+exports.getServiceCatalog = async (req, res) => {
+  try {
+    const category = String(req.query.category || '').trim();
+    const status = String(req.query.status || '').trim();
+
+    let catalog = Pricing.getDefaultServiceCatalog();
+
+    try {
+      const pricing = await Pricing.getPricing();
+      catalog = Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length
+        ? pricing.serviceCatalog
+        : Pricing.getDefaultServiceCatalog();
+    } catch (dbError) {
+      console.warn('SERVICE_CATALOG_FALLBACK_ACTIVE:', dbError.message);
+    }
+
+    const filtered = catalog.filter((service) => {
+      const matchesCategory = !category || String(service.category || '').toLowerCase() === category.toLowerCase();
+      const matchesStatus = !status || String(service.status || 'active') === status.toLowerCase();
+      return matchesCategory && matchesStatus;
+    });
+
+    return res.json({
+      success: true,
+      services: filtered,
+      total: filtered.length,
+      category: category || 'all',
+    });
+  } catch (error) {
+    console.error('SERVICE_CATALOG_ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load service catalog.' });
+  }
+};
+
 const normalizeServiceCategory = (service) => {
   const normalized = String(service || '').toLowerCase().trim();
   if (["self-service", "selfservice", "self_service"].includes(normalized)) return "selfService";
