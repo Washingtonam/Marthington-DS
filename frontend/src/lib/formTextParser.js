@@ -32,9 +32,11 @@ const inferOptions = (line = "") => {
 
 const isHeaderLine = (line = "") => {
   const normalized = String(line || "").trim();
-  return /^(name\s+modification\s+form|service\s+form|form|section|part|details)$/i.test(normalized)
-    || /^[-*•]+$/.test(normalized)
-    || /^[A-Z\s&/()]+$/.test(normalized) && normalized.length <= 40;
+  if (!normalized) return true;
+  if (/^[-*•]+$/.test(normalized)) return true;
+  if (/^(name\s+modification\s+form|service\s+form|form|section|part|details)$/i.test(normalized)) return true;
+  if (/^\d+\s*$/.test(normalized)) return true;
+  return /^[A-Z\s&/()]+$/.test(normalized) && normalized.length <= 40;
 };
 
 const getFieldType = (label = "", options = []) => {
@@ -93,6 +95,8 @@ export const parseImportedFormText = (rawText = "") => {
     const finalLabel = cleanedLabel.replace(/\s*\(\s*optional\s*\)\s*/gi, "").trim();
     const finalKey = normalizeFieldKey(finalLabel);
     const finalOptions = options.length ? options : inferOptions(finalLabel);
+
+    if (!finalLabel || finalLabel.length < 2) continue;
 
     seen.add(finalKey);
     fields.push({
