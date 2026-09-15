@@ -90,7 +90,7 @@ const LEGAL_DOCUMENTS = {
           </p>
           <div className="mt-3 p-4 bg-gray-100 rounded-lg">
             <p><strong>Email:</strong> privacy@xcombinator.com</p>
-            <p><strong>Phone:</strong> +234 817 973 6442</p>
+            <p><strong>Phone:</strong> +234 807 320 0555</p>
           </div>
         </section>
       </div>
@@ -179,7 +179,7 @@ const LEGAL_DOCUMENTS = {
           </p>
           <div className="mt-3 p-4 bg-gray-100 rounded-lg">
             <p><strong>Email:</strong> legal@xcombinator.com</p>
-            <p><strong>Phone:</strong> +234 817 973 6442</p>
+            <p><strong>Phone:</strong> +234 807 320 0555</p>
           </div>
         </section>
       </div>

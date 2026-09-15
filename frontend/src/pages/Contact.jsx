@@ -19,7 +19,7 @@ export default function Contact() {
 
         <div>
           <h2 className="font-semibold">Call</h2>
-          <a href="tel:+2348073200555" className="text-slate-700">+234 817 973 6442</a>
+          <a href="tel:+2348073200555" className="text-slate-700">+234 807 320 0555</a>
         </div>
       </div>
     </div>

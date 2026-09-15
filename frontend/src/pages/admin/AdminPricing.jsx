@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../../lib/axios";
+import { parseImportedFormText } from "../../lib/formTextParser";
 import {
   Loader2,
   Plus,
@@ -56,6 +57,7 @@ export default function AdminPricing() {
   const [selectedService, setSelectedService] = useState(null);
   const [serviceForm, setServiceForm] = useState(defaultServiceModel);
   const [isCreating, setIsCreating] = useState(false);
+  const [importedFormText, setImportedFormText] = useState("");
 
   const groupedSummary = useMemo(() => {
     const summary = {};
@@ -153,6 +155,29 @@ export default function AdminPricing() {
         formFields: [...(prev.metadata?.formFields || []), emptyFormField()],
       },
     }));
+  };
+
+  const importFormText = () => {
+    const parsedFields = parseImportedFormText(importedFormText);
+
+    if (!parsedFields.length) {
+      alert("No fields could be extracted from the pasted form text.");
+      return;
+    }
+
+    setServiceForm((prev) => ({
+      ...prev,
+      metadata: {
+        ...prev.metadata,
+        formFields: parsedFields.map((field) => ({
+          ...field,
+          id: field.id || crypto.randomUUID(),
+          key: String(field.key || "field").trim() || "field",
+          options: Array.isArray(field.options) ? field.options.join(", ") : String(field.options || ""),
+        })),
+      },
+    }));
+    setImportedFormText("");
   };
 
   const removeField = (index) => {
@@ -443,6 +468,27 @@ export default function AdminPricing() {
               <button onClick={addField} className="text-sm text-blue-600 font-medium flex items-center gap-2">
                 <Plus size={16} /> Add field
               </button>
+            </div>
+
+            <div className="mb-5 rounded-2xl border border-dashed border-blue-200 bg-blue-50 p-4">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-blue-700">
+                <FileText size={16} /> Paste a form and auto-create fields
+              </div>
+              <textarea
+                value={importedFormText}
+                onChange={(event) => setImportedFormText(event.target.value)}
+                placeholder="Paste a copied service form here. Example: NIN, Last Name/Surname, First Name, Middle Name (Optional), Email, GSM, Have you ever done modification? Yes / No"
+                className="min-h-[120px] w-full rounded-xl border border-blue-200 bg-white p-3 text-sm text-slate-700 outline-none transition focus:border-blue-500"
+              />
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={importFormText}
+                  className="rounded-xl bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                  Import Fields
+                </button>
+              </div>
             </div>
 
             <div className="space-y-4">
