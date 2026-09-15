@@ -238,7 +238,7 @@ exports.getServiceCatalog = async (req, res) => {
 
 const normalizeServiceCategory = (service) => {
   const normalized = String(service || '').toLowerCase().trim();
-  if (["self-service", "selfservice", "self_service"].includes(normalized)) return "selfService";
+  if (["self-service", "selfservice", "self_service", "selfserviceemailretrieval", "selfservice-deviceunlink", "emailretrieval", "deviceunlink"].includes(normalized)) return "selfService";
   if (normalized === "validation") return "validation";
   if (normalized === "modification") return "modification";
   if (normalized === "ipe") return "ipe";
@@ -247,14 +247,22 @@ const normalizeServiceCategory = (service) => {
 
 const findCatalogService = (catalog, serviceIdentifier, typeIdentifier) => {
   if (!Array.isArray(catalog)) return null;
-  const normalizedService = String(serviceIdentifier || '').trim();
-  const normalizedType = String(typeIdentifier || '').trim();
+  const normalizedService = String(serviceIdentifier || '').trim().toLowerCase();
+  const normalizedType = String(typeIdentifier || '').trim().toLowerCase();
 
   return catalog.find((service) => {
-    const serviceCode = String(service?.serviceCode || '').trim();
-    const serviceName = String(service?.name || '').trim();
-    const serviceType = String(service?.type || '').trim();
-    return serviceCode === normalizedService || serviceName === normalizedService || serviceCode === normalizedType || serviceType === normalizedType;
+    const serviceCode = String(service?.serviceCode || '').trim().toLowerCase();
+    const serviceName = String(service?.name || '').trim().toLowerCase();
+    const serviceType = String(service?.type || '').trim().toLowerCase();
+    const category = String(service?.category || '').trim().toLowerCase();
+
+    return serviceCode === normalizedService
+      || serviceName === normalizedService
+      || serviceCode === normalizedType
+      || serviceType === normalizedType
+      || (normalizedService && (serviceCode.includes(normalizedService) || serviceName.includes(normalizedService)))
+      || (category === 'nin' && normalizedService === 'validation' && serviceType === 'validation')
+      || (category === 'nin' && normalizedService === 'modification' && serviceType === 'modification');
   }) || null;
 };
 

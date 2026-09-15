@@ -9,13 +9,13 @@ const makeSuperAdminToken = () => jwt.sign({
 }, process.env.JWT_SECRET || 'test-jwt-secret');
 
 describe('service catalog API', () => {
-  it('exposes a public catalog with NIN and CAC services', async () => {
+  it('exposes a public catalog with the canonical NIMC and CAC services', async () => {
     const response = await request(app).get('/api/services/catalog');
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(Array.isArray(response.body.services)).toBe(true);
-    expect(response.body.services.some((service) => service.serviceCode === 'nin-verification')).toBe(true);
+    expect(response.body.services.some((service) => service.serviceCode === 'validation-noRecord')).toBe(true);
     expect(response.body.services.some((service) => service.serviceCode === 'cac-sole-proprietorship')).toBe(true);
   });
 
@@ -29,6 +29,23 @@ describe('service catalog API', () => {
     expect(response.body.success).toBe(true);
     expect(Array.isArray(response.body.services)).toBe(true);
     expect(response.body.services.every((service) => String(service.category).toLowerCase() === 'nin')).toBe(true);
+  });
+
+  it('uses the canonical legacy NIMC service set as the default service catalog', async () => {
+    const response = await request(app).get('/api/services/catalog?category=NIN');
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+
+    const codes = response.body.services.map((service) => service.serviceCode);
+    expect(codes).toEqual(expect.arrayContaining([
+      'validation-noRecord',
+      'modification-name',
+      'personalization-tracking',
+      'self-service-emailRetrieval',
+      'ipe-inProcessingError'
+    ]));
+    expect(codes).not.toEqual(expect.arrayContaining(['nin-verification', 'phone-verification', 'tracking-verification']));
   });
 
   it('supports custom categories and custom service pricing from the catalog', async () => {
