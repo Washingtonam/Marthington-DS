@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../../lib/axios";
 import DynamicServiceForm from "../../components/DynamicServiceForm";
 import { useUser } from "../../context/UserContext";
@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   ArrowRight
 } from "lucide-react";
-import { motion } from "framer-motion";
 import { formatNaira } from "../../lib/currency";
 
 const SERVICE_OPTIONS = [
@@ -64,31 +63,31 @@ const SECRETARY_FIELDS = [
   { name: "nin", label: "NIN", placeholder: "National Identification Number" }
 ];
 
-export default function CacServices() {
+export default function CacServices({ dedicated = false }) {
+  const { serviceCode } = useParams();
+  const navigate = useNavigate();
   const { user, refreshBalance, setBalance } = useUser();
   const [service, setService] = useState("");
   const [catalogServices, setCatalogServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(true);
-  const [history, setHistory] = useState([]);
   const [prices, setPrices] = useState({ sole_proprietorship: 30000, partnership: 32000, limited_1m: 40000, custom_ngo: 0 });
   const [businessInfo, setBusinessInfo] = useState({ businessName1: "", businessName2: "", companyEmail: "", companyPhone: "", category: "", state: "", lga: "", shopNo: "", streetAddress: "" });
   const [proprietors, setProprietors] = useState([{ fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "" }]);
-  const [witness, setWitness] = useState({ fullName: "", dob: "", gender: "", phone: "", nin: "", email: "" });
-  const [includeSecretary, setIncludeSecretary] = useState(false);
-  const [secretary, setSecretary] = useState({ fullName: "", phone: "", email: "", nin: "" });
+  const [witness] = useState({ fullName: "", dob: "", gender: "", phone: "", nin: "", email: "" });
+  const [includeSecretary] = useState(false);
+  const [secretary] = useState({ fullName: "", phone: "", email: "", nin: "" });
 
   const currentPrice = prices[service] || 0;
   const showWitness = service !== "sole_proprietorship" && service !== "custom_ngo";
+  const selectedCatalogName = catalogServices.find((entry) => entry.serviceCode === serviceCode)?.name;
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [pricingRes, historyRes, catalogRes] = await Promise.all([
+        const [pricingRes, catalogRes] = await Promise.all([
           api.get("/api/pricing"),
-          user?.id ? api.get(`/api/cac/user-requests/${user.id}`) : Promise.resolve({ data: [] }),
           api.get("/api/services/catalog?category=CAC")
         ]);
 
@@ -104,18 +103,19 @@ export default function CacServices() {
 
         const activeCatalog = Array.isArray(catalogRes.data?.services) ? catalogRes.data.services.filter((entry) => ["active", "paused"].includes(entry.status)) : [];
         setCatalogServices(activeCatalog);
-        if (activeCatalog[0]) {
+        const requestedService = activeCatalog.find((entry) => entry.serviceCode === serviceCode);
+        if (dedicated && requestedService) {
+          setService(requestedService.type);
+          setSelectedService(null);
+        } else if (activeCatalog[0]) {
           setSelectedService(activeCatalog[0]);
         }
-        setHistory(historyRes.data || []);
       } catch (err) {
         console.error("Initialization error:", err);
-      } finally {
-        setLoadingHistory(false);
       }
     };
     fetchData();
-  }, [user?.id]);
+  }, [dedicated, serviceCode, user?.id]);
 
   const updateBusinessInfo = (field, value) => setBusinessInfo((prev) => ({ ...prev, [field]: value }));
   const updateProprietor = (index, field, value) => {
@@ -127,8 +127,6 @@ export default function CacServices() {
   };
 
   const addProprietor = () => setProprietors((prev) => [...prev, { fullName: "", dob: "", gender: "", phone: "", nin: "", email: "", state: "", lga: "", address: "" }]);
-  const removeProprietor = (index) => setProprietors((prev) => prev.filter((_, idx) => idx !== index));
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!service) return;
@@ -180,10 +178,15 @@ export default function CacServices() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-6 md:p-12">
       <div className="max-w-6xl mx-auto space-y-10">
+        {dedicated && (
+          <button type="button" onClick={() => navigate("/services/cac")} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-blue-600">
+            <ArrowRight className="rotate-180" size={16} /> Back to CAC services
+          </button>
+        )}
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.35em] text-blue-500">Corporate service</p>
-            <h1 className="text-4xl font-black">CAC Registry Services</h1>
+            <h1 className="text-4xl font-black">{dedicated && selectedCatalogName ? selectedCatalogName : "CAC Registry Services"}</h1>
           </div>
           <div className="rounded-3xl border bg-white/80 dark:bg-slate-950/80 p-5 shadow-2xl">
             <p className="text-sm text-slate-500">Wallet Balance</p>
@@ -191,10 +194,10 @@ export default function CacServices() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        {!dedicated && <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {catalogServices.length ? catalogServices.map((option) => (
-            <motion.button key={option.serviceCode} type="button" onClick={() => setSelectedService(option)} whileHover={{ y: -2 }}
-              className={`group rounded-3xl border p-6 text-left transition ${selectedService?.serviceCode === option.serviceCode ? "border-blue-500 bg-blue-500/10 shadow-xl" : "border-slate-200 bg-white dark:bg-slate-900"}`}
+            <button key={option.serviceCode} type="button" onClick={() => setSelectedService(option)}
+              className={`group rounded-3xl border p-6 text-left transition hover:-translate-y-1 ${selectedService?.serviceCode === option.serviceCode ? "border-blue-500 bg-blue-500/10 shadow-xl" : "border-slate-200 bg-white dark:bg-slate-900"}`}
             >
               <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500 text-white"><Briefcase /></div>
               <h2 className="text-xl font-semibold">{option.name}</h2>
@@ -203,17 +206,17 @@ export default function CacServices() {
                 <span>₦{Number(option.price || 0).toLocaleString()}</span>
                 <ArrowRight size={16} />
               </div>
-            </motion.button>
+            </button>
           )) : SERVICE_OPTIONS.map((option) => (
-            <motion.button key={option.key} type="button" onClick={() => setService(option.key)} whileHover={{ y: -2 }}
-              className={`group rounded-3xl border p-6 text-left transition ${service === option.key ? "border-blue-500 bg-blue-500/10 shadow-xl" : "border-slate-200 bg-white dark:bg-slate-900"}`}
+            <button key={option.key} type="button" onClick={() => setService(option.key)}
+              className={`group rounded-3xl border p-6 text-left transition hover:-translate-y-1 ${service === option.key ? "border-blue-500 bg-blue-500/10 shadow-xl" : "border-slate-200 bg-white dark:bg-slate-900"}`}
             >
               <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500 text-white">{option.icon}</div>
               <h2 className="text-xl font-semibold">{option.title}</h2>
               <p className="mt-3 text-sm text-slate-500">{option.description}</p>
-            </motion.button>
+            </button>
           ))}
-        </div>
+        </div>}
 
         {selectedService && (
           <div className="rounded-3xl border bg-white p-8 shadow-sm dark:bg-slate-950">

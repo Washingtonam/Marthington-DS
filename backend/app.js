@@ -55,6 +55,7 @@ app.use("/api/payments", require("./routes/payment.routes"));
 app.use("/api/users", require("./routes/users.routes"));
 app.use("/api/user", require("./routes/users.routes"));
 app.use("/api/services", require("./routes/nin.routes"));
+app.use("/api/notifications", require("./routes/notifications.routes").router);
 app.get("/api/service-requests", verifyToken, require("./controllers/services.controller").getServiceRequests);
 app.get("/api/verification-requests", verifyToken, require("./controllers/services.controller").getVerificationRequests);
 app.use("/api/cac", require("./routes/cac.routes"));
@@ -62,6 +63,7 @@ app.use("/api/slips", require("./routes/slips.routes"));
 
 // Administrative routes (frontend calls /api/admin/*)
 app.use("/api/admin", verifyToken, require("./routes/admin.routes"));
+app.use("/api/admin/notifications", verifyToken, require("./routes/notifications.routes").adminRouter);
 app.use("/api/admin/audit-logs", verifyToken, require("./routes/auditRoutes"));
 
 // Backwards compatibility alias for legacy transaction path

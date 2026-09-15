@@ -2,7 +2,6 @@ import {
   BrowserRouter,
   Routes,
   Route,
-  useLocation,
   Navigate,
 } from "react-router-dom";
 
@@ -26,14 +25,14 @@ import Transactions from "./pages/transactions/Transactions";
 import VerifyNIN from "./pages/verification/VerifyNIN";
 import VerifyBVN from "./pages/verification/VerifyBVN";
 import VerifyResult from "./pages/verification/VerifyResult";
-import NINServices from "./pages/services/NINServices";
 import Validation from "./pages/services/Validation";
 import IPEClearance from "./pages/services/IPEClearance";
 import Modification from "./pages/services/Modification";
 import SelfServiceForm from "./pages/services/SelfServiceForm";
-import CacServices from "./pages/services/CacServices";
 import Personalization from "./pages/services/Personalization";
 import CategoryServicesPage from "./pages/services/CategoryServicesPage";
+import ServiceDetailPage from "./pages/services/ServiceDetailPage";
+import CacServices from "./pages/services/CacServices";
 
 // Admin
 import Admin from "./pages/admin/Admin";
@@ -42,11 +41,13 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminPricing from "./pages/admin/AdminPricing";
 import AdminRequests from "./pages/admin/AdminRequests";
+import AdminNotifications from "./pages/admin/AdminNotifications";
 import UserDetailView from "./pages/admin/UserDetailView";
 import Contact from "./pages/Contact";
 
 // Layout & Context
 import Layout from "./layout/Layout";
+import NotificationHost from "./components/NotificationHost";
 import { ThemeProvider } from "./context/ThemeContext";
 
 // ==============================
@@ -102,11 +103,11 @@ const SuperAdminRoute = ({ children }) => {
 // APP ROUTER CONTROLLER
 // ==============================
 function AppRoutes() {
-  const location = useLocation();
   const loggedIn = isAuthenticated();
 
   return (
-    <Routes>
+    <>
+      <Routes>
       {/* Public Routes */}
       <Route path="/" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Home />} />
       <Route path="/login" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Login />} />
@@ -143,10 +144,13 @@ function AppRoutes() {
       <Route path="/contact" element={<ProtectedRoute><Layout><Contact /></Layout></ProtectedRoute>} />
 
       {/* Services Routes */}
-      <Route path="/nin-services" element={<ProtectedRoute><Layout><NINServices /></Layout></ProtectedRoute>} />
-      <Route path="/services/nin" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
-      <Route path="/services/nimc" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
-      <Route path="/services/cac" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
+      <Route path="/nin-services" element={<ProtectedRoute><Layout><CategoryServicesPage defaultCategory="NIN" /></Layout></ProtectedRoute>} />
+      <Route path="/cac-services" element={<ProtectedRoute><Layout><CategoryServicesPage defaultCategory="CAC" /></Layout></ProtectedRoute>} />
+      <Route path="/services/:category/:serviceCode" element={<ProtectedRoute><Layout><ServiceDetailPage /></Layout></ProtectedRoute>} />
+      <Route path="/services/nin" element={<ProtectedRoute><Layout><CategoryServicesPage defaultCategory="NIN" /></Layout></ProtectedRoute>} />
+      <Route path="/services/nimc" element={<ProtectedRoute><Layout><CategoryServicesPage defaultCategory="NIN" /></Layout></ProtectedRoute>} />
+      <Route path="/services/cac" element={<ProtectedRoute><Layout><CategoryServicesPage defaultCategory="CAC" /></Layout></ProtectedRoute>} />
+      <Route path="/services/cac/:serviceCode" element={<ProtectedRoute><Layout><CacServices dedicated /></Layout></ProtectedRoute>} />
       <Route path="/services/jamb" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
       <Route path="/services/cse" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
       <Route path="/services/:category" element={<ProtectedRoute><Layout><CategoryServicesPage /></Layout></ProtectedRoute>} />
@@ -155,7 +159,6 @@ function AppRoutes() {
       <Route path="/nin-services/modification" element={<ProtectedRoute><Layout><Modification /></Layout></ProtectedRoute>} />
       <Route path="/nin-services/personalization" element={<ProtectedRoute><Layout><Personalization /></Layout></ProtectedRoute>} />
       <Route path="/nin-services/selfservice" element={<ProtectedRoute><Layout><SelfServiceForm /></Layout></ProtectedRoute>} />
-      <Route path="/cac-services" element={<ProtectedRoute><Layout><CacServices /></Layout></ProtectedRoute>} />
 
       {/* Admin Routes */}
       <Route path="/admin" element={<AdminRoute><Layout><AdminDashboard /></Layout></AdminRoute>} />
@@ -165,11 +168,14 @@ function AppRoutes() {
       <Route path="/admin/verification-requests" element={<AdminRoute><Layout><VerificationRequests /></Layout></AdminRoute>} />
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/services-engine" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/notifications" element={<SuperAdminRoute><Layout><AdminNotifications /></Layout></SuperAdminRoute>} />
       <Route path="/admin/user/:userId/details" element={<SuperAdminRoute><Layout><UserDetailView /></Layout></SuperAdminRoute>} />
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+      </Routes>
+      <NotificationHost />
+    </>
   );
 }
 

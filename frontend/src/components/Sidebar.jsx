@@ -92,7 +92,7 @@ export default function Sidebar() {
             });
             paymentsData = alt.data?.data || alt.data || [];
           } catch (err2) {
-            console.error("Payments fetch failed:", err?.message);
+            console.error("Payments fetch failed:", err2?.message || err?.message);
             paymentsData = [];
           }
         }
@@ -215,7 +215,7 @@ export default function Sidebar() {
                 icon={<Sliders size={18} />}
                 open={open}
                 onNavigate={handleNavClick}
-              />
+                  />
               <SidebarNavItem
                 to="/wallet"
                 label="Wallet"
@@ -294,13 +294,22 @@ export default function Sidebar() {
                     onNavigate={handleNavClick}
                   />
                   {isSuperAdmin && (
-                    <SidebarNavItem
-                      to="/admin/services-engine"
-                      label="Services Engine"
-                      icon={<Sliders size={18} />}
-                      open={open}
-                      onNavigate={handleNavClick}
-                    />
+                    <>
+                      <SidebarNavItem
+                        to="/admin/services-engine"
+                        label="Services Engine"
+                        icon={<Sliders size={18} />}
+                        open={open}
+                        onNavigate={handleNavClick}
+                      />
+                      <SidebarNavItem
+                        to="/admin/notifications"
+                        label="Notification Center"
+                        icon={<Bell size={18} />}
+                        open={open}
+                        onNavigate={handleNavClick}
+                      />
+                    </>
                   )}
                 </SidebarNavSection>
               </div>
