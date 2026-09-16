@@ -20,7 +20,7 @@ exports.getUserRequests = async (req, res) => {
     const skip = (page - 1) * limit;
     const search = req.query.search ? String(req.query.search).trim() : '';
     const statusParam = req.query.status ? String(req.query.status).trim().toLowerCase() : '';
-    const typeParam = req.query.type ? String(req.query.type).trim() : '';
+    const typeParam = req.query.type ? String(req.query.type).trim() : (req.query.category ? String(req.query.category).trim() : '');
 
     const serviceQuery = { userId };
     const cacQuery = { userId };
@@ -40,12 +40,16 @@ exports.getUserRequests = async (req, res) => {
 
     if (typeParam) {
       const normalizedType = typeParam.toLowerCase();
-      if (['nimc', 'cac', 'nmt'].includes(normalizedType)) {
-        serviceQuery.serviceCategory = new RegExp(`^${typeParam}$`, 'i');
-        cacQuery.serviceCategory = new RegExp(`^${typeParam}$`, 'i');
+      if (['nimc', 'nin'].includes(normalizedType)) {
+        serviceQuery.serviceCategory = { $in: [/^NIN$/i, /^NIMC$/i] };
+        cacQuery._id = null;
+      } else if (normalizedType === 'cac') {
+        serviceQuery.serviceCategory = /^CAC$/i;
+        cacQuery.serviceCategory = /^CAC$/i;
       } else {
-        serviceQuery.type = new RegExp(`^${typeParam}$`, 'i');
-        cacQuery.serviceType = new RegExp(`^${typeParam}$`, 'i');
+        const escapedType = typeParam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        serviceQuery.serviceCategory = new RegExp(`^${escapedType}$`, 'i');
+        cacQuery._id = null;
       }
     }
 

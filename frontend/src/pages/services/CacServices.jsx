@@ -101,7 +101,7 @@ export default function CacServices({ dedicated = false }) {
           });
         }
 
-        const activeCatalog = Array.isArray(catalogRes.data?.services) ? catalogRes.data.services.filter((entry) => ["active", "paused"].includes(entry.status)) : [];
+        const activeCatalog = Array.isArray(catalogRes.data?.services) ? catalogRes.data.services.filter((entry) => entry.status === "active") : [];
         setCatalogServices(activeCatalog);
         const requestedService = activeCatalog.find((entry) => entry.serviceCode === serviceCode);
         if (dedicated && requestedService) {

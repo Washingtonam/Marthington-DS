@@ -100,6 +100,7 @@ router.put("/categories/:slug", isSuperAdmin, async (req, res) => {
       return res.status(409).json({ success: false, message: 'That category already exists.' });
     }
 
+    const previousLabel = String(categories.find((category) => category.slug === currentSlug)?.label || currentSlug).trim();
     target.slug = nextSlug;
     target.label = label;
     pricing.serviceCatalog = (pricing.serviceCatalog || []).map((service) => {
@@ -110,6 +111,10 @@ router.put("/categories/:slug", isSuperAdmin, async (req, res) => {
     pricing.markModified('categories');
     pricing.markModified('serviceCatalog');
     await pricing.save();
+    await ServiceRequest.updateMany(
+      { serviceCategory: { $in: [previousLabel, currentSlug, currentSlug.toUpperCase()] } },
+      { $set: { serviceCategory: label } }
+    );
     return res.json({ success: true, category: target });
   } catch (error) {
     console.error('ADMIN CATEGORY UPDATE ERROR:', error);
@@ -162,10 +167,10 @@ router.get("/requests", isAdmin, async (req, res) => {
     }
 
     if (normalizedCategory === "cac") {
-      serviceQuery._id = null;
-      cacQuery.serviceCategory = "CAC";
+      serviceQuery.serviceCategory = { $in: ["CAC", "cac"] };
+      cacQuery.serviceCategory = { $in: ["CAC", "cac"] };
     } else if (normalizedCategory === "nimc") {
-      serviceQuery.serviceCategory = "NIMC";
+      serviceQuery.serviceCategory = { $in: ["NIN", "NIMC", "nin", "nimc"] };
       cacQuery._id = null;
     } else if (normalizedCategory) {
       const escapedCategory = escapeRegex(normalizedCategory);
@@ -174,6 +179,7 @@ router.get("/requests", isAdmin, async (req, res) => {
         { service: { $regex: escapedCategory, $options: "i" } },
         { type: { $regex: escapedCategory, $options: "i" } }
       ];
+      cacQuery._id = null;
     }
 
     if (normalizedServiceType) {
@@ -367,7 +373,7 @@ router.get("/stats/overview", isAdmin, async (req, res) => {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const successfulStatuses = ["success", "successful", "approved", "completed"];
 
-    const [dailyRevenueAgg, monthlyRevenueAgg, nimcPending, serviceCacPending, cacRequestPending] = await Promise.all([
+    const [dailyRevenueAgg, monthlyRevenueAgg, categories, cacRequestPending] = await Promise.all([
       Transaction.aggregate([
         { $match: { status: { $in: successfulStatuses }, createdAt: { $gte: todayStart } } },
         { $group: { _id: null, amount: { $sum: { $cond: [{ $gt: ["$amount", null] }, "$amount", { $divide: ["$amountKobo", 100] }] } } } }
@@ -376,17 +382,27 @@ router.get("/stats/overview", isAdmin, async (req, res) => {
         { $match: { status: { $in: successfulStatuses }, createdAt: { $gte: monthStart } } },
         { $group: { _id: null, amount: { $sum: { $cond: [{ $gt: ["$amount", null] }, "$amount", { $divide: ["$amountKobo", 100] }] } } } }
       ]),
-      ServiceRequest.countDocuments({ status: { $in: ["pending", "processing", "in-progress"] }, serviceCategory: "NIMC" }),
-      ServiceRequest.countDocuments({ status: { $in: ["pending", "processing", "in-progress"] }, serviceCategory: "CAC" }),
+      Pricing.getCategories(),
       CACRequest.countDocuments({ status: { $in: ["pending", "processing", "in-progress"] } })
     ]);
 
     const dailyRevenue = dailyRevenueAgg[0]?.amount || 0;
     const monthlyRevenue = monthlyRevenueAgg[0]?.amount || 0;
-    const pendingRequests = {
-      NIMC: nimcPending,
-      CAC: serviceCacPending + cacRequestPending
-    };
+    const pendingStatuses = ["pending", "processing", "in-progress"];
+    const pendingRequests = {};
+    await Promise.all(categories.filter((category) => category.isActive !== false).map(async (category) => {
+      const rawCategoryLabel = String(category.label || category.slug || "Service").trim();
+      const categoryLabel = rawCategoryLabel.toUpperCase() === "NIN" ? "NIMC" : rawCategoryLabel;
+      const categoryAliases = ["NIMC", "NIN"].includes(categoryLabel.toUpperCase())
+        ? ["NIMC", "NIN", "nimc", "nin"]
+        : [categoryLabel, categoryLabel.toUpperCase(), categoryLabel.toLowerCase()];
+      const serviceCount = await ServiceRequest.countDocuments({
+        status: { $in: pendingStatuses },
+        serviceCategory: { $in: categoryAliases }
+      });
+      pendingRequests[categoryLabel] = serviceCount;
+    }));
+    pendingRequests.CAC = (pendingRequests.CAC || 0) + cacRequestPending;
     const systemStatus = {
       apiGateway: "nominal",
       verificationWorkers: "stable",
@@ -630,7 +646,7 @@ router.put("/status/:id", isAdmin, async (req, res) => {
     if (!record) {
       return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
     }
-    const normalizedModule = cacRecord ? 'cac' : 'nimc';
+    const normalizedModule = cacRecord ? 'cac' : 'service';
     const normalizedStatus = String(status).toLowerCase();
 
     // SECURITY: Block non-super-admins from modifying pending requests

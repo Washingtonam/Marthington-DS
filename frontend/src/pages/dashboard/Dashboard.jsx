@@ -83,7 +83,7 @@ export default function Dashboard() {
       const query = normalizedFilter ? `category=${encodeURIComponent(normalizedFilter)}&limit=5` : "limit=5";
 
       const balancePromise = api.get("/api/users/balance");
-      const requestsPromise = api.get(`/api/service-requests?${query}`);
+      const requestsPromise = api.get(`/api/users/requests/history?${query}`);
 
       const [balanceRes, requestsRes] = await Promise.all([balancePromise, requestsPromise]);
       const balanceValue = balanceRes?.data?.walletBalance ?? contextWalletBalance ?? 0;

@@ -8,6 +8,8 @@ const transactionSchema = new mongoose.Schema({
     units: { type: Number, default: 0 },
     unitsUsed: { type: Number, default: 0 },
     status: { type: String, enum: ["pending", "approved", "rejected", "success", "successful", "failed"], default: "pending" },
+    requestId: { type: mongoose.Schema.Types.ObjectId, index: true },
+    requestSource: { type: String, enum: ["service", "cac"], default: "service" },
     description: String,
     reference: { type: String, unique: true, sparse: true },
     proof: String

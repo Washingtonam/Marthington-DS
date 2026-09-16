@@ -13,7 +13,7 @@ export default function ServiceDetailPage() {
   useEffect(() => {
     const fetchService = async () => {
       try {
-        const response = await api.get("/api/services/catalog", { params: { category: String(category || "").toUpperCase() } });
+        const response = await api.get("/api/services/catalog", { params: { category: String(category || ""), status: "active" } });
         const code = decodeURIComponent(serviceCode || "");
         setService((response.data?.services || []).find((entry) => entry.serviceCode === code) || null);
       } catch (error) {

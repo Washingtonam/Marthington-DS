@@ -41,7 +41,7 @@ export default function UserRequests() {
       if (nin) params.set("nin", nin);
       if (search) params.set("search", search);
 
-      const res = await api.get(`/api/service-requests?${params.toString()}`);
+      const res = await api.get(`/api/users/requests/history?${params.toString()}`);
       const newData = res.data?.data || [];
 
       if (append) {
@@ -98,6 +98,8 @@ export default function UserRequests() {
   const statusStyle = (status) => {
     switch (status?.toLowerCase()) {
       case "pending": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
+      case "approved": return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+      case "in-progress": return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
       case "processing": return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
       case "completed":
       case "success":
@@ -111,6 +113,8 @@ export default function UserRequests() {
   const statusText = (status) => {
     switch (status?.toLowerCase()) {
       case "pending": return "⏳ Waiting for Review";
+      case "approved": return "✅ Approved";
+      case "in-progress": return "⚙️ In Progress";
       case "processing": return "⚙️ In Progress";
       case "completed":
       case "success":

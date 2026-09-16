@@ -9,7 +9,7 @@ export default function ActivityCard({ activity, statusLabel, statusBadgeColor, 
   const navigate = useNavigate();
 
   const latestUpdate = Array.isArray(activity.statusHistory)
-    ? activity.statusHistory[0]
+    ? activity.statusHistory[activity.statusHistory.length - 1]
     : null;
   const latestNote = latestUpdate?.note || activity.status || "No update yet";
 

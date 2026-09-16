@@ -30,7 +30,21 @@ router.post("/submit", verifyToken, async (req, res) => {
       custom_ngo: 0
     };
 
-    const cost = rates[serviceType];
+    const catalogService = Array.isArray(pricing?.serviceCatalog)
+      ? pricing.serviceCatalog.find((entry) => entry.serviceCode === serviceType || entry.type === serviceType)
+      : null;
+    if (catalogService && catalogService.status !== "active") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: "This CAC service is not currently available." });
+    }
+
+    const cost = catalogService ? Number(catalogService.price || 0) : rates[serviceType];
+    if (!Number.isFinite(cost)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: "Unable to resolve the current CAC service price." });
+    }
     const costKobo = Math.round(Number(cost) * 100);
 
     const user = await User.findById(userId).session(session);
@@ -108,7 +122,7 @@ router.post("/submit", verifyToken, async (req, res) => {
     // Track Transaction (wallet debit)
     await Transaction.create([{
       userId, type: "SERVICE", amount: cost, amountKobo: costKobo, unitsUsed: 0, status: "success",
-      proof: `CAC ID: ${newCacJob._id}`
+      proof: `CAC ID: ${newCacJob._id}`, requestId: newCacJob._id, requestSource: "cac"
     }], { session });
 
     await session.commitTransaction();

@@ -50,9 +50,18 @@ export default function DynamicServiceForm({ service, onSubmit, onCancel }) {
 
   if (!fields.length) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
-        This service has no form definition yet. Add form fields in the Services Engine to enable user intake.
-      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
+          This service does not require additional information. Submit to create your request.
+        </div>
+        <div className="flex justify-end gap-3">
+          {onCancel && <button type="button" onClick={onCancel} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>}
+          <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {submitting ? "Submitting..." : "Submit Service"}
+          </button>
+        </div>
+      </form>
     );
   }
 

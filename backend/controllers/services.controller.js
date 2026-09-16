@@ -9,6 +9,13 @@ const { validateServiceRequest } = require('../shared/validators');
 const { SUPER_ADMIN_EMAIL } = require('../config/constants');
 const { normalizeServiceType } = require('../config/serviceTypes');
 
+const normalizeCategorySlug = (value = '') => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .replace(/-+/g, '-');
+
 exports.getAllCacRequests = async (req, res) => {
   // ...existing logic from cac.routes.js...
 };
@@ -248,9 +255,9 @@ exports.getServiceCatalog = async (req, res) => {
     }
 
     const filtered = catalog.filter((service) => {
-      const serviceCategorySlug = String(service.category || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const serviceCategorySlug = normalizeCategorySlug(service.category);
       const isVisibleCategory = !activeCategorySlugs || activeCategorySlugs.has(serviceCategorySlug);
-      const matchesCategory = !category || String(service.category || '').toLowerCase() === category.toLowerCase();
+      const matchesCategory = !category || normalizeCategorySlug(service.category) === normalizeCategorySlug(category);
       const matchesStatus = !status || String(service.status || 'active') === status.toLowerCase();
       return isVisibleCategory && matchesCategory && matchesStatus;
     });
@@ -361,6 +368,10 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
         throw new Error('Unable to resolve service price from current pricing configuration.');
       }
 
+      if (!catalogService || catalogService.status !== 'active') {
+        throw new Error('This service is not currently available.');
+      }
+
       const { amount, amountKobo } = resolvedPrice;
       const normalizedCategory = String(catalogService?.category || category || 'NIMC').trim().toUpperCase() || 'NIMC';
 
@@ -429,7 +440,8 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
           amountKobo,
           status: 'success',
           userId,
-          requestId: savedRequest._id
+          requestId: savedRequest._id,
+          requestSource: 'service'
         }
       ], { session });
 
