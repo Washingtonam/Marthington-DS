@@ -47,6 +47,39 @@ const defaultServiceCatalog = [
 
 const catalogFallback = [...defaultServiceCatalog];
 
+const normalizeCategorySlug = (value = '') => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .replace(/-+/g, '-');
+
+const normalizeCategory = (category = {}) => {
+  const label = String(category.label || category.name || category.slug || '').trim();
+  const slug = normalizeCategorySlug(category.slug || label);
+  return {
+    slug,
+    label: label || slug.toUpperCase(),
+    isActive: category.isActive !== false,
+  };
+};
+
+const getCategoriesFromCatalog = (catalog = [], categories = []) => {
+  const merged = new Map();
+
+  (Array.isArray(categories) ? categories : []).forEach((category) => {
+    const normalized = normalizeCategory(category);
+    if (normalized.slug) merged.set(normalized.slug, normalized);
+  });
+
+  (Array.isArray(catalog) ? catalog : []).forEach((service) => {
+    const normalized = normalizeCategory({ label: service?.category });
+    if (normalized.slug && !merged.has(normalized.slug)) merged.set(normalized.slug, normalized);
+  });
+
+  return [...merged.values()];
+};
+
 const LEGACY_GENERIC_SERVICE_CODES = new Set([
   'nin-verification',
   'phone-verification',
@@ -89,6 +122,14 @@ const normalizeServiceCatalog = (catalog = []) => {
 };
 
 const pricingSchema = new mongoose.Schema({
+  categories: {
+    type: [{
+      slug: { type: String, required: true },
+      label: { type: String, required: true },
+      isActive: { type: Boolean, default: true },
+    }],
+    default: [],
+  },
   serviceCatalog: {
     type: [{
       serviceCode: { type: String, required: true },
@@ -208,14 +249,21 @@ const pricingSchema = new mongoose.Schema({
 pricingSchema.statics.getPricing = async function () {
   let pricing = await this.findOne();
   if (!pricing) {
-    pricing = await this.create({ serviceCatalog: defaultServiceCatalog });
+    pricing = await this.create({
+      categories: getCategoriesFromCatalog(defaultServiceCatalog),
+      serviceCatalog: defaultServiceCatalog,
+    });
   } else {
     const normalizedCatalog = normalizeServiceCatalog(pricing.serviceCatalog);
-    const hasLegacyEntries = JSON.stringify(normalizedCatalog) !== JSON.stringify(pricing.serviceCatalog || []);
+    const normalizedCategories = getCategoriesFromCatalog(normalizedCatalog, pricing.categories);
+    const hasLegacyEntries = JSON.stringify(normalizedCatalog) !== JSON.stringify(pricing.serviceCatalog || [])
+      || JSON.stringify(normalizedCategories) !== JSON.stringify(pricing.categories || []);
 
     if (hasLegacyEntries) {
       pricing.serviceCatalog = normalizedCatalog;
+      pricing.categories = normalizedCategories;
       pricing.markModified('serviceCatalog');
+      pricing.markModified('categories');
       await pricing.save();
     }
   }
@@ -254,5 +302,13 @@ pricingSchema.statics.getServiceCatalog = async function () {
     metadata: service.metadata || {},
   }));
 };
+
+pricingSchema.statics.getCategories = async function () {
+  const pricing = await this.getPricing();
+  return getCategoriesFromCatalog(pricing?.serviceCatalog, pricing?.categories);
+};
+
+pricingSchema.statics.normalizeCategorySlug = normalizeCategorySlug;
+pricingSchema.statics.normalizeCategory = normalizeCategory;
 
 module.exports = mongoose.models.Pricing || mongoose.model("Pricing", pricingSchema);

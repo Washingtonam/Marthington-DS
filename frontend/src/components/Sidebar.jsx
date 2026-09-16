@@ -11,8 +11,6 @@ import {
   X,
   Briefcase,
   Sparkles,
-  Building2,
-  Sliders,
 } from "lucide-react";
 
 import { useState, useEffect } from "react";
@@ -37,6 +35,7 @@ export default function Sidebar() {
   const [open, setOpen] = useState(window.innerWidth >= 1024);
   const [pendingPayments, setPendingPayments] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [serviceCategories, setServiceCategories] = useState([]);
 
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
@@ -116,6 +115,20 @@ export default function Sidebar() {
     fetchCounts();
   }, [isAdmin, headers]);
 
+  useEffect(() => {
+    const fetchServiceCategories = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/api/services/categories`, { headers });
+        setServiceCategories(Array.isArray(response.data?.categories) ? response.data.categories : []);
+      } catch (err) {
+        console.error("Sidebar categories fetch failed:", err?.message || err);
+        setServiceCategories([]);
+      }
+    };
+
+    fetchServiceCategories();
+  }, [token]);
+
   const handleNavClick = () => {
     if (window.innerWidth < 1024) {
       toggleSidebar();
@@ -188,34 +201,16 @@ export default function Sidebar() {
                 open={open}
                 onNavigate={handleNavClick}
               />
-              <SidebarNavItem
-                to="/nin-services"
-                label="NIMC Services"
-                icon={<Briefcase size={18} />}
-                open={open}
-                onNavigate={handleNavClick}
-              />
-              <SidebarNavItem
-                to="/cac-services"
-                label="CAC Services"
-                icon={<Building2 size={18} />}
-                open={open}
-                onNavigate={handleNavClick}
-              />
-              <SidebarNavItem
-                to="/services/jamb"
-                label="JAMB Services"
-                icon={<Briefcase size={18} />}
-                open={open}
-                onNavigate={handleNavClick}
-              />
-              <SidebarNavItem
-                to="/services/cse"
-                label="CSE Services"
-                icon={<Sliders size={18} />}
-                open={open}
-                onNavigate={handleNavClick}
-                  />
+              {serviceCategories.map((category) => (
+                <SidebarNavItem
+                  key={category.slug}
+                  to={`/services/${category.slug}`}
+                  label={`${category.label} Services`}
+                  icon={<Briefcase size={18} />}
+                  open={open}
+                  onNavigate={handleNavClick}
+                />
+              ))}
               <SidebarNavItem
                 to="/wallet"
                 label="Wallet"

@@ -42,6 +42,7 @@ router.get("/requests", verifyToken, servicesController.getServiceRequests);
 // 🧩 ROUTE 1C: PUBLIC SERVICE CATALOG
 // ==============================================================
 router.get("/catalog", servicesController.getServiceCatalog);
+router.get("/categories", servicesController.getServiceCategories);
 
 // ==============================================================
 // ⚡ ROUTE 2: INSTANT AUTOMATED THIRD-PARTY NIN RECOVERY / VERIFY

@@ -64,7 +64,7 @@ exports.getServiceRequests = async (req, res) => {
     }
 
     const [requests, totalCount] = await Promise.all([
-      ServiceRequest.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      ServiceRequest.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
       ServiceRequest.countDocuments(query)
     ]);
 
@@ -129,10 +129,10 @@ exports.getVerificationRequests = async (req, res) => {
       ];
     }
 
-    const verificationPromise = VerificationRequest.find(verificationQuery).sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
+    const verificationPromise = VerificationRequest.find(verificationQuery).sort({ createdAt: -1 }).skip(skip).limit(limit);
     const verificationCountPromise = VerificationRequest.countDocuments(verificationQuery);
     const servicePromise = includeServiceRequests
-      ? ServiceRequest.find(serviceQuery).sort({ createdAt: -1 }).skip(skip).limit(limit).lean()
+      ? ServiceRequest.find(serviceQuery).sort({ createdAt: -1 }).skip(skip).limit(limit)
       : Promise.resolve([]);
     const serviceCountPromise = includeServiceRequests
       ? ServiceRequest.countDocuments(serviceQuery)
@@ -202,26 +202,57 @@ exports.getPricing = async (req, res) => {
   }
 };
 
+exports.getServiceCategories = async (req, res) => {
+  try {
+    let categories;
+    try {
+      categories = await Pricing.getCategories();
+    } catch (dbError) {
+      console.warn('SERVICE_CATEGORIES_FALLBACK_ACTIVE:', dbError.message);
+      categories = Pricing.getCategories
+        ? Pricing.getDefaultServiceCatalog().reduce((result, service) => {
+          const label = String(service.category || '').trim();
+          const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          if (slug && !result.some((category) => category.slug === slug)) result.push({ slug, label, isActive: true });
+          return result;
+        }, [])
+        : [];
+    }
+    return res.json({
+      success: true,
+      categories: categories.filter((category) => category.isActive !== false),
+    });
+  } catch (error) {
+    console.error('SERVICE_CATEGORIES_ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load service categories.' });
+  }
+};
+
 exports.getServiceCatalog = async (req, res) => {
   try {
     const category = String(req.query.category || '').trim();
     const status = String(req.query.status || '').trim();
 
     let catalog = Pricing.getDefaultServiceCatalog();
+    let activeCategorySlugs = null;
 
     try {
       const pricing = await Pricing.getPricing();
       catalog = Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length
         ? pricing.serviceCatalog
         : Pricing.getDefaultServiceCatalog();
+      const categories = await Pricing.getCategories();
+      activeCategorySlugs = new Set(categories.filter((item) => item.isActive !== false).map((item) => item.slug));
     } catch (dbError) {
       console.warn('SERVICE_CATALOG_FALLBACK_ACTIVE:', dbError.message);
     }
 
     const filtered = catalog.filter((service) => {
+      const serviceCategorySlug = String(service.category || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const isVisibleCategory = !activeCategorySlugs || activeCategorySlugs.has(serviceCategorySlug);
       const matchesCategory = !category || String(service.category || '').toLowerCase() === category.toLowerCase();
       const matchesStatus = !status || String(service.status || 'active') === status.toLowerCase();
-      return matchesCategory && matchesStatus;
+      return isVisibleCategory && matchesCategory && matchesStatus;
     });
 
     return res.json({
@@ -331,10 +362,7 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
       }
 
       const { amount, amountKobo } = resolvedPrice;
-      const resolvedCategory = String(catalogService?.category || category || 'NIMC').trim().toUpperCase();
-      const normalizedCategory = ['NIMC', 'CAC', 'JAMB', 'CSE', 'NIN', 'OTHER'].includes(resolvedCategory)
-        ? resolvedCategory
-        : 'OTHER';
+      const normalizedCategory = String(catalogService?.category || category || 'NIMC').trim().toUpperCase() || 'NIMC';
 
       const user = await User.findById(userId).session(session);
       if (!user) {

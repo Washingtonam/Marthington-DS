@@ -42,6 +42,100 @@ const isSuperAdmin = (req, res, next) => {
 // 🚀 ADMINISTRATIVE OPERATION ENDPOINTS
 // =========================================================================
 
+router.get("/categories", isSuperAdmin, async (req, res) => {
+  try {
+    const categories = await Pricing.getCategories();
+    return res.json({ success: true, categories });
+  } catch (error) {
+    console.error('ADMIN CATEGORY LIST ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load service categories.' });
+  }
+});
+
+router.post("/categories", isSuperAdmin, async (req, res) => {
+  try {
+    const label = String(req.body?.label || req.body?.name || '').trim();
+    const slug = Pricing.normalizeCategorySlug(req.body?.slug || label);
+    if (!label || !slug) {
+      return res.status(400).json({ success: false, message: 'A category name is required.' });
+    }
+
+    const pricing = await Pricing.getPricing();
+    const categories = await Pricing.getCategories();
+    const existing = categories.find((category) => category.slug === slug);
+    if (existing) {
+      if (existing.isActive === false) {
+        existing.isActive = true;
+        pricing.categories = categories;
+        pricing.markModified('categories');
+        await pricing.save();
+        return res.status(200).json({ success: true, category: existing });
+      }
+      return res.status(409).json({ success: false, message: 'That category already exists.' });
+    }
+
+    const category = { slug, label, isActive: true };
+    pricing.categories = [...categories, category];
+    pricing.markModified('categories');
+    await pricing.save();
+    return res.status(201).json({ success: true, category });
+  } catch (error) {
+    console.error('ADMIN CATEGORY CREATE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create service category.' });
+  }
+});
+
+router.put("/categories/:slug", isSuperAdmin, async (req, res) => {
+  try {
+    const pricing = await Pricing.getPricing();
+    const categories = await Pricing.getCategories();
+    const currentSlug = Pricing.normalizeCategorySlug(req.params.slug);
+    const target = categories.find((category) => category.slug === currentSlug);
+    const label = String(req.body?.label || '').trim();
+    const nextSlug = Pricing.normalizeCategorySlug(req.body?.slug || label || currentSlug);
+
+    if (!target) return res.status(404).json({ success: false, message: 'Category not found.' });
+    if (!label || !nextSlug) return res.status(400).json({ success: false, message: 'A category name is required.' });
+    if (categories.some((category) => category.slug === nextSlug && category.slug !== currentSlug)) {
+      return res.status(409).json({ success: false, message: 'That category already exists.' });
+    }
+
+    target.slug = nextSlug;
+    target.label = label;
+    pricing.serviceCatalog = (pricing.serviceCatalog || []).map((service) => {
+      const serviceCategory = Pricing.normalizeCategorySlug(service.category);
+      return serviceCategory === currentSlug ? { ...service, category: label } : service;
+    });
+    pricing.categories = categories;
+    pricing.markModified('categories');
+    pricing.markModified('serviceCatalog');
+    await pricing.save();
+    return res.json({ success: true, category: target });
+  } catch (error) {
+    console.error('ADMIN CATEGORY UPDATE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update service category.' });
+  }
+});
+
+router.delete("/categories/:slug", isSuperAdmin, async (req, res) => {
+  try {
+    const pricing = await Pricing.getPricing();
+    const categories = await Pricing.getCategories();
+    const slug = Pricing.normalizeCategorySlug(req.params.slug);
+    const target = categories.find((category) => category.slug === slug);
+    if (!target) return res.status(404).json({ success: false, message: 'Category not found.' });
+
+    target.isActive = false;
+    pricing.categories = categories;
+    pricing.markModified('categories');
+    await pricing.save();
+    return res.json({ success: true, category: target, message: 'Category hidden from the service directory.' });
+  } catch (error) {
+    console.error('ADMIN CATEGORY DELETE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to remove service category.' });
+  }
+});
+
 // 📥 FIXES 404 CONSOLE ERROR: UNIFIED CENTRAL PIPELINE FOR REQUEST ENTITIES
 // Handles pagination, matching statuses (pending, approved, completed), and coordinates cross-model streams.
 router.get("/requests", isAdmin, async (req, res) => {
@@ -195,7 +289,7 @@ router.get("/requests", isAdmin, async (req, res) => {
 
     const agg = [
       { $match: serviceMatch },
-      { $addFields: { pipelineSource: 'nimc' } },
+      { $addFields: { pipelineSource: 'service' } },
       { $project: { __v: 0 } },
       { $unionWith: { coll: cacColl, pipeline: [ { $match: cacMatch }, { $addFields: { pipelineSource: 'cac' } }, { $project: { __v: 0 } } ] } },
       { $sort: { [sortField]: sortOrder } },

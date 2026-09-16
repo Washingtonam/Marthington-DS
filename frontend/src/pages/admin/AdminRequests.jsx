@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../../lib/axios";
-import { nimcSubServices, cacSubServices } from "../../config/serviceTypes";
 import {
   Search, ArrowUpDown, Eye, CheckCircle2, XCircle, Clock3,
   ChevronLeft, ChevronRight, Fingerprint, Building2, AlertCircle,
@@ -9,7 +8,6 @@ import {
 } from "lucide-react";
 import SlideOver from "../../components/ui/SlideOver";
 import RequestDetails from "./RequestDetails";
-import MultiSelect from "../../components/ui/MultiSelect";
 import { useToast } from "../../context/ToastContext";
 
 // 🔒 Data Masking Utility for Sensitive Fields
@@ -49,7 +47,8 @@ const getStatusIcon = (status) => {
 export default function AdminRequests() {
   const [searchParams] = useSearchParams();
   const { success, error: toastError, info } = useToast();
-  const [activeTab, setActiveTab] = useState("nimc");
+  const [activeTab, setActiveTab] = useState("all");
+  const [serviceCategories, setServiceCategories] = useState([]);
   const [activeSubService, setActiveSubService] = useState("All");
   const [selectedServices, setSelectedServices] = useState([]);
   const [activeStatus, setActiveStatus] = useState("all");
@@ -93,7 +92,7 @@ export default function AdminRequests() {
         page: pageNum,
         limit: pageSize,
         status: activeStatus === "all" ? "" : activeStatus,
-        category: activeTab === "cac" ? "cac" : "nimc",
+        category: activeTab === "all" ? "" : (serviceCategories.find((item) => item.slug === activeTab)?.label || activeTab),
         serviceType: selectedServices.length ? selectedServices.join(',') : '',
         search: searchQuery || searchTerm,
         userRole: requesterRole,
@@ -119,6 +118,18 @@ export default function AdminRequests() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const response = await api.get("/api/services/categories");
+        setServiceCategories(Array.isArray(response.data?.categories) ? response.data.categories : []);
+      } catch (err) {
+        console.error("Failed to load request categories:", err);
+      }
+    };
+    loadCategories();
+  }, []);
 
   useEffect(() => {
     fetchRequests(1);
@@ -303,7 +314,7 @@ export default function AdminRequests() {
     if (request.pipelineSource === "cac") {
       return request.serviceType ? request.serviceType.replace(/_/g, " ") : "CAC";
     }
-    return request.service || "General";
+    return request.serviceName || request.service || request.type || "General";
   };
 
   const getRequestDetails = (request) => {
@@ -327,19 +338,17 @@ export default function AdminRequests() {
       <div className="mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-3 flex-wrap">
-            {['nimc', 'cac'].map((tab) => (
+            {[{ slug: "all", label: "All services" }, ...serviceCategories].map((tab) => (
               <button
-                key={tab}
-                onClick={() => handleTabChange(tab)}
-                className={`px-4 py-2 font-semibold rounded-2xl transition ${activeTab === tab ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
+                key={tab.slug}
+                onClick={() => handleTabChange(tab.slug)}
+                className={`px-4 py-2 font-semibold rounded-2xl transition ${activeTab === tab.slug ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
               >
-                {tab.toUpperCase()}
+                {tab.label}
               </button>
             ))}
 
-            <div className="ml-2 w-72">
-              <MultiSelect options={(activeTab === 'nimc' ? nimcSubServices : cacSubServices)} value={selectedServices} onChange={setSelectedServices} placeholder="Service types" />
-            </div>
+            {activeTab !== "all" && <div className="ml-2 w-72"><input value={selectedServices[0] || ""} onChange={(event) => setSelectedServices(event.target.value ? [event.target.value] : [])} placeholder="Filter by service code or type" className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" /></div>}
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
@@ -353,7 +362,7 @@ export default function AdminRequests() {
                 className="w-64 md:w-80 outline-none bg-transparent text-slate-900 dark:text-slate-100"
               />
             </div>
-              <button onClick={() => { const qs = new URLSearchParams({ search: searchQuery || searchTerm, status: activeStatus === 'all' ? '' : activeStatus, category: activeTab === 'cac' ? 'cac' : 'nimc', serviceType: selectedServices.length ? selectedServices.join(',') : '', userRole: requesterRole, sortBy, order }); window.open(`/api/admin/requests/export?${qs.toString()}`, '_blank'); }} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-200 dark:text-slate-950">Export</button>
+              <button onClick={() => { const qs = new URLSearchParams({ search: searchQuery || searchTerm, status: activeStatus === 'all' ? '' : activeStatus, category: activeTab === 'all' ? '' : (serviceCategories.find((item) => item.slug === activeTab)?.label || activeTab), serviceType: selectedServices.length ? selectedServices.join(',') : '', userRole: requesterRole, sortBy, order }); window.open(`/api/admin/requests/export?${qs.toString()}`, '_blank'); }} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-200 dark:text-slate-950">Export</button>
               <button onClick={() => setShowJobs(true)} aria-label="Open Jobs panel" className="rounded-2xl bg-transparent px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Jobs</button>
               <button onClick={() => { if (selectedIds.size === 0) selectAllVisible(); else clearSelection(); }} className="rounded-2xl bg-transparent px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">{selectedIds.size === 0 ? 'Select Visible' : `Selected ${selectedIds.size}`}</button>
 
@@ -442,8 +451,8 @@ export default function AdminRequests() {
                     <td className="p-3">{formatDateShort(r.createdAt)}</td>
                     <td className="p-3">{r.userId?.email || '-'}</td>
                     <td className="p-3">{r.userId?.role || '-'}</td>
-                    <td className="p-3">{r.pipelineSource === 'cac' ? 'CAC' : 'NIMC'}</td>
-                    <td className="p-3">{r.serviceType || r.service || '-'}</td>
+                    <td className="p-3">{r.pipelineSource === 'cac' ? 'CAC' : (r.serviceCategory || 'Service')}</td>
+                    <td className="p-3">{getRequestTitle(r)}</td>
                     <td className="p-3">{formatAmount(r.amount || r.amountCharged)}</td>
                     <td className="p-3"><span className={`px-2 py-1 rounded ${statusColors[r.status] || 'bg-slate-100'}`}>{r.status}</span></td>
                     <td className="p-3">
@@ -468,10 +477,10 @@ export default function AdminRequests() {
                   </div>
                   <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${statusColors[r.status] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{r.status?.replace('-', ' ') || 'pending'}</span>
                 </div>
-                <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${serviceColors[r.service || r.serviceType] || "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>{r.pipelineSource === "cac" ? (r.serviceType || "CAC") : (r.service || "General")}</span>
+                <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${serviceColors[r.service || r.serviceType] || "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>{getRequestTitle(r)}</span>
                 <div className="mt-3 space-y-2 text-xs text-slate-600 dark:text-slate-400">
                   <div className="flex justify-between"><span className="text-slate-500">Requested by:</span><span className="font-semibold">{r.userId?.role || 'user'}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Category:</span><span className="font-semibold">{r.pipelineSource === "cac" ? "CAC" : "NIMC"}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">Category:</span><span className="font-semibold">{r.pipelineSource === "cac" ? "CAC" : (r.serviceCategory || "Service")}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">Amount:</span><span className="font-semibold">{formatAmount(r.amount || 0)}</span></div>
                 </div>
                 <div className="mt-auto flex gap-2 items-end">

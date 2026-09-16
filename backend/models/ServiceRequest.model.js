@@ -16,7 +16,6 @@ const ServiceRequestSchema = new mongoose.Schema({
   },
   serviceCategory: {
     type: String,
-    enum: ["NIMC", "CAC", "JAMB", "CSE", "NIN", "OTHER"],
     default: "NIMC"
   },
   nin: {

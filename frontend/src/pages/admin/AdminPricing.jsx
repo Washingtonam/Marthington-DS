@@ -15,8 +15,6 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-const DEFAULT_CATEGORIES = ["NIN", "CAC", "JAMB", "CSE"];
-
 const emptyFormField = () => ({
   id: crypto.randomUUID(),
   key: "",
@@ -53,6 +51,7 @@ export default function AdminPricing() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [category, setCategory] = useState("NIN");
+  const [categories, setCategories] = useState([]);
   const [services, setServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
   const [serviceForm, setServiceForm] = useState(defaultServiceModel);
@@ -61,11 +60,28 @@ export default function AdminPricing() {
 
   const groupedSummary = useMemo(() => {
     const summary = {};
-    DEFAULT_CATEGORIES.forEach((name) => {
+    categories.forEach(({ label }) => {
+      const name = label;
       summary[name] = services.filter((service) => String(service.category || "").toUpperCase() === name).length;
     });
     return summary;
-  }, [services]);
+  }, [categories, services]);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await api.get("/api/admin/categories", { headers });
+      const nextCategories = Array.isArray(res.data?.categories)
+        ? res.data.categories.filter((item) => item.isActive !== false)
+        : [];
+      setCategories(nextCategories);
+      setCategory((current) => nextCategories.some((item) => item.label === current)
+        ? current
+        : (nextCategories[0]?.label || "NIN"));
+    } catch (err) {
+      console.error("FETCH CATEGORIES ERROR:", err);
+      setCategories([]);
+    }
+  };
 
   const fetchServices = async (targetCategory = category) => {
     try {
@@ -85,8 +101,43 @@ export default function AdminPricing() {
   };
 
   useEffect(() => {
+    fetchCategories();
     fetchServices(category);
   }, [category]);
+
+  const createCategory = async () => {
+    const label = window.prompt("Category name");
+    if (!label?.trim()) return;
+    try {
+      const res = await api.post("/api/admin/categories", { label: label.trim() }, { headers });
+      await fetchCategories();
+      setCategory(res.data?.category?.label || label.trim());
+    } catch (err) {
+      alert(err?.response?.data?.message || "Unable to create category.");
+    }
+  };
+
+  const renameCategory = async (item) => {
+    const label = window.prompt("Category name", item.label);
+    if (!label?.trim() || label.trim() === item.label) return;
+    try {
+      const res = await api.put(`/api/admin/categories/${item.slug}`, { label: label.trim() }, { headers });
+      await fetchCategories();
+      setCategory(res.data?.category?.label || label.trim());
+    } catch (err) {
+      alert(err?.response?.data?.message || "Unable to rename category.");
+    }
+  };
+
+  const removeCategory = async (item) => {
+    if (!window.confirm(`Remove ${item.label} from the service directory? Existing services will stay hidden.`)) return;
+    try {
+      await api.delete(`/api/admin/categories/${item.slug}`, { headers });
+      await fetchCategories();
+    } catch (err) {
+      alert(err?.response?.data?.message || "Unable to remove category.");
+    }
+  };
 
   const openCreateModal = () => {
     setIsCreating(true);
@@ -352,22 +403,32 @@ export default function AdminPricing() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-4 gap-4 mb-8">
-        {DEFAULT_CATEGORIES.map((item) => (
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-white">Service categories</h2>
+        <button onClick={createCategory} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+          <Plus size={16} /> Add category
+        </button>
+      </div>
+      <div className="grid gap-4 mb-8 sm:grid-cols-2 lg:grid-cols-4">
+        {categories.map((item) => (
           <button
-            key={item}
-            onClick={() => setCategory(item)}
+            key={item.slug}
+            onClick={() => setCategory(item.label)}
             className={`rounded-2xl border p-4 text-left transition ${
-              category === item
+              category === item.label
                 ? "border-blue-500 bg-blue-50 text-blue-700"
                 : "border-gray-200 bg-white text-slate-700"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="font-semibold">{item}</span>
-              <Layers3 size={16} />
+              <span className="font-semibold">{item.label}</span>
+              <span className="flex items-center gap-2">
+                <Pencil size={14} onClick={(event) => { event.stopPropagation(); renameCategory(item); }} />
+                <Trash2 size={14} onClick={(event) => { event.stopPropagation(); removeCategory(item); }} />
+                <Layers3 size={16} />
+              </span>
             </div>
-            <div className="mt-3 text-2xl font-bold">{groupedSummary[item] || 0}</div>
+            <div className="mt-3 text-2xl font-bold">{groupedSummary[item.label] || 0}</div>
           </button>
         ))}
       </div>
@@ -440,7 +501,7 @@ export default function AdminPricing() {
             </Field>
             <Field label="Category">
               <select value={serviceForm.category} onChange={(e) => updateField("category", e.target.value)} className="w-full border border-gray-200 rounded-xl p-3">
-                {DEFAULT_CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}
+                {categories.map((item) => <option key={item.slug} value={item.label}>{item.label}</option>)}
               </select>
             </Field>
             <Field label="Status">
