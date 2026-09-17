@@ -11,6 +11,7 @@ import {
   X,
   Briefcase,
   Sparkles,
+  Sliders,
 } from "lucide-react";
 
 import { useState, useEffect } from "react";
