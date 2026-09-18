@@ -5,17 +5,17 @@ import { ArrowRight, BriefcaseBusiness, Building2, FileText, Fingerprint, Loader
 
 const normalizeCategory = (value = "") => {
   const raw = String(value || "").trim().toLowerCase();
-  if (["nin", "nimc"].includes(raw)) return "NIN";
+  if (["nin", "nimc"].includes(raw)) return "NIMC";
   if (["cac"].includes(raw)) return "CAC";
   if (["jamb"].includes(raw)) return "JAMB";
   if (["cse"].includes(raw)) return "CSE";
-  return raw ? raw.toUpperCase() : "NIN";
+  return raw ? raw.toUpperCase() : "NIMC";
 };
 
 const TRENDING_CODES = ["modification-name", "modification-dob", "validation-noRecord", "validation-vnin"];
 
 const categoryDetails = {
-  NIN: { label: "NIMC services", eyebrow: "Identity, made simpler", icon: Fingerprint, accent: "from-blue-950 via-blue-900 to-cyan-800" },
+  NIMC: { label: "NIMC services", eyebrow: "Identity, made simpler", icon: Fingerprint, accent: "from-blue-950 via-blue-900 to-cyan-800" },
   CAC: { label: "CAC services", eyebrow: "Build with confidence", icon: Building2, accent: "from-slate-950 via-slate-900 to-emerald-900" },
   JAMB: { label: "JAMB services", eyebrow: "Ready when you are", icon: BriefcaseBusiness, accent: "from-amber-950 via-orange-900 to-rose-800" },
   CSE: { label: "Other services", eyebrow: "More ways to move forward", icon: Sparkles, accent: "from-violet-950 via-indigo-900 to-blue-900" },

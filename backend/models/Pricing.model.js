@@ -30,7 +30,7 @@ const defaultServiceCatalog = [
   ] } },
   { serviceCode: 'modification-phone', category: 'NIN', name: 'Phone Number Modification', type: 'phone', status: 'active', price: 12000, metadata: { description: 'Update the phone number attached to the NIN.', formFields: [] } },
   { serviceCode: 'modification-address', category: 'NIN', name: 'Address Modification', type: 'address', status: 'active', price: 12000, metadata: { description: 'Correct or update the residential address record.', formFields: [] } },
-  { serviceCode: 'modification-dob', category: 'NIN', name: 'DOB Modification & NPC Attestation', type: 'dob', status: 'active', price: 50000, metadata: { description: 'Correct date of birth and request NPC attestation support.', trending: true, formFields: [
+  { serviceCode: 'modification-dob', category: 'NIN', name: 'DOB Modification & NPC Attestation', type: 'dob', status: 'active', price: 65000, metadata: { description: 'Correct date of birth and request NPC attestation support.', trending: true, formFields: [
     { key: 'nin', label: 'NIN', type: 'text', required: true, placeholder: 'Enter your 11-digit NIN' },
     { key: 'fullName', label: 'Full name', type: 'text', required: true, placeholder: 'Enter your full name' },
     { key: 'currentDob', label: 'Current date of birth', type: 'date', required: true },
@@ -52,14 +52,15 @@ const normalizeCategorySlug = (value = '') => String(value || '')
   .toLowerCase()
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '')
-  .replace(/-+/g, '-');
+  .replace(/-+/g, '-')
+  .replace(/^nin$/, 'nimc');
 
 const normalizeCategory = (category = {}) => {
   const label = String(category.label || category.name || category.slug || '').trim();
   const slug = normalizeCategorySlug(category.slug || label);
   return {
     slug,
-    label: label || slug.toUpperCase(),
+    label: slug === 'nimc' ? 'NIMC' : (label || slug.toUpperCase()),
     isActive: category.isActive !== false,
   };
 };
@@ -91,7 +92,7 @@ const normalizeCatalogService = (service = {}, fallback = {}) => ({
   ...fallback,
   ...service,
   serviceCode: String(service.serviceCode || fallback.serviceCode || '').trim(),
-  category: String(service.category || fallback.category || 'NIN').trim() || 'NIN',
+  category: normalizeCategory({ label: service.category || fallback.category || 'NIMC' }).label,
   name: String(service.name || fallback.name || '').trim() || 'Unnamed Service',
   type: String(service.type || fallback.type || '').trim(),
   status: ['active', 'paused', 'disabled'].includes(service.status || fallback.status) ? (service.status || fallback.status) : 'active',
@@ -207,7 +208,7 @@ const pricingSchema = new mongoose.Schema({
       name: { type: Number, default: 12000 },
       phone: { type: Number, default: 12000 },
       address: { type: Number, default: 12000 },
-      dob: { type: Number, default: 50000 },
+      dob: { type: Number, default: 65000 },
     },
 
     // =========================
@@ -271,14 +272,14 @@ pricingSchema.statics.getPricing = async function () {
 };
 
 pricingSchema.statics.getDefaultServiceCatalog = function () {
-  return [...catalogFallback];
+  return catalogFallback.map((service) => normalizeCatalogService(service));
 };
 
 pricingSchema.statics.replaceServiceCatalog = function (catalog) {
   const nextCatalog = normalizeServiceCatalog(Array.isArray(catalog) ? catalog : [...defaultServiceCatalog]);
   catalogFallback.splice(0, catalogFallback.length, ...nextCatalog.map((service) => ({
     ...service,
-    category: String(service.category || 'NIN').trim() || 'NIN',
+    category: normalizeCategory({ label: service.category || 'NIMC' }).label,
     type: String(service.type || '').trim(),
     status: ['active', 'paused', 'disabled'].includes(service.status) ? service.status : 'active',
     price: Number(service.price) || 0,
@@ -295,7 +296,7 @@ pricingSchema.statics.getServiceCatalog = async function () {
 
   return normalizeServiceCatalog(catalog).map((service) => ({
     ...service,
-    category: String(service.category || 'NIN').trim() || 'NIN',
+    category: normalizeCategory({ label: service.category || 'NIMC' }).label,
     type: String(service.type || '').trim(),
     status: ['active', 'paused', 'disabled'].includes(service.status) ? service.status : 'active',
     price: Number(service.price) || 0,

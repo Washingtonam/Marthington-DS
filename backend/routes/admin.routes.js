@@ -1845,17 +1845,14 @@ router.get("/services", isSuperAdmin, async (req, res) => {
     let services = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
 
     try {
-      const pricing = await Pricing.getPricing();
-      if (Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length) {
-        services = pricing.serviceCatalog;
-      }
+      services = await Pricing.getServiceCatalog();
     } catch (dbError) {
       console.warn('ADMIN_SERVICE_CATALOG_FALLBACK_ACTIVE:', dbError.message);
     }
 
     const filteredServices = !category
       ? services
-      : services.filter((service) => String(service.category || '').toLowerCase() === category.toLowerCase());
+      : services.filter((service) => Pricing.normalizeCategorySlug(service.category) === Pricing.normalizeCategorySlug(category));
 
     return res.json({ success: true, services: filteredServices, category: category || 'all' });
   } catch (error) {
@@ -1866,7 +1863,7 @@ router.get("/services", isSuperAdmin, async (req, res) => {
 
 router.post("/services", isSuperAdmin, async (req, res) => {
   try {
-    const { serviceCode, category = 'NIN', name, status = 'active', price = 0, metadata = {} } = req.body || {};
+    const { serviceCode, category = 'NIMC', name, status = 'active', price = 0, metadata = {} } = req.body || {};
 
     if (!serviceCode || !name) {
       return res.status(400).json({ success: false, message: 'serviceCode and name are required.' });
@@ -1891,7 +1888,7 @@ router.post("/services", isSuperAdmin, async (req, res) => {
 
     const newService = {
       serviceCode,
-      category,
+      category: Pricing.normalizeCategory({ label: category }).label,
       name,
       status: ['active', 'paused', 'disabled'].includes(status) ? status : 'active',
       price: Number(price) || 0,
@@ -1935,7 +1932,9 @@ router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Service not found.' });
     }
 
-    if (req.body.category !== undefined) target.category = req.body.category;
+    if (req.body.category !== undefined) {
+      target.category = Pricing.normalizeCategory({ label: req.body.category }).label;
+    }
     if (req.body.name !== undefined) target.name = req.body.name;
     if (req.body.status !== undefined) {
       target.status = ['active', 'paused', 'disabled'].includes(req.body.status) ? req.body.status : target.status;

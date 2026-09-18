@@ -16,19 +16,28 @@ describe('service catalog API', () => {
     expect(response.body.success).toBe(true);
     expect(Array.isArray(response.body.services)).toBe(true);
     expect(response.body.services.some((service) => service.serviceCode === 'validation-noRecord')).toBe(true);
+    expect(response.body.services.filter((service) => service.category === 'NIMC').length).toBeGreaterThan(0);
     expect(response.body.services.some((service) => service.serviceCode === 'cac-sole-proprietorship')).toBe(true);
   });
 
-  it('filters admin catalog services by category', async () => {
+  it('filters admin catalog services by the canonical NIMC category', async () => {
     const token = makeSuperAdminToken();
     const response = await request(app)
-      .get('/api/admin/services?category=NIN')
+      .get('/api/admin/services?category=NIMC')
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(Array.isArray(response.body.services)).toBe(true);
-    expect(response.body.services.every((service) => String(service.category).toLowerCase() === 'nin')).toBe(true);
+    expect(response.body.services.every((service) => service.category === 'NIMC')).toBe(true);
+  });
+
+  it('accepts NIN as a legacy alias while returning NIMC catalog categories', async () => {
+    const response = await request(app).get('/api/services/catalog?category=NIN');
+
+    expect(response.status).toBe(200);
+    expect(response.body.services.length).toBeGreaterThan(0);
+    expect(response.body.services.every((service) => service.category === 'NIMC')).toBe(true);
   });
 
   it('uses the canonical legacy NIMC service set as the default service catalog', async () => {

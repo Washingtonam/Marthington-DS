@@ -14,7 +14,8 @@ const normalizeCategorySlug = (value = '') => String(value || '')
   .toLowerCase()
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '')
-  .replace(/-+/g, '-');
+  .replace(/-+/g, '-')
+  .replace(/^nin$/, 'nimc');
 
 exports.getAllCacRequests = async (req, res) => {
   // ...existing logic from cac.routes.js...
@@ -299,8 +300,8 @@ const findCatalogService = (catalog, serviceIdentifier, typeIdentifier) => {
       || serviceCode === normalizedType
       || serviceType === normalizedType
       || (normalizedService && (serviceCode.includes(normalizedService) || serviceName.includes(normalizedService)))
-      || (category === 'nin' && normalizedService === 'validation' && serviceType === 'validation')
-      || (category === 'nin' && normalizedService === 'modification' && serviceType === 'modification');
+      || (category === 'nimc' && normalizedService === 'validation' && serviceType === 'validation')
+      || (category === 'nimc' && normalizedService === 'modification' && serviceType === 'modification');
   }) || null;
 };
 

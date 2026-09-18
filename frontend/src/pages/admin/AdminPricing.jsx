@@ -27,7 +27,7 @@ const emptyFormField = () => ({
 
 const defaultServiceModel = {
   serviceCode: "",
-  category: "NIN",
+  category: "NIMC",
   name: "",
   status: "active",
   price: 0,
@@ -50,7 +50,7 @@ export default function AdminPricing() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [category, setCategory] = useState("NIN");
+  const [category, setCategory] = useState("NIMC");
   const [categories, setCategories] = useState([]);
   const [services, setServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
@@ -76,7 +76,7 @@ export default function AdminPricing() {
       setCategories(nextCategories);
       setCategory((current) => nextCategories.some((item) => item.label === current)
         ? current
-        : (nextCategories[0]?.label || "NIN"));
+        : (nextCategories[0]?.label || "NIMC"));
     } catch (err) {
       console.error("FETCH CATEGORIES ERROR:", err);
       setCategories([]);
