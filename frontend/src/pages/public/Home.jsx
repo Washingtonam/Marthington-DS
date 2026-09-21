@@ -21,7 +21,7 @@ import { motion } from "framer-motion";
 
 export default function Home() {
   const navigate = useNavigate();
-  const [pricing, setPricing] = useState({ verification: 250, name: 12000, slip: 150 });
+  const [pricing, setPricing] = useState({ verification: 1000, name: 12000, slip: 150 });
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -38,9 +38,16 @@ export default function Home() {
   useEffect(() => {
     const loadPricing = async () => {
       try {
-        const { data } = await api.get("/api/pricing");
+        const [{ data }, catalogResponse] = await Promise.all([
+          api.get("/api/pricing"),
+          api.get("/api/services/catalog", { params: { category: "NIN" } }),
+        ]);
+        const catalog = Array.isArray(catalogResponse.data?.services) ? catalogResponse.data.services : [];
+        const verificationService = catalog.find((service) => service.serviceCode === "validation-noRecord")
+          || catalog.find((service) => String(service.name || "").toLowerCase().includes("verification"));
+
         setPricing({
-          verification: data?.nin?.unitPrice || 250,
+          verification: verificationService?.price || data?.ninServices?.validation?.noRecord || 1000,
           name: data?.ninServices?.modification?.name || 12000,
           slip: data?.ninServices?.slipPrice || 150,
         });
@@ -140,7 +147,7 @@ export default function Home() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <BentoCard index={0} title="Instant NIN Validation" icon={<Zap className="text-amber-500" />} description="Run NIN, phone, demographic, and tracking checks from one guided flow." className="md:col-span-2 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white" />
+          <BentoCard dark index={0} title="Instant NIN Validation" icon={<Zap className="text-amber-400" />} description="Run NIN, phone, demographic, and tracking checks from one guided flow." className="md:col-span-2" />
           <BentoCard index={1} title="NIN Modification" icon={<RefreshCw className="text-blue-500" />} description="Manage updates and corrections without friction." />
           <BentoCard index={2} title="Wallet Management" icon={<Wallet className="text-emerald-500" />} description="Track transactions and fund operations with confidence." />
           <BentoCard index={3} title="Team Dashboard" icon={<LayoutDashboard className="text-violet-500" />} description="Keep requests, balances, and operational oversight structured." className="md:col-span-2 bg-gradient-to-br from-white to-slate-50" />
@@ -179,7 +186,7 @@ function PreviewStat({ label, value }) { return <div className="rounded-xl borde
 
 function PricingSection({ pricing }) {
   const items = [{ label: "NIN verification", value: pricing.verification, note: "per unit" }, { label: "Name modification", value: pricing.name, note: "service fee" }, { label: "Slip printing", value: pricing.slip, note: "add-on fee" }];
-  return <section className="mt-20"><div className="mb-7 flex flex-col justify-between gap-3 md:flex-row md:items-end"><div><p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-600">Transparent pricing</p><h2 className="mt-2 text-4xl font-black text-slate-900">Know the cost before you start.</h2></div><p className="max-w-sm text-sm leading-6 text-slate-500">Prices are loaded from the live service catalog. Fund your wallet through Flutterwave or the configured payment gateway.</p></div><div className="grid gap-4 md:grid-cols-3">{items.map((item) => <div key={item.label} className="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm"><p className="text-sm font-semibold text-slate-500">{item.label}</p><p className="mt-4 text-3xl font-black text-slate-900">₦{Number(item.value).toLocaleString()}</p><p className="mt-1 text-xs text-slate-400">{item.note}</p><div className="mt-5 flex items-center gap-2 text-xs font-semibold text-emerald-600"><CheckCircle2 size={14} /> Wallet payment supported</div></div>)}</div></section>;
+  return <section className="mt-20"><div className="mb-7 flex flex-col justify-between gap-3 md:flex-row md:items-end"><div><p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-600">Transparent pricing</p><h2 className="mt-2 text-4xl font-black text-slate-900">Know the cost before you start.</h2></div><p className="max-w-sm text-sm leading-6 text-slate-500">Prices reflect live catalog rates and may include third-party provider or network processing fees. Fund your wallet through Flutterwave or the configured gateway.</p></div><div className="grid gap-4 md:grid-cols-3">{items.map((item) => <div key={item.label} className="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm"><p className="text-sm font-semibold text-slate-500">{item.label}</p><p className="mt-4 text-3xl font-black text-slate-900">₦{Number(item.value).toLocaleString()}</p><p className="mt-1 text-xs text-slate-400">{item.note}</p><div className="mt-5 flex items-center gap-2 text-xs font-semibold text-emerald-600"><CheckCircle2 size={14} /> Wallet payment supported</div></div>)}</div><p className="mt-4 text-xs text-slate-500">Service total may combine the base verification fee with optional instant PDF slip generation.</p></section>;
 }
 
 function FaqSection() {
@@ -192,20 +199,20 @@ function FaqSection() {
   return <section className="mt-20"><div className="mb-7"><p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-600">Questions, answered</p><h2 className="mt-2 text-4xl font-black text-slate-900">A clearer start for your team.</h2></div><div className="divide-y divide-slate-200 rounded-3xl border border-slate-200 bg-white/70 px-6 shadow-sm">{faqs.map(([question, answer]) => <details key={question} className="group py-5"><summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-bold text-slate-900"><span>{question}</span><ChevronDown size={18} className="shrink-0 text-slate-400 transition group-open:rotate-180" /></summary><p className="max-w-3xl pt-3 text-sm leading-7 text-slate-600">{answer}</p></details>)}</div></section>;
 }
 
-function BentoCard({ title, icon, description, className = "", index = 0 }) {
+function BentoCard({ title, icon, description, className = "", index = 0, dark = false }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
       whileHover={{ y: -6, scale: 1.01 }}
-      className={`rounded-[1.75rem] border border-slate-200/80 bg-white/75 p-8 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-xl transition ${className}`}
+      className={`rounded-[1.75rem] border p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)] backdrop-blur-xl transition ${dark ? "border-white/10 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white" : "border-slate-200/80 bg-white/75"} ${className}`}
     >
       <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/70 shadow-sm">
         {icon}
       </div>
-      <h3 className="text-2xl font-bold text-slate-900">{title}</h3>
-      <p className="mt-2 text-sm leading-7 text-slate-600">{description}</p>
+      <h3 className={`text-2xl font-bold ${dark ? "text-white" : "text-slate-900"}`}>{title}</h3>
+      <p className={`mt-2 text-sm leading-7 ${dark ? "text-slate-200" : "text-slate-600"}`}>{description}</p>
     </motion.div>
   );
 }
