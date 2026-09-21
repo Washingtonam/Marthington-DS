@@ -31,20 +31,6 @@ import ActivityCard from "./ActivityCard";
 
 const FILTER_OPTIONS = ["All", "NIN", "CAC", "NIMC"];
 
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="h-48 animate-pulse rounded-[2rem] bg-slate-200/70 dark:bg-slate-800/70" />
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-32 animate-pulse rounded-3xl bg-slate-200/70 dark:bg-slate-800/70" />
-        ))}
-      </div>
-      <div className="h-80 animate-pulse rounded-[2rem] bg-slate-200/70 dark:bg-slate-800/70" />
-    </div>
-  );
-}
-
 function EmptyState({ title, description, actionLabel, onAction }) {
   return (
     <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white/70 p-10 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/50">
@@ -67,27 +53,18 @@ function EmptyState({ title, description, actionLabel, onAction }) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, refreshBalance, walletBalance: contextWalletBalance } = useUser();
+  const { user, walletBalance: contextWalletBalance } = useUser();
   const [stats, setStats] = useState({ total: 0, completed: 0, pending: 0 });
-  const [walletBalanceLocal, setWalletBalance] = useState(contextWalletBalance ?? 0);
   const [requestsData, setRequestsData] = useState([]);
   const [filter, setFilter] = useState("All");
-  const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async (nextFilter = filter) => {
     if (!user?.id) return;
 
-    setLoading(true);
     try {
       const normalizedFilter = nextFilter === "All" ? "" : nextFilter;
       const query = normalizedFilter ? `category=${encodeURIComponent(normalizedFilter)}&limit=5` : "limit=5";
-
-      const balancePromise = api.get("/api/users/balance");
-      const requestsPromise = api.get(`/api/users/requests/history?${query}`);
-
-      const [balanceRes, requestsRes] = await Promise.all([balancePromise, requestsPromise]);
-      const balanceValue = balanceRes?.data?.walletBalance ?? contextWalletBalance ?? 0;
-      setWalletBalance(balanceValue);
+      const requestsRes = await api.get(`/api/users/requests/history?${query}`);
 
       const data = Array.isArray(requestsRes?.data?.data) ? requestsRes.data.data : [];
       const mappedData = data.map((r) => ({
@@ -113,10 +90,8 @@ export default function Dashboard() {
       setRequestsData([]);
       setStats({ total: 0, completed: 0, pending: 0 });
       toast.error("We couldn't load your recent requests right now.");
-    } finally {
-      setLoading(false);
     }
-  }, [user?.id, contextWalletBalance, filter]);
+  }, [user?.id, filter]);
 
   useEffect(() => {
     fetchData(filter);
@@ -129,10 +104,7 @@ export default function Dashboard() {
         subtitle="Manage verifications, requests and transactions from one secure dashboard."
       />
 
-      {loading ? (
-        <DashboardSkeleton />
-      ) : (
-        <>
+      <>
           <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -143,7 +115,7 @@ export default function Dashboard() {
         <div className="relative z-10 flex flex-col lg:flex-row justify-between gap-8">
           <div>
             <p className="text-white/70 text-sm mb-3">Available Wallet Balance</p>
-            <h1 className="text-6xl font-black tracking-tight">{loading ? "..." : formatNaira(walletBalanceLocal)}</h1>
+            <h1 className="text-6xl font-black tracking-tight">{formatNaira(contextWalletBalance ?? 0)}</h1>
             <div className="flex gap-3 mt-6">
               <Button onClick={() => navigate("/wallet")} className="bg-white text-blue-700 hover:bg-gray-100 font-bold px-6 py-2.5 rounded-xl">Fund Wallet</Button>
               <Button onClick={() => navigate("/my-requests")} className="bg-white/10 border border-white/20 text-white px-6 py-2.5 rounded-xl">View Requests</Button>
@@ -168,7 +140,7 @@ export default function Dashboard() {
         <StatCard title="Total Requests" value={stats.total} icon={<FileText size={20} />} color="blue" />
         <StatCard title="Completed" value={stats.completed} icon={<ShieldCheck size={20} />} color="green" />
         <StatCard title="Pending" value={stats.pending} icon={<CreditCard size={20} />} color="red" />
-        <StatCard title="Wallet Balance" value={formatNaira(walletBalanceLocal)} icon={<Wallet size={20} />} color="purple" />
+        <StatCard title="Wallet Balance" value={formatNaira(contextWalletBalance ?? 0)} icon={<Wallet size={20} />} color="purple" />
       </Grid>
 
       {/* Quick Actions Grid */}
@@ -325,14 +297,13 @@ export default function Dashboard() {
           <StatCard
             glassEffect
             title="Total Saved"
-            value={formatNaira(walletBalanceLocal * 0.02)}
+            value={formatNaira((contextWalletBalance ?? 0) * 0.02)}
             icon={<TrendingUp size={20} className="text-blue-600" />}
             subtitle="Promotional credits"
           />
         </Grid>
       </motion.div>
-        </>
-      )}
+      </>
     </div>
   );
 }

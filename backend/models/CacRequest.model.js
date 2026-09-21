@@ -98,4 +98,7 @@ const CacRequestSchema = new mongoose.Schema({
   ]
 }, { timestamps: true });
 
+CacRequestSchema.index({ userId: 1, createdAt: -1 });
+CacRequestSchema.index({ userId: 1, serviceCategory: 1, createdAt: -1 });
+
 module.exports = mongoose.models.CacRequest || mongoose.model("CacRequest", CacRequestSchema);

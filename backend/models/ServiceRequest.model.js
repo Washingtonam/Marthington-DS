@@ -99,4 +99,7 @@ const ServiceRequestSchema = new mongoose.Schema({
   ]
 }, { timestamps: true });
 
+ServiceRequestSchema.index({ userId: 1, createdAt: -1 });
+ServiceRequestSchema.index({ userId: 1, serviceCategory: 1, createdAt: -1 });
+
 module.exports = mongoose.models.ServiceRequest || mongoose.model("ServiceRequest", ServiceRequestSchema);

@@ -11,6 +11,7 @@ const api = axios.create({
   // Ensure this points to the root URL (without /api)
   // because your server.js routes all start with /api
   baseURL: apiUrl,
+  timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },

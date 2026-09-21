@@ -17,7 +17,10 @@ const router = express.Router();
 router.get("/balance", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id; 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId)
+      .select("walletBalance walletBalanceKobo units commissionBalance commissionBalanceKobo role")
+      .lean()
+      .exec();
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -46,7 +49,10 @@ router.get("/balance", verifyToken, async (req, res) => {
 router.get("/wallet", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const user = await User.findById(userId);
+    const user = await User.findById(userId)
+      .select("walletBalance walletBalanceKobo units commissionBalance commissionBalanceKobo role")
+      .lean()
+      .exec();
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }

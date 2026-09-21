@@ -96,7 +96,6 @@ export function UserProvider({ children }) {
         setWalletBalance(normalized.walletBalance);
       }
       localStorage.setItem(SESSION_LAST_ACTIVITY_KEY, String(Date.now()));
-      apiUnits().catch(() => {});
     }
   }, []);
 
