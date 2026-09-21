@@ -158,9 +158,6 @@ export function UserProvider({ children }) {
     setWalletBalance((prev) => normalized.walletBalance ?? prev ?? null);
     localStorage.setItem("user", JSON.stringify(normalized));
     localStorage.setItem(SESSION_LAST_ACTIVITY_KEY, String(Date.now()));
-    if (normalized?.id) {
-      apiUnits().catch(() => {});
-    }
   };
 
   // =========================

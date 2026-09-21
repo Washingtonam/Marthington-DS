@@ -4,9 +4,11 @@ import { Eye, EyeOff, ShieldCheck, LockKeyhole, Mail, ArrowRight, Sparkles, Chec
 import { motion } from "framer-motion";
 
 import { login } from "../../services/api";
+import { useUser } from "../../context/UserContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { setUser } = useUser();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,6 +30,7 @@ export default function Login() {
         localStorage.setItem("email", data.user.email);
         localStorage.setItem("token", data.token);
         localStorage.setItem("lastActivity", String(Date.now()));
+        setUser(data.user);
 
         const destination = data.user?.role === "admin" || data.user?.role === "super_admin" ? "/admin" : "/dashboard";
         navigate(destination);
