@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, MessageSquare, Shield } from 'lucide-react';
 import { useToast } from "../../context/ToastContext";
 
@@ -18,6 +19,7 @@ export default function RequestDetails({
   page,
   setSelected,
 }) {
+  const navigate = useNavigate();
   if (!selected) return null;
 
   const [expandedKeys, setExpandedKeys] = useState({});
@@ -70,7 +72,14 @@ export default function RequestDetails({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-4">
         <div>
           <p className="text-xs text-slate-500">Requester</p>
-          <p className="font-semibold">{selected.userId?.email} <span className="text-sm font-normal">({selected.userId?.role || 'user'})</span></p>
+          <p className="font-semibold">
+            {selected.userId?._id ? (
+              <button type="button" onClick={() => navigate(`/admin/user/${selected.userId._id}/details`)} className="text-left text-blue-600 hover:underline dark:text-blue-400">
+                {selected.userId.email}
+              </button>
+            ) : selected.userId?.email || '-'}
+            <span className="text-sm font-normal"> ({selected.userId?.role || 'user'})</span>
+          </p>
           <p className="text-xs text-slate-500 mt-2">Status</p>
           <p className="font-semibold">{selected.status}</p>
           <p className="text-xs text-slate-500 mt-2">Submitted</p>

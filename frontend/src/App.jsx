@@ -169,7 +169,7 @@ function AppRoutes() {
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/services-engine" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/notifications" element={<SuperAdminRoute><Layout><AdminNotifications /></Layout></SuperAdminRoute>} />
-      <Route path="/admin/user/:userId/details" element={<SuperAdminRoute><Layout><UserDetailView /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/user/:userId/details" element={<AdminRoute><Layout><UserDetailView /></Layout></AdminRoute>} />
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" />} />

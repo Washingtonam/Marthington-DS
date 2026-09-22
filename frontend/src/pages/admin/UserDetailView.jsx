@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
 import { Wallet2, Loader2 } from "lucide-react";
@@ -7,6 +8,8 @@ import { Wallet2, Loader2 } from "lucide-react";
 export default function UserDetailView() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const { user: currentUser } = useUser();
+  const canFundWallet = currentUser?.role === "super_admin";
   const [user, setUser] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -84,9 +87,11 @@ export default function UserDetailView() {
         </div>
         <div className="flex gap-3">
           <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg bg-slate-100">Back</button>
-          <button onClick={openFundModal} className="px-4 py-2 rounded-lg bg-emerald-600 text-white flex items-center gap-2">
-            <Wallet2 size={16} /> Fund Wallet
-          </button>
+          {canFundWallet && (
+            <button onClick={openFundModal} className="px-4 py-2 rounded-lg bg-emerald-600 text-white flex items-center gap-2">
+              <Wallet2 size={16} /> Fund Wallet
+            </button>
+          )}
         </div>
       </div>
 

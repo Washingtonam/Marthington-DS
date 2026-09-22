@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import {
@@ -62,6 +62,8 @@ export default function AdminUsers() {
       const params = {
         page: pageNum,
         limit: pageSize,
+        sortBy,
+        order: "desc",
       };
       if (search.trim()) {
         params.search = search.trim();
@@ -123,7 +125,7 @@ export default function AdminUsers() {
     // refetch when filters change
     setPage(1);
     fetchUsers(1, currentSearch);
-  }, [roleFilter, statusFilter]);
+  }, [roleFilter, statusFilter, sortBy]);
 
   useEffect(() => {
     if (page !== 1) {
@@ -245,21 +247,7 @@ export default function AdminUsers() {
     }
   };
 
-  const filteredUsers = useMemo(() => {
-    return users;
-  }, [users]);
-
-  const sortedAndFilteredUsers = useMemo(() => {
-    const result = [...filteredUsers];
-    if (sortBy === "balance") {
-      result.sort((a, b) => (b.walletBalanceKobo || 0) - (a.walletBalanceKobo || 0));
-    } else if (sortBy === "alphabetical") {
-      result.sort((a, b) => (a.firstname || "").localeCompare(b.firstname || ""));
-    } else {
-      result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
-    return result;
-  }, [filteredUsers, sortBy]);
+  const sortedAndFilteredUsers = users;
 
   // Handle fund adjustment
   const handleAdjustFunds = async () => {

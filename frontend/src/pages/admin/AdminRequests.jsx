@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import api from "../../lib/axios";
 import {
   Search, ArrowUpDown, Eye, CheckCircle2, XCircle, Clock3,
@@ -46,6 +46,7 @@ const getStatusIcon = (status) => {
 
 export default function AdminRequests() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { success, error: toastError, info } = useToast();
   const [activeTab, setActiveTab] = useState("all");
   const [serviceCategories, setServiceCategories] = useState([]);
@@ -449,7 +450,13 @@ export default function AdminRequests() {
                   <tr key={r._id} className="border-b border-slate-200 dark:border-slate-700">
                     <td className="p-3"><input type="checkbox" checked={selectedIds.has(r._id)} onChange={() => toggleSelect(r._id)} /></td>
                     <td className="p-3">{formatDateShort(r.createdAt)}</td>
-                    <td className="p-3">{r.userId?.email || '-'}</td>
+                    <td className="p-3">
+                      {r.userId?._id ? (
+                        <button type="button" onClick={() => navigate(`/admin/user/${r.userId._id}/details`)} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+                          {r.userId.email}
+                        </button>
+                      ) : '-'}
+                    </td>
                     <td className="p-3">{r.userId?.role || '-'}</td>
                     <td className="p-3">{r.pipelineSource === 'cac' ? 'CAC' : (r.serviceCategory || 'Service')}</td>
                     <td className="p-3">{getRequestTitle(r)}</td>
@@ -472,7 +479,11 @@ export default function AdminRequests() {
               <div key={r._id} className={`bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition ${r.status === 'pending' ? 'ring-1 ring-yellow-300 dark:ring-yellow-600' : ''} h-full flex flex-col`}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <h3 className="font-bold text-sm truncate">{r.userId?.email}</h3>
+                    {r.userId?._id ? (
+                      <button type="button" onClick={() => navigate(`/admin/user/${r.userId._id}/details`)} className="block max-w-full truncate text-left font-bold text-sm text-blue-600 hover:underline dark:text-blue-400">
+                        {r.userId.email}
+                      </button>
+                    ) : <h3 className="font-bold text-sm truncate">{r.userId?.email || '-'}</h3>}
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">ID: {r._id.slice(-6)}</p>
                   </div>
                   <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${statusColors[r.status] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{r.status?.replace('-', ' ') || 'pending'}</span>

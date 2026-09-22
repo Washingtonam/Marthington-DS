@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 
 export default function SlideOver({ isOpen, onClose, title, children }) {
   const panelRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -17,7 +19,7 @@ export default function SlideOver({ isOpen, onClose, title, children }) {
     focusable?.[0]?.focus?.();
 
     const handleKey = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
       if (e.key === 'Tab') {
         // recompute focusable nodes to handle dynamic content
         const preferSelectors = 'input, textarea, select, [role="textbox"], [contenteditable]';
@@ -43,7 +45,7 @@ export default function SlideOver({ isOpen, onClose, title, children }) {
       document.removeEventListener('keydown', handleKey);
       prevActive?.focus?.();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return (
     <div className={`fixed inset-0 z-50 ${isOpen ? '' : 'pointer-events-none'}`} aria-hidden={!isOpen}>

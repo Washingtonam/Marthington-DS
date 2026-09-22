@@ -158,6 +158,14 @@ router.get("/requests", isAdmin, async (req, res) => {
 
     const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+    const setOrGroup = (query, conditions) => {
+      if (query.$or) {
+        query.$and = query.$and || [];
+        query.$and.push({ $or: query.$or });
+      }
+      query.$or = conditions;
+    };
+
     const serviceQuery = {};
     const cacQuery = {};
 
@@ -174,11 +182,11 @@ router.get("/requests", isAdmin, async (req, res) => {
       cacQuery._id = null;
     } else if (normalizedCategory) {
       const escapedCategory = escapeRegex(normalizedCategory);
-      serviceQuery.$or = [
+      setOrGroup(serviceQuery, [
         { serviceCategory: { $regex: escapedCategory, $options: "i" } },
         { service: { $regex: escapedCategory, $options: "i" } },
         { type: { $regex: escapedCategory, $options: "i" } }
-      ];
+      ]);
       cacQuery._id = null;
     }
 
@@ -187,15 +195,14 @@ router.get("/requests", isAdmin, async (req, res) => {
       const parts = String(serviceType || '').split(',').map(s => s.trim()).filter(Boolean);
       if (parts.length > 1) {
         const ors = parts.map(p => ({ service: { $regex: escapeRegex(p), $options: 'i' } }));
-        serviceQuery.$or = [ ...(serviceQuery.$or || []), ...ors ];
-        cacQuery.$or = [ ...(cacQuery.$or || []), ...parts.map(p => ({ serviceType: { $regex: escapeRegex(p), $options: 'i' } })) ];
+        setOrGroup(serviceQuery, ors);
+        setOrGroup(cacQuery, parts.map(p => ({ serviceType: { $regex: escapeRegex(p), $options: 'i' } })));
       } else {
         const escapedType = escapeRegex(normalizedServiceType);
-        serviceQuery.$or = [
-          ...(serviceQuery.$or || []),
+        setOrGroup(serviceQuery, [
           { service: { $regex: escapedType, $options: "i" } },
           { type: { $regex: escapedType, $options: "i" } }
-        ];
+        ]);
         cacQuery.serviceType = { $regex: escapedType, $options: "i" };
       }
     }
@@ -209,10 +216,13 @@ router.get("/requests", isAdmin, async (req, res) => {
     // Date range filter
     if (fromDate || toDate) {
       const gte = fromDate ? new Date(fromDate) : null;
-      const lte = toDate ? new Date(toDate) : null;
+      const lte = toDate ? new Date(`${toDate}T00:00:00`) : null;
       const dateRange = {};
       if (gte && !isNaN(gte)) dateRange.$gte = gte;
-      if (lte && !isNaN(lte)) dateRange.$lte = lte;
+      if (lte && !isNaN(lte)) {
+        lte.setDate(lte.getDate() + 1);
+        dateRange.$lt = lte;
+      }
       if (Object.keys(dateRange).length > 0) {
         serviceQuery.createdAt = dateRange;
         cacQuery.createdAt = dateRange;
@@ -237,22 +247,24 @@ router.get("/requests", isAdmin, async (req, res) => {
 
     if (searchTerm) {
       const escapedSearch = escapeRegex(searchTerm);
-      serviceQuery.$or = [
-        ...(serviceQuery.$or || []),
+      const searchConditions = [
         { nin: { $regex: escapedSearch, $options: "i" } },
         { service: { $regex: escapedSearch, $options: "i" } },
-        { type: { $regex: escapedSearch, $options: "i" } },
-        { _id: { $regex: escapedSearch, $options: "i" } }
+        { type: { $regex: escapedSearch, $options: "i" } }
       ];
-      cacQuery.$or = [
-        ...(cacQuery.$or || []),
+      const cacSearchConditions = [
         { nin: { $regex: escapedSearch, $options: "i" } },
         { businessName1: { $regex: escapedSearch, $options: "i" } },
         { businessName2: { $regex: escapedSearch, $options: "i" } },
         { companyEmail: { $regex: escapedSearch, $options: "i" } },
-        { serviceType: { $regex: escapedSearch, $options: "i" } },
-        { _id: { $regex: escapedSearch, $options: "i" } }
+        { serviceType: { $regex: escapedSearch, $options: "i" } }
       ];
+      if (mongoose.Types.ObjectId.isValid(searchTerm)) {
+        searchConditions.push({ _id: new mongoose.Types.ObjectId(searchTerm) });
+        cacSearchConditions.push({ _id: new mongoose.Types.ObjectId(searchTerm) });
+      }
+      setOrGroup(serviceQuery, searchConditions);
+      setOrGroup(cacQuery, cacSearchConditions);
     }
 
     if (roleFilter && roleFilter !== "all") {
@@ -348,7 +360,7 @@ router.get("/stats", isSuperAdmin, async (req, res) => {
       Transaction.countDocuments(),
       Transaction.countDocuments({ status: "pending", type: { $in: ["UNIT_ADD", "credit", "admin_credit"] } }),
       User.aggregate([
-        { $group: { _id: null, total: { $sum: { $ifNull: ["$walletBalance", 0] } } } }
+        { $group: { _id: null, total: { $sum: { $divide: [{ $ifNull: ["$walletBalanceKobo", 0] }, 100] } } } }
       ])
     ]);
 
@@ -749,6 +761,11 @@ router.put("/approve-request/:id", isAdmin, async (req, res) => {
       record.statusHistory = [];
     }
     record.statusHistory.push({ status: 'approved', note, actorRole: req.user?.role || null, createdAt: new Date() });
+    if (note && String(note).trim().length > 0) {
+      if (!Array.isArray(record.adminComments)) record.adminComments = [];
+      record.adminComments.push({ comment: note, author: req.user.email, authorRole: req.user?.role || null, createdAt: new Date() });
+      record.markModified('adminComments');
+    }
     record.markModified('status');
     record.markModified('statusHistory');
     await record.save();
@@ -1016,7 +1033,7 @@ router.post("/payments/:id/reject", isAdmin, async (req, res) => {
 // 👥 PAGINATED USERS REGISTRY DIRECTORY
 router.get("/users", isSuperAdmin, async (req, res) => {
   try {
-    let { page = 1, limit = 20, search = "", role = "", status = "" } = req.query;
+    let { page = 1, limit = 20, search = "", role = "", status = "", sortBy = "newest", order = "desc" } = req.query;
     page = Math.max(1, parseInt(page));
     limit = Math.max(1, parseInt(limit));
 
@@ -1042,9 +1059,20 @@ router.get("/users", isSuperAdmin, async (req, res) => {
     }
 
     const total = await User.countDocuments(query);
+    const sortFields = {
+      newest: { createdAt: -1 },
+      balance: { walletBalanceKobo: -1, createdAt: -1 },
+      alphabetical: { firstName: 1, lastName: 1, createdAt: -1 },
+    };
+    const selectedSort = sortFields[sortBy] || sortFields.newest;
+    const direction = String(order).toLowerCase() === "asc" ? 1 : -1;
+    const sort = Object.fromEntries(
+      Object.entries(selectedSort).map(([field, value], index) => [field, index === 0 ? direction : value])
+    );
+
     const users = await User.find(query)
       .select("-password")
-      .sort({ createdAt: -1 })
+      .sort(sort)
       .skip((page - 1) * limit)
       .limit(limit)
       .lean();
