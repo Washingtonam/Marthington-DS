@@ -71,6 +71,7 @@ export default function ArticleBodyEditor({ value, onChange }) {
   const editorRef = useRef(null);
   const fileInputRef = useRef(null);
   const onChangeRef = useRef(onChange);
+  const emittedContentRef = useRef(value);
   const [uploading, setUploading] = useState(0);
   const [error, setError] = useState("");
 
@@ -131,7 +132,11 @@ export default function ArticleBodyEditor({ value, onChange }) {
     ],
     content: renderArticleBody(value),
     immediatelyRender: false,
-    onUpdate: ({ editor: currentEditor }) => onChangeRef.current(currentEditor.getHTML()),
+    onUpdate: ({ editor: currentEditor }) => {
+      const content = currentEditor.getHTML();
+      emittedContentRef.current = content;
+      onChangeRef.current(content);
+    },
     editorProps: {
       attributes: {
         class: "min-h-64 px-4 py-3 text-sm leading-7 outline-none [&_a]:text-blue-700 [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-4 [&_h2]:my-3 [&_h2]:text-xl [&_h2]:font-bold [&_img]:my-3 [&_img]:max-w-full [&_img]:rounded-md [&_li]:ml-5 [&_ol]:list-decimal [&_p]:my-2 [&_ul]:list-disc",
@@ -168,8 +173,10 @@ export default function ArticleBodyEditor({ value, onChange }) {
   }, [editor]);
 
   useEffect(() => {
+    if (!editor || value === emittedContentRef.current) return;
     const content = renderArticleBody(value);
-    if (editor && content !== editor.getHTML()) editor.commands.setContent(content, { emitUpdate: false });
+    emittedContentRef.current = value;
+    if (content !== editor.getHTML()) editor.commands.setContent(content, { emitUpdate: false });
   }, [editor, value]);
 
   const addLink = () => {
