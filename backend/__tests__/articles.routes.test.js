@@ -6,12 +6,14 @@ jest.mock("../models/Article.model", () => ({
   exists: jest.fn(),
   create: jest.fn(),
 }));
+jest.mock("../shared/cloudinary", () => ({ uploadToCloudinary: jest.fn() }));
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const request = require("supertest");
 const User = require("../models/User.model");
 const Article = require("../models/Article.model");
+const { uploadToCloudinary } = require("../shared/cloudinary");
 const { JWT_SECRET_FALLBACK } = require("../config/constants");
 const { verifyToken } = require("../shared/authGuard");
 const { publicRouter, adminRouter } = require("../routes/articles.routes");
@@ -85,5 +87,69 @@ describe("article routes", () => {
 
     expect(response.status).toBe(403);
     expect(Article.find).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes article markup before saving", async () => {
+    User.findById.mockResolvedValue({
+      id: "admin-1",
+      _id: "admin-1",
+      email: "admin@example.com",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    Article.exists.mockResolvedValue(false);
+    Article.create.mockImplementation(async (payload) => payload);
+
+    const response = await request(app)
+      .post("/api/admin/articles")
+      .set("Authorization", `Bearer ${makeToken()}`)
+      .send({
+        title: "Safe guide",
+        body: '<p>Hello <a href="https://example.com" onclick="alert(1)">source</a><script>alert(1)</script></p>',
+      });
+
+    expect(response.status).toBe(201);
+    expect(Article.create.mock.calls[0][0].body).toBe('<p>Hello <a href="https://example.com">source</a></p>');
+  });
+
+  it("rejects rich-text bodies that contain only empty paragraphs", async () => {
+    User.findById.mockResolvedValue({
+      id: "admin-1",
+      _id: "admin-1",
+      email: "admin@example.com",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+
+    const response = await request(app)
+      .post("/api/admin/articles")
+      .set("Authorization", `Bearer ${makeToken()}`)
+      .send({ title: "Empty guide", body: "<p><br></p>" });
+
+    expect(response.status).toBe(400);
+    expect(Article.create).not.toHaveBeenCalled();
+  });
+
+  it("uploads article images to Cloudinary for super-admins", async () => {
+    User.findById.mockResolvedValue({
+      id: "admin-1",
+      _id: "admin-1",
+      email: "admin@example.com",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    uploadToCloudinary.mockResolvedValue("https://res.cloudinary.com/example/image/upload/article.png");
+
+    const response = await request(app)
+      .post("/api/admin/articles/image")
+      .set("Authorization", `Bearer ${makeToken()}`)
+      .attach("image", Buffer.from("image-bytes"), { filename: "guide.png", contentType: "image/png" });
+
+    expect(response.status).toBe(201);
+    expect(response.body.url).toBe("https://res.cloudinary.com/example/image/upload/article.png");
+    expect(uploadToCloudinary).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/png;base64,/), "articles");
   });
 });

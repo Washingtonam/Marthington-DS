@@ -5,7 +5,7 @@ const articleSchema = new mongoose.Schema({
   slug: { type: String, required: true, unique: true, trim: true, lowercase: true, maxlength: 160 },
   summary: { type: String, trim: true, maxlength: 500, default: "" },
   category: { type: String, trim: true, maxlength: 80, default: "NIMC Guide" },
-  body: { type: String, required: true, maxlength: 50000 },
+  body: { type: String, required: true, maxlength: 200000 },
   sourceName: { type: String, trim: true, maxlength: 160, default: "" },
   sourceUrl: { type: String, trim: true, maxlength: 2048, default: "" },
   status: { type: String, enum: ["draft", "published"], default: "draft" },
