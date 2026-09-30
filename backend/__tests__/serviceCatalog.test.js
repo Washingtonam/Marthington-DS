@@ -1,5 +1,8 @@
+jest.mock('../models/User.model', () => ({ findById: jest.fn() }));
+
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
+const User = require('../models/User.model');
 const app = require('../app');
 
 const makeSuperAdminToken = () => jwt.sign({
@@ -21,6 +24,14 @@ describe('service catalog API', () => {
   });
 
   it('filters admin catalog services by the canonical NIMC category', async () => {
+    User.findById.mockResolvedValue({
+      id: 'admin-user-1',
+      _id: 'admin-user-1',
+      email: 'admin@xcombinator.com',
+      role: 'super_admin',
+      status: 'active',
+      approvalStatus: 'approved',
+    });
     const token = makeSuperAdminToken();
     const response = await request(app)
       .get('/api/admin/services?category=NIMC')
@@ -58,6 +69,14 @@ describe('service catalog API', () => {
   });
 
   it('supports custom categories and custom service pricing from the catalog', async () => {
+    User.findById.mockResolvedValue({
+      id: 'admin-user-1',
+      _id: 'admin-user-1',
+      email: 'admin@xcombinator.com',
+      role: 'super_admin',
+      status: 'active',
+      approvalStatus: 'approved',
+    });
     const token = makeSuperAdminToken();
     const createResponse = await request(app)
       .post('/api/admin/services')

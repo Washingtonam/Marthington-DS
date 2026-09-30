@@ -1033,7 +1033,7 @@ router.post("/payments/:id/reject", isAdmin, async (req, res) => {
 // 👥 PAGINATED USERS REGISTRY DIRECTORY
 router.get("/users", isSuperAdmin, async (req, res) => {
   try {
-    let { page = 1, limit = 20, search = "", role = "", status = "", sortBy = "newest", order = "desc" } = req.query;
+    let { page = 1, limit = 20, search = "", role = "", status = "", approvalStatus = "", sortBy = "newest", order = "desc" } = req.query;
     page = Math.max(1, parseInt(page));
     limit = Math.max(1, parseInt(limit));
 
@@ -1056,6 +1056,17 @@ router.get("/users", isSuperAdmin, async (req, res) => {
     }
     if (statusTerm) {
       query.status = statusTerm;
+    }
+    const approvalTerm = String(approvalStatus || "").trim();
+    if (approvalTerm === "approved") {
+      const searchClause = query.$or ? { $or: query.$or } : null;
+      query.$and = [
+        ...(searchClause ? [searchClause] : []),
+        { $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }] },
+      ];
+      delete query.$or;
+    } else if (approvalTerm) {
+      query.approvalStatus = approvalTerm;
     }
 
     const total = await User.countDocuments(query);
@@ -1531,6 +1542,42 @@ router.put("/user/:id/activate", isSuperAdmin, async (req, res) => {
   } catch (err) {
     console.error("ACTIVATE ERROR:", err);
     res.status(500).json({ message: "Failed to dispatch restoration trigger state context updates" });
+  }
+});
+
+router.put("/user/:id/approve", isSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Super-admin accounts do not require agent approval" });
+    if (user.approvalStatus !== "pending") return res.status(409).json({ message: "Only pending agent applications can be approved" });
+
+    user.approvalStatus = "approved";
+    user.reviewedBy = req.user.id;
+    user.reviewedAt = new Date();
+    await user.save();
+    return res.json({ message: "Agent application approved", approvalStatus: user.approvalStatus });
+  } catch (error) {
+    console.error("APPROVE USER ERROR:", error);
+    return res.status(500).json({ message: "Failed to approve agent application" });
+  }
+});
+
+router.put("/user/:id/reject", isSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Super-admin accounts cannot be rejected" });
+    if (user.approvalStatus !== "pending") return res.status(409).json({ message: "Only pending agent applications can be rejected" });
+
+    user.approvalStatus = "rejected";
+    user.reviewedBy = req.user.id;
+    user.reviewedAt = new Date();
+    await user.save();
+    return res.json({ message: "Agent application rejected", approvalStatus: user.approvalStatus });
+  } catch (error) {
+    console.error("REJECT USER ERROR:", error);
+    return res.status(500).json({ message: "Failed to reject agent application" });
   }
 });
 

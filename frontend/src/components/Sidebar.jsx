@@ -12,6 +12,7 @@ import {
   Briefcase,
   Sparkles,
   Sliders,
+  BookOpenText,
 } from "lucide-react";
 
 import { useState, useEffect } from "react";
@@ -302,6 +303,13 @@ export default function Sidebar() {
                         to="/admin/notifications"
                         label="Notification Center"
                         icon={<Bell size={18} />}
+                        open={open}
+                        onNavigate={handleNavClick}
+                      />
+                      <SidebarNavItem
+                        to="/admin/articles"
+                        label="Guides & Updates"
+                        icon={<BookOpenText size={18} />}
                         open={open}
                         onNavigate={handleNavClick}
                       />

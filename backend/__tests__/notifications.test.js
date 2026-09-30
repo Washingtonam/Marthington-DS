@@ -1,5 +1,8 @@
+jest.mock("../models/User.model", () => ({ findById: jest.fn() }));
+
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
+const User = require("../models/User.model");
 const app = require("../app");
 const {
   isWithinSchedule,
@@ -39,6 +42,15 @@ describe("notification rules and access", () => {
   });
 
   it("keeps notification management restricted to super admins", async () => {
+    User.findById.mockResolvedValue({
+      id: "admin-user-1",
+      _id: "admin-user-1",
+      email: "admin@example.com",
+      role: "admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+
     const regularAdmin = await request(app)
       .get("/api/admin/notifications")
       .set("Authorization", `Bearer ${signToken("admin")}`);
@@ -46,6 +58,15 @@ describe("notification rules and access", () => {
   });
 
   it("returns client validation errors before touching the database", async () => {
+    User.findById.mockResolvedValue({
+      id: "admin-user-1",
+      _id: "admin-user-1",
+      email: "admin@example.com",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+
     const response = await request(app)
       .post("/api/admin/notifications")
       .set("Authorization", `Bearer ${signToken("super_admin")}`)

@@ -67,7 +67,6 @@ export default function Register() {
     try {
       await api.post("/api/auth/register", { ...form, phone: form.phone.trim() });
       setIsSuccess(true);
-      window.setTimeout(() => navigate("/login"), 1800);
     } catch (error) {
       console.error("🔥 REGISTRATION ERROR:", error);
       alert(error.response?.data?.error || "Registration failed. Please try again.");
@@ -91,13 +90,10 @@ export default function Register() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
               <CheckCircle2 size={32} />
             </div>
-            <h3 className="text-2xl font-black text-slate-900">Account created successfully!</h3>
-            <p className="mt-3 text-sm leading-7 text-slate-600">Your account is ready. We’re taking you to sign in so you can get started.</p>
-            <div className="mt-6 flex justify-center gap-2">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <motion.span key={index} animate={{ y: [0, -6, 0], opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.2, repeat: Infinity, delay: index * 0.12 }} className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500" />
-              ))}
-            </div>
+            <h3 className="text-2xl font-black text-slate-900">Application submitted</h3>
+            <p className="mt-3 text-sm leading-7 text-slate-600">Your agent account is pending review. Contact WhatsApp Support to complete onboarding; you can sign in after approval.</p>
+            <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">WhatsApp Support</a>
+            <button type="button" onClick={() => navigate("/guides")} className="mt-4 text-sm font-semibold text-blue-700 underline">Read NIMC guides</button>
           </motion.div>
         </motion.div>
       )}
@@ -117,11 +113,11 @@ export default function Register() {
             </div>
 
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-blue-100 backdrop-blur">
-              <Sparkles size={16} /> Launch your journey in minutes
+              <Sparkles size={16} /> Agent access by application
             </div>
 
-            <h2 className="max-w-md text-5xl font-black leading-tight">Create a profile that feels premium from day one.</h2>
-            <p className="mt-6 max-w-lg text-base leading-8 text-white/70">Open your account, add your WhatsApp number, and start verifying with a polished experience designed to impress.</p>
+            <h2 className="max-w-md text-5xl font-black leading-tight">A reviewed start for every agent.</h2>
+            <p className="mt-6 max-w-lg text-base leading-8 text-white/70">Submit your details, speak with WhatsApp Support, and wait for an administrator to approve portal access.</p>
           </div>
 
           <div className="relative z-10 space-y-4">
@@ -131,8 +127,8 @@ export default function Register() {
                   <CheckCircle2 size={22} />
                 </div>
                 <div>
-                  <h3 className="font-semibold">Fast onboarding</h3>
-                  <p className="text-sm text-white/70">Set up your account and start right away.</p>
+                  <h3 className="font-semibold">Reviewed onboarding</h3>
+                  <p className="text-sm text-white/70">Portal access is enabled after your application is reviewed.</p>
                 </div>
               </div>
             </div>
@@ -156,8 +152,8 @@ export default function Register() {
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-600 lg:hidden">
                 <Sparkles size={14} /> Agent OnBoarding
               </div>
-              <h2 className="text-4xl font-black text-slate-900">Create Account 🚀</h2>
-              <p className="mt-3 text-sm leading-7 text-slate-600">Your account setup should feel just as premium as the platform itself.</p>
+              <h2 className="text-4xl font-black text-slate-900">Apply for agent access</h2>
+              <p className="mt-3 text-sm leading-7 text-slate-600">Applications are reviewed before you can sign in and use portal services.</p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -215,7 +211,7 @@ export default function Register() {
             </div>
 
             <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-4 text-sm font-semibold text-white shadow-[0_12px_40px_rgba(37,99,235,0.25)] transition hover:opacity-90">
-              {loading ? "Creating account..." : (<><span>Create Account</span><ArrowRight size={18} /></>)}
+              {loading ? "Submitting application..." : (<><span>Submit application</span><ArrowRight size={18} /></>)}
             </button>
           </form>
         </div>

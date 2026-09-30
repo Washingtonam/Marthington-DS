@@ -35,9 +35,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // If the server responds with 401 (Unauthorized) or 403 (Forbidden), 
-    // it likely means the token has expired or is invalid.
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+    // A 403 is an authorization decision, not an expired session.
+    if (error.response?.status === 401) {
       // Clear local storage and redirect to login
       localStorage.removeItem("token");
       localStorage.removeItem("user");

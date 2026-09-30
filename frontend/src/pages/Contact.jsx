@@ -9,7 +9,7 @@ export default function Contact() {
       <div className="bg-white dark:bg-slate-900 border rounded-2xl p-6 space-y-4">
         <div>
           <h2 className="font-semibold">WhatsApp</h2>
-          <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" className="text-green-600">Chat on WhatsApp</a>
+          <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" className="text-green-600">WhatsApp Support</a>
         </div>
 
         <div>

@@ -83,10 +83,13 @@ router.post("/register", async (req, res) => {
       phone,
       password: hashedPassword,
       role: assignedRole,
+      approvalStatus: assignedRole === "super_admin" ? "approved" : "pending",
     });
 
     res.status(201).json({
-      message: "User registered successfully",
+      message: newUser.approvalStatus === "approved"
+        ? "User registered successfully"
+        : "Your agent application was submitted for review",
       user: {
         id: newUser._id,
         email: newUser.email,
@@ -95,6 +98,7 @@ router.post("/register", async (req, res) => {
         walletBalance: newUser.walletBalance || 0,
         walletBalanceKobo: newUser.walletBalanceKobo || 0,
         role: newUser.role,
+        approvalStatus: newUser.approvalStatus,
       },
     });
 
@@ -143,6 +147,18 @@ router.post("/login", async (req, res) => {
       return res.status(403).json({
         error: "Account suspended",
         message: "Account suspended",
+      });
+    }
+
+    if (user.approvalStatus !== "approved") {
+      const isPending = user.approvalStatus === "pending";
+      const message = isPending
+        ? "Your agent application is awaiting review. Contact WhatsApp Support for onboarding assistance."
+        : "Your agent application was not approved. Contact WhatsApp Support for assistance.";
+      return res.status(403).json({
+        error: message,
+        message,
+        code: isPending ? "ACCOUNT_PENDING_APPROVAL" : "ACCOUNT_NOT_APPROVED",
       });
     }
 

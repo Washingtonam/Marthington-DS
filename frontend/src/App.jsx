@@ -7,6 +7,8 @@ import {
 
 // Public Pages
 import Home from "./pages/public/Home";
+import Guides from "./pages/public/Guides";
+import GuideArticle from "./pages/public/GuideArticle";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
@@ -42,6 +44,7 @@ import AdminPayments from "./pages/admin/AdminPayments";
 import AdminPricing from "./pages/admin/AdminPricing";
 import AdminRequests from "./pages/admin/AdminRequests";
 import AdminNotifications from "./pages/admin/AdminNotifications";
+import AdminArticles from "./pages/admin/AdminArticles";
 import UserDetailView from "./pages/admin/UserDetailView";
 import Contact from "./pages/Contact";
 
@@ -110,6 +113,8 @@ function AppRoutes() {
       <Routes>
       {/* Public Routes */}
       <Route path="/" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Home />} />
+      <Route path="/guides" element={<Guides />} />
+      <Route path="/guides/:slug" element={<GuideArticle />} />
       <Route path="/login" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Login />} />
       <Route path="/register" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -169,6 +174,7 @@ function AppRoutes() {
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/services-engine" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/notifications" element={<SuperAdminRoute><Layout><AdminNotifications /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/articles" element={<SuperAdminRoute><Layout><AdminArticles /></Layout></SuperAdminRoute>} />
       <Route path="/admin/user/:userId/details" element={<AdminRoute><Layout><UserDetailView /></Layout></AdminRoute>} />
 
       {/* Catch all */}

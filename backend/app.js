@@ -50,6 +50,9 @@ app.use(express.json({
 // - /api/services/*  -> core services routes (verify, request, etc.)
 // - /api/cac/*       -> CAC service routes
 app.use("/api/auth", require("./routes/auth.routes"));
+const articleRoutes = require("./routes/articles.routes");
+app.use("/api/articles", articleRoutes.publicRouter);
+app.use("/api/admin/articles", verifyToken, articleRoutes.adminRouter);
 app.use("/api/finance", require("./routes/finance.routes"));
 app.use("/api/payments", require("./routes/payment.routes"));
 app.use("/api/users", require("./routes/users.routes"));

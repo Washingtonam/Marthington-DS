@@ -14,7 +14,10 @@ const userSchema = new mongoose.Schema({
     commissionBalanceKobo: { type: Number, default: 0 },
     units: { type: Number, default: 0 },
     role: { type: String, enum: ["user", "admin", "super_admin"], default: "user" },
-    status: { type: String, enum: ["active", "suspended"], default: "active" }
+    status: { type: String, enum: ["active", "suspended"], default: "active" },
+    approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    reviewedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 // Pre-save to preserve currency precision and keep legacy field in sync

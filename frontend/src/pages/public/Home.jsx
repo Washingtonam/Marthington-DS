@@ -22,6 +22,7 @@ import { motion } from "framer-motion";
 export default function Home() {
   const navigate = useNavigate();
   const [pricing, setPricing] = useState({ verification: 1000, name: 12000, slip: 150 });
+  const [articles, setArticles] = useState([]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -59,6 +60,12 @@ export default function Home() {
     loadPricing();
   }, []);
 
+  useEffect(() => {
+    api.get("/api/articles", { params: { limit: 3 } })
+      .then(({ data }) => setArticles(data.articles || []))
+      .catch((error) => console.error("Public articles load error:", error));
+  }, []);
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_32%),linear-gradient(135deg,_#f8fbff_0%,_#eef4ff_45%,_#fdfcff_100%)] text-slate-900 selection:bg-blue-500/25">
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
@@ -88,11 +95,12 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/guides")} className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">Guides &amp; Updates</button>
             <button onClick={() => navigate("/login")} className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
               Login
             </button>
             <button onClick={() => navigate("/register")} className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-slate-900/10 transition hover:bg-slate-800">
-              Create Agent Account
+              Apply for Agent Access
             </button>
           </div>
         </div>
@@ -117,13 +125,13 @@ export default function Home() {
 
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.45 }} className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} onClick={() => navigate("/register")} className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-4 text-sm font-semibold text-white shadow-[0_12px_40px_rgba(37,99,235,0.25)] transition">
-              Start Verifying Now <ArrowRight size={18} />
+              Apply for Agent Access <ArrowRight size={18} />
             </motion.button>
             <button onClick={() => navigate("/login")} className="rounded-full border border-slate-300 bg-white/70 px-8 py-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white">
               Login
             </button>
           </motion.div>
-          <p className="mt-4 text-sm font-medium text-slate-500">No monthly subscription fees <span className="mx-2 text-slate-300">•</span> Instant account funding</p>
+          <p className="mt-4 text-sm font-medium text-slate-500">Applications are reviewed before portal access <span className="mx-2 text-slate-300">•</span> Browse practical NIMC guides</p>
         </motion.div>
       </section>
 
@@ -140,7 +148,7 @@ export default function Home() {
             <h2 className="mt-3 text-4xl font-black tracking-tight text-slate-900">From NIN search to response, without the guesswork.</h2>
             <p className="mt-5 leading-8 text-slate-600">Search, review the response, and keep every wallet transaction visible from one focused workspace.</p>
             <button onClick={() => navigate("/register")} className="mt-7 inline-flex items-center gap-2 rounded-full bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-700">
-              Open your workspace <ArrowRight size={17} />
+              Apply for access <ArrowRight size={17} />
             </button>
           </div>
           <ProductPreview />
@@ -154,6 +162,14 @@ export default function Home() {
         </div>
 
         <PricingSection pricing={pricing} />
+        <section className="mt-20" aria-labelledby="latest-guides-heading">
+          <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div><p className="text-sm font-bold uppercase tracking-[0.2em] text-blue-700">Resource desk</p><h2 id="latest-guides-heading" className="mt-2 text-3xl font-black text-slate-900">NIMC guides &amp; updates</h2><p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">Understand common identity record processes and what to prepare before requesting assistance.</p></div>
+            <button onClick={() => navigate("/guides")} className="inline-flex items-center gap-2 self-start text-sm font-bold text-blue-700 hover:text-blue-900 sm:self-auto">Browse all guides <ArrowRight size={16} /></button>
+          </div>
+          {articles.length > 0 ? <div className="grid gap-4 md:grid-cols-3">{articles.map((article) => <article key={article._id} className="border-t-2 border-slate-300 bg-white/70 px-5 py-5"><p className="text-xs font-bold uppercase text-blue-700">{article.category || "NIMC Guide"}</p><h3 className="mt-2 text-lg font-bold text-slate-900"><button onClick={() => navigate(`/guides/${article.slug}`)} className="text-left hover:text-blue-700">{article.title}</button></h3><p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{article.summary}</p></article>)}</div> : <p className="border-y border-slate-200 py-5 text-sm text-slate-500">New guides and updates will appear here.</p>}
+          <p className="mt-4 text-xs text-slate-500">Guidance is informational and is not an official NIMC notice.</p>
+        </section>
         <FaqSection />
       </section>
 

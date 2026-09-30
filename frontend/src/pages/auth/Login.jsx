@@ -14,6 +14,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loginMessage, setLoginMessage] = useState("");
+  const [approvalBlocked, setApprovalBlocked] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -39,12 +41,13 @@ export default function Login() {
       }
     } catch (error) {
       console.error("🔥 LOGIN SUBMISSION EXCEPTION:", error);
-      alert(
-        error.response?.data?.error ||
+      setLoginMessage(
         error.response?.data?.message ||
+        error.response?.data?.error ||
         error.message ||
         "Authentication processing failed."
       );
+      setApprovalBlocked(["ACCOUNT_PENDING_APPROVAL", "ACCOUNT_NOT_APPROVED"].includes(error.response?.data?.code));
     } finally {
       setLoading(false);
     }
@@ -141,13 +144,15 @@ export default function Login() {
                 <Link to="/forgot-password" className="text-sm font-medium text-blue-600 transition hover:underline">Forgot Password?</Link>
               </div>
 
+              {loginMessage && <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">{loginMessage}{approvalBlocked && <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" className="mt-2 block font-bold underline">WhatsApp Support</a>}</div>}
+
               <button onClick={handleLogin} disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-4 text-sm font-semibold text-white shadow-[0_12px_40px_rgba(37,99,235,0.25)] transition hover:opacity-90">
                 {loading ? "Processing..." : (<><span>Login</span><ArrowRight size={18} /></>)}
               </button>
             </div>
 
             <div className="mt-8 text-center">
-              <p className="text-sm text-slate-500">Don’t have an account? <span onClick={() => navigate("/register")} className="cursor-pointer font-semibold text-blue-600 transition hover:underline">Create Account</span></p>
+              <p className="text-sm text-slate-500">Want to become an agent? <span onClick={() => navigate("/register")} className="cursor-pointer font-semibold text-blue-600 transition hover:underline">Apply for access</span></p>
             </div>
           </div>
         </div>

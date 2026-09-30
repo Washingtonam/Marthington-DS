@@ -44,6 +44,7 @@ export default function AdminUsers() {
   const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [approvalFilter, setApprovalFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   // Modal states
@@ -70,6 +71,7 @@ export default function AdminUsers() {
       }
       if (roleFilter) params.role = roleFilter;
       if (statusFilter) params.status = statusFilter;
+      if (approvalFilter) params.approvalStatus = approvalFilter;
 
       const response = await api.get("/api/admin/users", { params });
       setUsers(response.data.data || []);
@@ -125,7 +127,7 @@ export default function AdminUsers() {
     // refetch when filters change
     setPage(1);
     fetchUsers(1, currentSearch);
-  }, [roleFilter, statusFilter, sortBy]);
+  }, [roleFilter, statusFilter, approvalFilter, sortBy]);
 
   useEffect(() => {
     if (page !== 1) {
@@ -342,6 +344,21 @@ export default function AdminUsers() {
     }
   };
 
+  const handleApproval = async (userId, decision) => {
+    if (decision === "reject" && !window.confirm("Reject this agent application?")) return;
+
+    try {
+      const response = await api.put(`/api/admin/user/${userId}/${decision}`);
+      setMessage({ type: "success", text: response.data?.message || `Application ${decision}ed successfully` });
+      await fetchUsers(page, currentSearch);
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || `Failed to ${decision} application`,
+      });
+    }
+  };
+
   // Handle promote to admin
   const handlePromote = async (userId) => {
     if (!isSuperAdmin) {
@@ -538,6 +555,16 @@ export default function AdminUsers() {
             <option value="active">Active</option>
             <option value="suspended">Suspended</option>
           </select>
+          <select
+            value={approvalFilter}
+            onChange={(e) => setApprovalFilter(e.target.value)}
+            className="ml-3 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white text-sm"
+          >
+            <option value="">All approvals</option>
+            <option value="pending">Pending approval</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
           <div className="ml-3 flex items-center gap-2">
             <button
               onClick={() => setViewMode("grid")}
@@ -614,6 +641,15 @@ export default function AdminUsers() {
                     >
                       {u.status || "active"}
                     </span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      (u.approvalStatus || "approved") === "pending"
+                        ? "bg-amber-600/30 text-amber-200"
+                        : (u.approvalStatus || "approved") === "rejected"
+                        ? "bg-red-600/30 text-red-200"
+                        : "bg-emerald-600/30 text-emerald-200"
+                    }`}>
+                      {u.approvalStatus || "approved"}
+                    </span>
                   </div>
 
                   <div className="text-xs text-slate-400 mt-3">
@@ -634,6 +670,12 @@ export default function AdminUsers() {
 
                   {/* Action Buttons */}
                   <div className="space-y-2">
+                    {isSuperAdmin && (u.approvalStatus || "approved") === "pending" && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => handleApproval(u._id, "approve")} className="px-3 py-2 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 rounded-lg text-sm font-medium transition">Approve</button>
+                        <button onClick={() => handleApproval(u._id, "reject")} className="px-3 py-2 bg-red-600/30 hover:bg-red-600/50 text-red-200 rounded-lg text-sm font-medium transition">Reject</button>
+                      </div>
+                    )}
                     <button onClick={() => navigate(`/admin/user/${u._id}/details`)} className="w-full px-3 py-2 bg-slate-700/30 hover:bg-slate-700/50 text-white rounded-lg text-sm font-medium transition">View Details</button>
                     {/* Fund Adjustment */}
                     <button
@@ -715,6 +757,7 @@ export default function AdminUsers() {
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Approval</th>
                     <th className="px-4 py-3 text-right">Balance</th>
                     <th className="px-4 py-3">Actions</th>
                   </tr>
@@ -734,9 +777,14 @@ export default function AdminUsers() {
                       </td>
                       <td className="px-4 py-3 align-top text-slate-200">{u.role || "user"}</td>
                       <td className="px-4 py-3 align-top text-slate-200">{u.status || "active"}</td>
+                      <td className="px-4 py-3 align-top capitalize text-slate-200">{u.approvalStatus || "approved"}</td>
                       <td className="px-4 py-3 align-top text-right font-semibold text-green-400">₦{(u.walletBalanceKobo / 100 || 0).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 align-top">
                         <div className="flex gap-2">
+                          {isSuperAdmin && (u.approvalStatus || "approved") === "pending" && <>
+                            <button onClick={() => handleApproval(u._id, "approve")} className="px-3 py-1 bg-emerald-600/30 rounded-md text-sm text-emerald-200">Approve</button>
+                            <button onClick={() => handleApproval(u._id, "reject")} className="px-3 py-1 bg-red-600/30 rounded-md text-sm text-red-200">Reject</button>
+                          </>}
                           <button onClick={() => navigate(`/admin/user/${u._id}/details`)} className="px-3 py-1 bg-slate-700/30 rounded-md text-sm text-white">Details</button>
                           <button onClick={() => openFundModal(u)} className="px-3 py-1 bg-emerald-600/30 rounded-md text-sm text-emerald-200">Fund</button>
                         </div>
