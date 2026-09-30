@@ -59,6 +59,7 @@ function ToolbarButton({ label, active = false, disabled = false, onClick, child
       aria-label={label}
       aria-pressed={active}
       disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
       className={`inline-flex h-9 w-9 items-center justify-center rounded border text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-200 dark:hover:bg-slate-800 ${active ? "border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950" : "border-transparent"}`}
     >
