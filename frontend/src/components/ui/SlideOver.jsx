@@ -1,0 +1,87 @@
+import React, { useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+
+export default function SlideOver({ isOpen, onClose, title, children }) {
+  const panelRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevActive = document.activeElement;
+    // Prefer input-like elements for initial focus (textarea, input, select) to avoid accidentally focusing the Close button
+    const preferSelectors = 'input, textarea, select, [role="textbox"], [contenteditable]';
+    const fallbackSelectors = 'button, [href], [tabindex]:not([tabindex="-1"])';
+    let focusable = panelRef.current?.querySelectorAll(preferSelectors);
+    if (!focusable || focusable.length === 0) {
+      focusable = panelRef.current?.querySelectorAll(fallbackSelectors);
+    }
+    focusable?.[0]?.focus?.();
+
+    const handleKey = (e) => {
+      if (e.key === 'Escape') onCloseRef.current();
+      if (e.key === 'Tab') {
+        // recompute focusable nodes to handle dynamic content
+        const preferSelectors = 'input, textarea, select, [role="textbox"], [contenteditable]';
+        const fallbackSelectors = 'button, [href], [tabindex]:not([tabindex="-1"])';
+        let nodes = panelRef.current?.querySelectorAll(preferSelectors) || [];
+        if (!nodes || nodes.length === 0) nodes = panelRef.current?.querySelectorAll(fallbackSelectors) || [];
+        nodes = Array.from(nodes);
+        if (nodes.length === 0) return;
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      prevActive?.focus?.();
+    };
+  }, [isOpen]);
+
+  return (
+    <div className={`fixed inset-0 z-50 ${isOpen ? '' : 'pointer-events-none'}`} aria-hidden={!isOpen}>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: isOpen ? 1 : 0 }}
+        transition={{ duration: 0.18 }}
+        onClick={onClose}
+        className={`fixed inset-0 bg-black/50 ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
+      />
+
+      <motion.aside
+        ref={panelRef}
+        initial={{ x: '100%' }}
+        animate={{ x: isOpen ? 0 : '100%' }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="fixed top-0 right-0 h-full w-full md:w-[720px] bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 shadow-2xl pointer-events-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="slideover-title"
+      >
+        <div className="h-full overflow-auto p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              {title && <h3 id="slideover-title" className="text-lg font-bold">{title}</h3>}
+            </div>
+            <div>
+              <button onClick={onClose} className="px-3 py-2 rounded-xl bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100">Close</button>
+            </div>
+          </div>
+
+          <div>
+            {children}
+          </div>
+        </div>
+      </motion.aside>
+    </div>
+  );
+}

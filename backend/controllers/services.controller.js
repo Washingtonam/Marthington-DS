@@ -1,0 +1,499 @@
+// backend/controllers/services.controller.js
+const mongoose = require('mongoose');
+const User = require('../models/User.model');
+const ServiceRequest = require('../models/ServiceRequest.model');
+const VerificationRequest = require('../models/VerificationRequest.model');
+const Transaction = require('../models/transaction.model');
+const Pricing = require('../models/Pricing.model');
+const { validateServiceRequest } = require('../shared/validators');
+const { SUPER_ADMIN_EMAIL } = require('../config/constants');
+const { normalizeServiceType } = require('../config/serviceTypes');
+
+const normalizeCategorySlug = (value = '') => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .replace(/-+/g, '-')
+  .replace(/^nin$/, 'nimc');
+
+exports.getAllCacRequests = async (req, res) => {
+  // ...existing logic from cac.routes.js...
+};
+
+exports.getAllNinRequests = async (req, res) => {
+  // ...existing logic from nin.routes.js...
+};
+
+exports.getServiceRequests = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const skip = (page - 1) * limit;
+    const category = String(req.query.category || '').trim();
+    const nin = String(req.query.nin || '').trim();
+    const search = String(req.query.search || '').trim();
+
+    const query = {};
+
+    if (userId) {
+      query.userId = userId;
+    }
+
+    if (category) {
+      const normalizedCategory = normalizeServiceType(category);
+      if (normalizedCategory === 'cac') {
+        query.serviceCategory = 'CAC';
+      } else if (normalizedCategory === 'nimc') {
+        query.serviceCategory = 'NIMC';
+      } else {
+        query.$or = [
+          { serviceCategory: { $regex: normalizedCategory, $options: 'i' } },
+          { service: { $regex: normalizedCategory, $options: 'i' } },
+          { type: { $regex: normalizedCategory, $options: 'i' } }
+        ];
+      }
+    }
+
+    if (nin) {
+      query.nin = { $regex: nin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    }
+
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.$or = [
+        ...(query.$or || []),
+        { nin: { $regex: escapedSearch, $options: 'i' } },
+        { service: { $regex: escapedSearch, $options: 'i' } },
+        { type: { $regex: escapedSearch, $options: 'i' } },
+        { _id: { $regex: escapedSearch, $options: 'i' } }
+      ];
+    }
+
+    const [requests, totalCount] = await Promise.all([
+      ServiceRequest.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      ServiceRequest.countDocuments(query)
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.max(Math.ceil(totalCount / limit), 1),
+      data: requests
+    });
+  } catch (error) {
+    console.error('SERVICE_REQUESTS_QUERY_ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load service requests.' });
+  }
+};
+
+exports.getVerificationRequests = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const skip = (page - 1) * limit;
+    const nin = String(req.query.nin || '').trim();
+    const search = String(req.query.search || '').trim();
+    const includeServiceRequests = String(req.query.includeServiceRequests || req.query.includeService || '').toLowerCase() === 'true';
+
+    const verificationQuery = {};
+    if (req.user?.role && !['admin', 'super_admin'].includes(req.user.role)) {
+      verificationQuery.userId = userId;
+    }
+
+    if (nin) {
+      verificationQuery.nin = { $regex: nin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    }
+
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      verificationQuery.$or = [
+        { nin: { $regex: escapedSearch, $options: 'i' } },
+        { method: { $regex: escapedSearch, $options: 'i' } },
+        { _id: { $regex: escapedSearch, $options: 'i' } }
+      ];
+    }
+
+    const serviceQuery = {};
+    if (req.user?.role && !['admin', 'super_admin'].includes(req.user.role)) {
+      serviceQuery.userId = userId;
+    }
+
+    if (nin) {
+      serviceQuery.nin = { $regex: nin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    }
+
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      serviceQuery.$or = [
+        { nin: { $regex: escapedSearch, $options: 'i' } },
+        { service: { $regex: escapedSearch, $options: 'i' } },
+        { type: { $regex: escapedSearch, $options: 'i' } },
+        { _id: { $regex: escapedSearch, $options: 'i' } }
+      ];
+    }
+
+    const verificationPromise = VerificationRequest.find(verificationQuery).sort({ createdAt: -1 }).skip(skip).limit(limit);
+    const verificationCountPromise = VerificationRequest.countDocuments(verificationQuery);
+    const servicePromise = includeServiceRequests
+      ? ServiceRequest.find(serviceQuery).sort({ createdAt: -1 }).skip(skip).limit(limit)
+      : Promise.resolve([]);
+    const serviceCountPromise = includeServiceRequests
+      ? ServiceRequest.countDocuments(serviceQuery)
+      : Promise.resolve(0);
+
+    const [verificationRequests, verificationTotalCount, serviceRequests, serviceTotalCount] = await Promise.all([
+      verificationPromise,
+      verificationCountPromise,
+      servicePromise,
+      serviceCountPromise,
+    ]);
+
+    const combinedData = [
+      ...verificationRequests.map((request) => ({ ...request, source: 'verification' })),
+      ...serviceRequests.map((request) => ({ ...request, source: 'service' }))
+    ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    const totalCount = verificationTotalCount + serviceTotalCount;
+
+    return res.status(200).json({
+      success: true,
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.max(Math.ceil(totalCount / limit), 1),
+      data: combinedData.slice(0, limit),
+    });
+  } catch (error) {
+    console.error('VERIFICATION_REQUESTS_QUERY_ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load verification requests.' });
+  }
+};
+
+exports.getRequestById = async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const [serviceRequest, verificationRequest] = await Promise.all([
+      ServiceRequest.findById(requestId).lean(),
+      VerificationRequest.findById(requestId).lean(),
+    ]);
+
+    const request = verificationRequest || serviceRequest;
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Request not found.' });
+    }
+
+    const isAdminRole = req.user && ['admin', 'super_admin'].includes(req.user.role);
+    const isOwner = req.user && String(request.userId) === String(req.user.id);
+    if (!isOwner && !isAdminRole) {
+      return res.status(403).json({ success: false, message: 'Forbidden: insufficient privileges' });
+    }
+
+    return res.status(200).json({ success: true, data: request });
+  } catch (error) {
+    console.error('FETCH REQUEST ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load request.' });
+  }
+};
+
+exports.getPricing = async (req, res) => {
+  try {
+    const pricing = await Pricing.getPricing();
+    return res.json(pricing);
+  } catch (error) {
+    console.error('PRICING_FETCH_ERROR:', error);
+    return res.status(500).json({ error: 'Failed to load pricing' });
+  }
+};
+
+exports.getServiceCategories = async (req, res) => {
+  try {
+    let categories;
+    try {
+      categories = await Pricing.getCategories();
+    } catch (dbError) {
+      console.warn('SERVICE_CATEGORIES_FALLBACK_ACTIVE:', dbError.message);
+      categories = Pricing.getCategories
+        ? Pricing.getDefaultServiceCatalog().reduce((result, service) => {
+          const label = String(service.category || '').trim();
+          const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          if (slug && !result.some((category) => category.slug === slug)) result.push({ slug, label, isActive: true });
+          return result;
+        }, [])
+        : [];
+    }
+    return res.json({
+      success: true,
+      categories: categories.filter((category) => category.isActive !== false),
+    });
+  } catch (error) {
+    console.error('SERVICE_CATEGORIES_ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load service categories.' });
+  }
+};
+
+exports.getServiceCatalog = async (req, res) => {
+  try {
+    const category = String(req.query.category || '').trim();
+    const status = String(req.query.status || '').trim();
+
+    let catalog = Pricing.getDefaultServiceCatalog();
+    let activeCategorySlugs = null;
+
+    try {
+      const pricing = await Pricing.getPricing();
+      catalog = Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length
+        ? pricing.serviceCatalog
+        : Pricing.getDefaultServiceCatalog();
+      const categories = await Pricing.getCategories();
+      activeCategorySlugs = new Set(categories.filter((item) => item.isActive !== false).map((item) => item.slug));
+    } catch (dbError) {
+      console.warn('SERVICE_CATALOG_FALLBACK_ACTIVE:', dbError.message);
+    }
+
+    const filtered = catalog.filter((service) => {
+      const serviceCategorySlug = normalizeCategorySlug(service.category);
+      const isVisibleCategory = !activeCategorySlugs || activeCategorySlugs.has(serviceCategorySlug);
+      const matchesCategory = !category || normalizeCategorySlug(service.category) === normalizeCategorySlug(category);
+      const matchesStatus = !status || String(service.status || 'active') === status.toLowerCase();
+      return isVisibleCategory && matchesCategory && matchesStatus;
+    });
+
+    return res.json({
+      success: true,
+      services: filtered,
+      total: filtered.length,
+      category: category || 'all',
+    });
+  } catch (error) {
+    console.error('SERVICE_CATALOG_ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load service catalog.' });
+  }
+};
+
+const normalizeServiceCategory = (service) => {
+  const normalized = String(service || '').toLowerCase().trim();
+  if (["self-service", "selfservice", "self_service", "selfserviceemailretrieval", "selfservice-deviceunlink", "emailretrieval", "deviceunlink"].includes(normalized)) return "selfService";
+  if (normalized === "validation") return "validation";
+  if (normalized === "modification") return "modification";
+  if (normalized === "ipe") return "ipe";
+  return normalized;
+};
+
+const findCatalogService = (catalog, serviceIdentifier, typeIdentifier) => {
+  if (!Array.isArray(catalog)) return null;
+  const normalizedService = String(serviceIdentifier || '').trim().toLowerCase();
+  const normalizedType = String(typeIdentifier || '').trim().toLowerCase();
+
+  return catalog.find((service) => {
+    const serviceCode = String(service?.serviceCode || '').trim().toLowerCase();
+    const serviceName = String(service?.name || '').trim().toLowerCase();
+    const serviceType = String(service?.type || '').trim().toLowerCase();
+    const category = String(service?.category || '').trim().toLowerCase();
+
+    return serviceCode === normalizedService
+      || serviceName === normalizedService
+      || serviceCode === normalizedType
+      || serviceType === normalizedType
+      || (normalizedService && (serviceCode.includes(normalizedService) || serviceName.includes(normalizedService)))
+      || (category === 'nimc' && normalizedService === 'validation' && serviceType === 'validation')
+      || (category === 'nimc' && normalizedService === 'modification' && serviceType === 'modification');
+  }) || null;
+};
+
+const resolveServicePrice = (pricing, service, type, slipType, catalogService) => {
+  const directPrice = Number(catalogService?.price ?? 0);
+  if (catalogService && directPrice > 0) {
+    return {
+      amount: directPrice,
+      amountKobo: Math.round(directPrice * 100)
+    };
+  }
+
+  if (!pricing || !pricing.ninServices) return null;
+
+  const category = normalizeServiceCategory(service);
+  const normalizedType = String(type || '').trim();
+
+  let basePrice = pricing.ninServices[category]?.[normalizedType];
+
+  if (basePrice === undefined) {
+    console.warn(`WARNING: Price not found for ${category}/${normalizedType}. Checking for default category fallback.`);
+    basePrice = pricing.ninServices[category]?.default || pricing.ninServices.default;
+  }
+
+  if (typeof basePrice !== 'number') return null;
+
+  const slipCost = category === 'validation' && slipType && slipType !== 'none'
+    ? pricing.ninServices?.slipPrice ?? 0
+    : 0;
+
+  const amount = Number(basePrice) + Number(slipCost);
+  return {
+    amount,
+    amountKobo: Math.round(amount * 100)
+  };
+};
+
+const processServiceRequest = async ({ userId, service, type, nin, slipType, proof, passport, formData, paymentSource = 'main', category }) => {
+  const session = await mongoose.startSession();
+  let savedRequest = null;
+  let walletBalance = 0;
+
+  try {
+    await session.withTransaction(async () => {
+      let pricing = null;
+      let catalogService = null;
+
+      try {
+        pricing = await Pricing.getPricing();
+      } catch (dbError) {
+        console.warn('SERVICE_REQUEST_PRICE_FALLBACK_ACTIVE:', dbError.message);
+        pricing = { ninServices: {}, cacServices: {} };
+      }
+
+      const fallbackCatalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+      catalogService = findCatalogService(
+        Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length ? pricing.serviceCatalog : fallbackCatalog,
+        service,
+        type
+      );
+
+      const resolvedPrice = resolveServicePrice(pricing, service, type, slipType, catalogService);
+
+      if (!resolvedPrice) {
+        throw new Error('Unable to resolve service price from current pricing configuration.');
+      }
+
+      if (!catalogService || catalogService.status !== 'active') {
+        throw new Error('This service is not currently available.');
+      }
+
+      const { amount, amountKobo } = resolvedPrice;
+      const normalizedCategory = String(catalogService?.category || category || 'NIMC').trim().toUpperCase() || 'NIMC';
+
+      const user = await User.findById(userId).session(session);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      if (user.walletBalanceKobo == null) {
+        user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);
+      }
+
+      const isSuperAdmin = user.email?.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim();
+      const normalizedPaymentSource = String(paymentSource || 'main').toLowerCase();
+      let updatedUser = user;
+
+      if (!isSuperAdmin && amountKobo > 0) {
+        if (normalizedPaymentSource === 'commission') {
+          updatedUser = await User.findOneAndUpdate(
+            { _id: userId, commissionBalanceKobo: { $gte: amountKobo } },
+            { $inc: { commissionBalanceKobo: -amountKobo, commissionBalance: -(amountKobo / 100) } },
+            { returnDocument: 'after', session }
+          );
+
+          if (!updatedUser) {
+            throw new Error('Insufficient commission balance');
+          }
+        } else {
+          updatedUser = await User.findOneAndUpdate(
+            { _id: userId, walletBalanceKobo: { $gte: amountKobo } },
+            { $inc: { walletBalanceKobo: -amountKobo } },
+            { returnDocument: 'after', session }
+          );
+
+          if (!updatedUser) {
+            throw new Error('Insufficient funds');
+          }
+        }
+      }
+
+      [savedRequest] = await ServiceRequest.create([
+        {
+          userId,
+          service: String(service),
+          type: String(type),
+          serviceCategory: normalizedCategory,
+          nin: nin ? String(nin) : 'N/A',
+          slipType: slipType ? String(slipType) : 'none',
+          amount,
+          amountKobo,
+          priceAtTimeOfRequest: amount,
+          unitsUsed: 0,
+          proof: proof ? String(proof) : 'wallet',
+          passport: passport ? String(passport) : 'wallet',
+          paymentSource: normalizedPaymentSource,
+          formData: typeof formData === 'object' ? formData : {},
+          status: 'pending',
+          statusHistory: [{ status: 'pending', note: 'Initialized manual pipeline sequence successfully.' }]
+        }
+      ], { session });
+
+      await Transaction.create([
+        {
+          type: 'SERVICE',
+          amount,
+          amountKobo,
+          status: 'success',
+          userId,
+          requestId: savedRequest._id,
+          requestSource: 'service'
+        }
+      ], { session });
+
+      walletBalance = updatedUser.getWalletBalanceNaira();
+    });
+  } finally {
+    session.endSession();
+  }
+
+  return { savedRequest, walletBalance };
+};
+
+exports.submitServiceRequest = async (req, res) => {
+  console.log('TRANSACTION TRACE START:', { body: req.body, userId: req.user?.id });
+  const { error } = validateServiceRequest.validate(req.body);
+  if (error) {
+    return res.status(400).json({ success: false, message: error.details[0].message });
+  }
+
+  try {
+    const userId = req.user.id;
+    const { service, type, nin, slipType, proof, passport, formData, paymentSource, category } = req.body;
+
+    const { savedRequest, walletBalance } = await processServiceRequest({
+      userId,
+      service,
+      type,
+      nin,
+      slipType,
+      proof,
+      passport,
+      formData,
+      paymentSource,
+      category
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Submission compiled successfully.',
+      request: savedRequest,
+      requestId: savedRequest._id,
+      userWalletBalance: walletBalance
+    });
+  } catch (error) {
+    console.error('❌ MANUAL SERVICE SUBMISSION ERROR:', error);
+    if (error.message === 'Insufficient funds') {
+      return res.status(400).json({ success: false, message: 'Insufficient funds' });
+    }
+    return res.status(500).json({ success: false, message: error.message || 'Failed to submit service request.' });
+  }
+};
+
+// Export for testing
+exports.processServiceRequest = processServiceRequest;

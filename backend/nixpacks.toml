@@ -1,0 +1,13 @@
+# Railway Nixpacks Configuration for Node.js with Puppeteer
+# This ensures the backend installs required Puppeteer system dependencies.
+
+[phases.setup]
+nixPkgs = [
+  "chromium",
+  "nss",
+  "freetype",
+  "harfbuzz",
+  "ca-certificates",
+  "ttf-freefont"
+]
+

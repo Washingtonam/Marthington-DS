@@ -1,0 +1,14 @@
+{
+  "users": [],
+  "transactions": [],
+  "pricing": {
+    "nin": {
+      "data": 350,
+      "premium": 450,
+      "long": 400
+    },
+    "bvn": {
+      "price": 150
+    }
+  }
+}

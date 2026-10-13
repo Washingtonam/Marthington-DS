@@ -1,0 +1,648 @@
+
+const mongoose = require("mongoose");
+const User = require("../models/User.model");
+const Transaction = require("../models/transaction.model");
+const AuditLog = require("../models/AuditLog.model");
+const Pricing = require("../models/Pricing.model");
+
+// Safe schema/model resolution for ServiceRequest and CACRequest
+let ServiceRequest;
+try {
+  ServiceRequest = mongoose.model("ServiceRequest");
+} catch {
+  const dynamicSchema = new mongoose.Schema({}, { strict: false, timestamps: true });
+  ServiceRequest = mongoose.model("ServiceRequest", dynamicSchema);
+}
+
+let CACRequest;
+try {
+  CACRequest = mongoose.model("CacRequest");
+} catch {
+  const dynamicCacSchema = new mongoose.Schema({}, { strict: false, timestamps: true });
+  CACRequest = mongoose.model("CacRequest", dynamicCacSchema);
+}
+
+// Central pipeline for requests
+exports.getRequests = async (req, res) => {
+  try {
+    let { page = 1, limit = 20, status } = req.query;
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
+
+    const filterQuery = {};
+    if (status) {
+      filterQuery.status = String(status).toLowerCase();
+    }
+
+    const [nimcRequests, cacRequests] = await Promise.all([
+      ServiceRequest.find(filterQuery)
+        .populate("userId", "email firstName lastName phoneNumber role")
+        .lean(),
+      CACRequest.find(filterQuery)
+        .populate("userId", "email firstName lastName phoneNumber role")
+        .lean()
+    ]);
+
+    const normalizedNimc = nimcRequests.map(r => ({ ...r, pipelineSource: "nimc" }));
+    const normalizedCac = cacRequests.map(r => ({ ...r, pipelineSource: "cac" }));
+    const combinedCollection = [...normalizedNimc, ...normalizedCac].sort(
+      (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+    );
+
+    const totalRecords = combinedCollection.length;
+    const totalPages = Math.ceil(totalRecords / limit);
+    const startIndex = (page - 1) * limit;
+    const paginatedSlice = combinedCollection.slice(startIndex, startIndex + limit);
+
+    res.json({
+      success: true,
+      data: paginatedSlice,
+      pagination: {
+        total: totalRecords,
+        page,
+        pages: totalPages,
+        limit
+      }
+    });
+  } catch (error) {
+    console.error("🔥 CENTRAL PIPELINE REQUEST STREAM ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to assemble systemic registration requests pipeline." });
+  }
+};
+
+exports.getStats = async (req, res) => {
+  try {
+    const [totalUsers, totalTransactions, pendingPayments, balanceData] = await Promise.all([
+      User.countDocuments(),
+      Transaction.countDocuments(),
+      Transaction.countDocuments({ type: "UNIT_ADD", status: "pending" }),
+      User.aggregate([
+        { $group: { _id: null, totalKobo: { $sum: { $ifNull: ["$walletBalanceKobo", 0] } } } }
+      ])
+    ]);
+
+    res.json({
+      success: true,
+      totalUsers,
+      totalTransactions,
+      pendingPayments,
+      totalBalance: (balanceData[0]?.totalKobo || 0) / 100 // Convert Kobo to Naira
+    });
+  } catch (err) {
+    console.error("STATS ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to compile aggregate system dashboard stats" });
+  }
+};
+
+exports.getNimcRequests = async (req, res) => {
+  try {
+    const requests = await ServiceRequest.find()
+      .populate("userId", "email firstName lastName phoneNumber")
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json({ success: true, data: requests });
+  } catch (error) {
+    console.error("🔥 ADMIN NIMC REQUESTS api ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to api NIMC pipeline requests" });
+  }
+};
+
+exports.getCacRequests = async (req, res) => {
+  try {
+    const requests = await CACRequest.find()
+      .populate("userId", "email firstName lastName phoneNumber")
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json({ success: true, data: requests });
+  } catch (error) {
+    console.error("🔥 ADMIN CAC REQUESTS api ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to api CAC business registry requests" });
+  }
+};
+
+exports.updateStatus = async (req, res) => {
+  const { targetModule, id } = req.params;
+  const { status, note } = req.body; 
+  const adminEmail = req.user.email;
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid system document identification signature format." });
+    }
+
+    const normalizedModule = String(targetModule).toLowerCase();
+    if (!["cac", "nimc", "service"].includes(normalizedModule)) {
+      return res.status(400).json({ success: false, message: "Invalid pipeline module tracking assignment type profile." });
+    }
+
+    const TargetModel = normalizedModule === "cac" ? CACRequest : ServiceRequest;
+    const normalizedStatus = String(status).toLowerCase();
+
+    const record = await TargetModel.findById(id);
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
+    }
+
+    record.status = normalizedStatus;
+    if (!record.statusHistory || !Array.isArray(record.statusHistory)) {
+      record.statusHistory = [];
+    }
+    record.statusHistory.push({
+      status: normalizedStatus,
+      note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`,
+      actorRole: req.user?.role || null,
+      createdAt: new Date()
+    });
+    record.markModified("status");
+    record.markModified("statusHistory");
+    await record.save();
+
+    try {
+      await AuditLog.create({
+        action: `UPDATE_${normalizedModule.toUpperCase()}_STATUS`,
+        performedBy: adminEmail,
+        userId: record.userId || null,
+        amount: record.amount || 0,
+        note: `Record ${id} shifted to ${normalizedStatus}. Comment: ${note || 'None'}`
+      });
+    } catch (logErr) {
+      console.warn("Audit log background compilation bypassed cleanly:", logErr.message);
+    }
+
+    res.json({ success: true, message: `Pipeline document successfully marked as ${normalizedStatus}`, data: record });
+  } catch (err) {
+    console.error("🔥 UNIFIED STATUS TRANSITION ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to transform application pipeline lifecycle state environment variables." });
+  }
+};
+
+exports.getPayments = async (req, res) => {
+  try {
+    const payments = await Transaction.find({ type: "UNIT_ADD" })
+      .populate("userId", "email units")
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json(payments);
+  } catch (error) {
+    console.error("🔥 api PAYMENTS ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to api ledger credit payment entries" });
+  }
+};
+exports.approvePayment = async (req, res) => {
+  try {
+    const adminEmail = req.user.email;
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Malformed Transaction Reference ID token identifier" });
+    }
+
+    const payment = await Transaction.findById(req.params.id);
+    if (!payment) return res.status(404).json({ message: "Payment authorization intent profile not found" });
+
+    if (payment.status !== "pending") {
+      return res.status(400).json({ message: `Cannot authorize historical transaction mapped as: ${payment.status}` });
+    }
+
+    const user = await User.findById(payment.userId);
+    if (!user) return res.status(404).json({ message: "Target workspace wallet account structure absent" });
+
+    const pricing = await Pricing.findOne().lean();
+    const pricePerUnit = pricing?.nin?.unitPrice || 250;
+
+    let unitsToAdd = payment.units;
+    if (!unitsToAdd || unitsToAdd < 1) {
+      unitsToAdd = Math.floor(payment.amount / pricePerUnit);
+    }
+
+    if (unitsToAdd < 1) {
+      return res.status(400).json({ message: "Inbound capital allocation insufficient to generate minimal unit allocation thresholds" });
+    }
+
+    // If this is a simple wallet credit (type 'credit'), credit the wallet directly
+    if (String(payment.type).toLowerCase() === 'credit') {
+      const paymentAmountKobo = payment.amountKobo || Math.round((payment.amount || 0) * 100);
+
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: user._id },
+        { $inc: { walletBalanceKobo: paymentAmountKobo } },
+        { returnDocument: 'after' }
+      );
+
+      if (!updatedUser) return res.status(404).json({ message: "User not found during approval" });
+
+      payment.status = "approved";
+      await payment.save();
+
+      try {
+        await AuditLog.create({
+          action: "APPROVE_PAYMENT",
+          performedBy: adminEmail,
+          userId: user._id,
+          amount: payment.amount,
+          note: `Admin approved credit transaction: ${payment._id}`
+        });
+      } catch (aud) {
+        console.warn("Telemetry entry dropped during core transaction settlement execution:", aud.message);
+      }
+
+      return res.json({
+        message: "Payment approved and wallet credited",
+        walletBalance: updatedUser.walletBalance,
+        walletBalanceKobo: updatedUser.walletBalanceKobo
+      });
+    }
+
+    // Otherwise treat as UNIT_ADD (legacy unit allocation)
+    const beforeUnits = user.units || 0;
+
+    user.units = (user.units || 0) + unitsToAdd;
+    await user.save();
+
+    payment.status = "approved";
+    payment.units = unitsToAdd;
+    await payment.save();
+
+    try {
+      await AuditLog.create({
+        action: "APPROVE_PAYMENT",
+        performedBy: adminEmail,
+        userId: user._id,
+        amount: payment.amount,
+        unitsAdded: unitsToAdd,
+        unitsBefore: beforeUnits,
+        unitsAfter: user.units,
+      });
+    } catch (aud) {
+      console.warn("Telemetry entry dropped during core transaction settlement execution:", aud.message);
+    }
+
+    res.json({
+      message: `Systemic balance settlement finalized. ${unitsToAdd} resource units dispatched seamlessly.`,
+      units: user.units,
+    });
+  } catch (error) {
+    console.error("🔥 CLEARING SETTLEMENT ALLOCATION ERROR:", error);
+    res.status(500).json({ message: "Ledger transaction structural approval runtime crash", error: error.message });
+  }
+};
+
+exports.rejectPayment = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Malformed pipeline unique transaction object footprint token signature" });
+    }
+
+    const payment = await Transaction.findById(req.params.id);
+    if (!payment) return res.status(404).json({ message: "Credit application target request profile context not found." });
+
+    if (payment.status !== "pending") {
+      return res.status(400).json({ message: `Cannot invalidate transaction currently processing state contexts labeled: ${payment.status}` });
+    }
+
+    payment.status = "rejected";
+    await payment.save();
+
+    res.json({ message: "Inbound resource verification request record canceled successfully." });
+  } catch (error) {
+    console.error("🔥 REJECT ROUTE RUNTIME CRASH:", error);
+    res.status(500).json({ message: "Transaction registry rejection failure status loop triggered" });
+  }
+};
+
+exports.getAllAdminUsers = async (req, res) => {
+  try {
+    let { page = 1, limit = 20, search = "" } = req.query;
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
+
+    const query = search
+      ? {
+          $or: [
+            { email: { $regex: String(search), $options: "i" } },
+            { firstName: { $regex: String(search), $options: "i" } },
+            { lastName: { $regex: String(search), $options: "i" } }
+          ]
+        }
+      : {};
+
+    const total = await User.countDocuments(query);
+    const users = await User.find(query)
+      .select("-password")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    res.json({
+      data: users,
+      pagination: { total, page, pages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    console.error("FETCH USERS ERROR:", err);
+    res.status(500).json({ message: "Error mapping client network infrastructure logs." });
+  }
+};
+
+exports.getTransactions = async (req, res) => {
+  try {
+    let { page = 1, limit = 20 } = req.query;
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
+
+    const total = await Transaction.countDocuments();
+    const transactions = await Transaction.find()
+      .populate("userId", "email")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    res.json({
+      data: transactions,
+      pagination: { total, page, pages: Math.ceil(total / limit) }
+    });
+  } catch (err) {
+    console.error("TRANSACTION ERROR:", err);
+    res.status(500).json({ message: "Error compiling enterprise transaction audit records" });
+  }
+};
+
+exports.getAuditLogs = async (req, res) => {
+  try {
+    let { page = 1, limit = 20 } = req.query;
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
+
+    const total = await AuditLog.countDocuments();
+    const logs = await AuditLog.find()
+      .populate("userId", "email")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    res.json({
+      data: logs,
+      pagination: { total, page, pages: Math.ceil(total / limit) }
+    });
+  } catch (err) {
+    console.error("AUDIT ERROR:", err);
+    res.status(500).json({ message: "Failed to pull infrastructure operational audit files" });
+  }
+};
+
+exports.makeAdmin = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User workspace identity profile not found" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Operation blocked: Immutable deployment target role signature" });
+
+    user.role = "admin";
+    await user.save();
+    res.json({ message: "Account mapping level successfully elevated to system administrator role configuration.", user });
+  } catch (err) {
+    console.error("MAKE ADMIN ERROR:", err);
+    res.status(500).json({ message: "Failed to elevate target workspace scope privileges" });
+  }
+};
+
+exports.removeAdmin = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User account node entity trace broken" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Operation rejected: Target security token instance immutable" });
+
+    user.role = "user";
+    await user.save();
+    res.json({ message: "Administrative privilege matrix flags de-allocated successfully.", user });
+  } catch (err) {
+    console.error("REMOVE ADMIN ERROR:", err);
+    res.status(500).json({ message: "Failed to downgrade targeted context node permissions" });
+  }
+};
+
+exports.suspendUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User matching identifier signature not located" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Security rule exception: Base root admin node suspension blocked" });
+
+    user.status = "suspended";
+    await user.save();
+    res.json({ message: "Target account execution capability frozen successfully" });
+  } catch (err) {
+    console.error("SUSPEND ERROR:", err);
+    res.status(500).json({ message: "System failure during active worker thread isolation setup execution" });
+  }
+};
+
+exports.activateUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "Requested operational user workspace matrix lost" });
+    user.status = "active";
+    await user.save();
+    res.json({ message: "User communication channel metrics authorized and restored to active state successfully." });
+  } catch (err) {
+    console.error("ACTIVATE ERROR:", err);
+    res.status(500).json({ message: "Failed to dispatch restoration trigger state context updates" });
+  }
+};
+
+exports.deleteUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User structural directory reference null" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "System security protection: Core identity instance extraction forbidden" });
+
+    await User.findByIdAndDelete(req.params.id);
+    await Transaction.deleteMany({ userId: req.params.id });
+    res.json({ message: "Identity credentials mapping records permanently expunged from system nodes successfully." });
+  } catch (err) {
+    console.error("DELETE ERROR:", err);
+    res.status(500).json({ message: "Failed to complete account lifecycle destruction script routines" });
+  }
+};
+
+exports.updateUnits = async (req, res) => {
+  try {
+    const { units, action } = req.body;
+    const targetUnits = parseInt(units);
+    if (isNaN(targetUnits) || targetUnits <= 0) {
+      return res.status(400).json({ message: "Allocation value metrics must represent clean positive integers" });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "Target token node container context not identified" });
+
+    if (action === "add") {
+      user.units = (user.units || 0) + targetUnits;
+    } else if (action === "deduct") {
+      if ((user.units || 0) < targetUnits) return res.status(400).json({ message: "Account balance lacks sufficient capital depth to process deduction" });
+      user.units = (user.units || 0) - targetUnits;
+    } else {
+      return res.status(400).json({ message: "Invalid transaction state instruction argument value." });
+    }
+
+    await user.save();
+    res.json({ message: "Account system token properties re-indexed cleanly.", units: user.units });
+  } catch (err) {
+    console.error("UNITS ERROR:", err);
+    res.status(500).json({ message: "Error mutating targeted allocation balance value arrays" });
+  }
+};
+
+// Admin fund adjustment: atomically updates wallet balance and creates transaction ledger entry
+exports.adjustWalletBalance = async (req, res) => {
+  try {
+    const { userId, amount, action, note } = req.body;
+    const adminEmail = req.user.email;
+    
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID format." });
+    }
+
+    const amountKobo = Math.round((Number(amount) || 0) * 100);
+    if (amountKobo <= 0) {
+      return res.status(400).json({ message: "Amount must be greater than zero." });
+    }
+
+    if (!["add", "deduct"].includes(action)) {
+      return res.status(400).json({ message: "Action must be 'add' or 'deduct'." });
+    }
+
+    // Fetch user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (user.role === "super_admin") {
+      return res.status(400).json({ message: "Cannot adjust super admin balance." });
+    }
+
+    // Check balance for deduction
+    if (action === "deduct" && (user.walletBalanceKobo || 0) < amountKobo) {
+      return res.status(400).json({ message: "Insufficient balance to deduct." });
+    }
+
+    const balanceBefore = user.walletBalanceKobo || 0;
+    const incrementAmount = action === "add" ? amountKobo : -amountKobo;
+
+    // ATOMIC: Update wallet balance
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $inc: {
+          walletBalanceKobo: incrementAmount,
+          walletBalance: incrementAmount / 100,
+        },
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!updatedUser) {
+      return res.status(500).json({ message: "Failed to update user wallet." });
+    }
+
+    const balanceAfter = updatedUser.walletBalanceKobo;
+
+    // Create transaction ledger entry
+    const transactionType = action === "add" ? "credit" : "debit";
+    const transaction = new Transaction({
+      userId,
+      type: `admin_${transactionType}`,
+      amount: amount,
+      amountKobo,
+      status: "success",
+      description: `Admin ${action} by ${adminEmail}: ${note || "Manual adjustment"}`,
+      reference: `ADMIN_${action.toUpperCase()}_${Date.now()}`,
+    });
+
+    await transaction.save();
+
+    // Create audit log
+    try {
+      await AuditLog.create({
+        action: `ADJUST_WALLET_${action.toUpperCase()}`,
+        performedBy: adminEmail,
+        userId,
+        amount,
+        balanceBefore: balanceBefore / 100,
+        balanceAfter: balanceAfter / 100,
+        note: `Admin wallet adjustment: ${action} ₦${amount} | ${note || "No note"}`,
+      });
+    } catch (auditErr) {
+      console.warn("Audit log creation failed:", auditErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: `Wallet ${action === "add" ? "credited" : "debited"} successfully.`,
+      data: {
+        userId,
+        email: updatedUser.email,
+        balanceBefore: balanceBefore / 100,
+        balanceAfter: balanceAfter / 100,
+        adjustedAmount: amount,
+        action,
+        transactionId: transaction._id,
+      },
+    });
+  } catch (error) {
+    console.error("🔥 ADJUST WALLET BALANCE ERROR:", error);
+    res.status(500).json({ message: "Failed to adjust wallet balance.", error: error.message });
+  }
+};
+
+exports.updatePricing = async (req, res) => {
+  try {
+    let pricing = await Pricing.findOne();
+    if (!pricing) pricing = new Pricing({});
+
+    if (!pricing.nin) pricing.nin = {};
+    if (!pricing.ninServices) pricing.ninServices = { validation: {}, selfService: {}, ipe: {}, modification: {} };
+    if (!pricing.ninServices.selfService) pricing.ninServices.selfService = {};
+    if (!pricing.cacServices) pricing.cacServices = {};
+
+    Object.assign(pricing.nin, {
+      unitPrice: req.body.unitPrice ?? pricing.nin.unitPrice,
+      agentPrice: req.body.agentPrice ?? pricing.nin.agentPrice,
+      mode: req.body.mode ?? pricing.nin.mode,
+    });
+
+    if (req.body.validation) Object.assign(pricing.ninServices.validation, req.body.validation);
+    if (req.body.ipe) Object.assign(pricing.ninServices.ipe, req.body.ipe);
+    if (req.body.modification) Object.assign(pricing.ninServices.modification, req.body.modification);
+    if (req.body.slipPrice !== undefined) pricing.ninServices.slipPrice = req.body.slipPrice;
+
+    if (req.body.selfService) {
+      Object.assign(pricing.ninServices.selfService, {
+        emailRetrieval: req.body.selfService.emailRetrieval ?? pricing.ninServices.selfService.emailRetrieval,
+        deviceUnlink: req.body.selfService.deviceUnlink ?? pricing.ninServices.selfService.deviceUnlink,
+      });
+    }
+
+    if (req.body.cacServices) {
+      Object.assign(pricing.cacServices, {
+        soleProprietorship: req.body.cacServices.soleProprietorship ?? pricing.cacServices.soleProprietorship,
+        partnership: req.body.cacServices.partnership ?? pricing.cacServices.partnership,
+        limited1M: req.body.cacServices.limited1M ?? pricing.cacServices.limited1M,
+      });
+    }
+
+    pricing.markModified("nin");
+    pricing.markModified("ninServices");
+    pricing.markModified("ninServices.validation");
+    pricing.markModified("ninServices.selfService");
+    pricing.markModified("ninServices.ipe");
+    pricing.markModified("ninServices.modification");
+    pricing.markModified("cacServices");
+
+    await pricing.save();
+    res.json({ message: "Pricing engine models updated successfully across all matrix tiers.", pricing });
+  } catch (err) {
+    console.error("PRICING ERROR:", err);
+    res.status(500).json({ message: "Failed to update pricing engine registry thresholds" });
+  }
+};

@@ -1,0 +1,2079 @@
+const express = require("express");
+const router = express.Router();
+const mongoose = require("mongoose");
+
+const User = require("../models/User.model");
+const Transaction = require("../models/transaction.model");
+const AuditLog = require("../models/AuditLog.model");
+const Pricing = require("../models/Pricing.model");
+const BulkJob = require("../models/BulkJob.model");
+const { verifyToken, isAdmin } = require("../shared/authGuard");
+const { normalizeServiceType } = require("../config/serviceTypes");
+const { awardCommissionIfEligible } = require("../services/commission.service");
+
+// =========================================================================
+// 🧠 SAFE SCHEMA COMPILATION & MODEL RESOLUTION
+// =========================================================================
+// Structural safety wrappers prevent application startup loops and schema structural rejections.
+let ServiceRequest;
+try {
+  ServiceRequest = mongoose.model("ServiceRequest");
+} catch {
+  const dynamicSchema = new mongoose.Schema({}, { strict: false, timestamps: true });
+  ServiceRequest = mongoose.model("ServiceRequest", dynamicSchema);
+}
+
+let CACRequest;
+try {
+  CACRequest = mongoose.model("CacRequest");
+} catch {
+  const dynamicCacSchema = new mongoose.Schema({}, { strict: false, timestamps: true });
+  CACRequest = mongoose.model("CacRequest", dynamicCacSchema);
+}
+
+const isSuperAdmin = (req, res, next) => {
+  if (!req.user || req.user.role !== "super_admin") {
+    return res.status(403).json({ success: false, message: "Access denied: Super admin token signature required" });
+  }
+  next();
+};
+
+// =========================================================================
+// 🚀 ADMINISTRATIVE OPERATION ENDPOINTS
+// =========================================================================
+
+router.get("/categories", isSuperAdmin, async (req, res) => {
+  try {
+    const categories = await Pricing.getCategories();
+    return res.json({ success: true, categories });
+  } catch (error) {
+    console.error('ADMIN CATEGORY LIST ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load service categories.' });
+  }
+});
+
+router.post("/categories", isSuperAdmin, async (req, res) => {
+  try {
+    const label = String(req.body?.label || req.body?.name || '').trim();
+    const slug = Pricing.normalizeCategorySlug(req.body?.slug || label);
+    if (!label || !slug) {
+      return res.status(400).json({ success: false, message: 'A category name is required.' });
+    }
+
+    const pricing = await Pricing.getPricing();
+    const categories = await Pricing.getCategories();
+    const existing = categories.find((category) => category.slug === slug);
+    if (existing) {
+      if (existing.isActive === false) {
+        existing.isActive = true;
+        pricing.categories = categories;
+        pricing.markModified('categories');
+        await pricing.save();
+        return res.status(200).json({ success: true, category: existing });
+      }
+      return res.status(409).json({ success: false, message: 'That category already exists.' });
+    }
+
+    const category = { slug, label, isActive: true };
+    pricing.categories = [...categories, category];
+    pricing.markModified('categories');
+    await pricing.save();
+    return res.status(201).json({ success: true, category });
+  } catch (error) {
+    console.error('ADMIN CATEGORY CREATE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create service category.' });
+  }
+});
+
+router.put("/categories/:slug", isSuperAdmin, async (req, res) => {
+  try {
+    const pricing = await Pricing.getPricing();
+    const categories = await Pricing.getCategories();
+    const currentSlug = Pricing.normalizeCategorySlug(req.params.slug);
+    const target = categories.find((category) => category.slug === currentSlug);
+    const label = String(req.body?.label || '').trim();
+    const nextSlug = Pricing.normalizeCategorySlug(req.body?.slug || label || currentSlug);
+
+    if (!target) return res.status(404).json({ success: false, message: 'Category not found.' });
+    if (!label || !nextSlug) return res.status(400).json({ success: false, message: 'A category name is required.' });
+    if (categories.some((category) => category.slug === nextSlug && category.slug !== currentSlug)) {
+      return res.status(409).json({ success: false, message: 'That category already exists.' });
+    }
+
+    const previousLabel = String(categories.find((category) => category.slug === currentSlug)?.label || currentSlug).trim();
+    target.slug = nextSlug;
+    target.label = label;
+    pricing.serviceCatalog = (pricing.serviceCatalog || []).map((service) => {
+      const serviceCategory = Pricing.normalizeCategorySlug(service.category);
+      return serviceCategory === currentSlug ? { ...service, category: label } : service;
+    });
+    pricing.categories = categories;
+    pricing.markModified('categories');
+    pricing.markModified('serviceCatalog');
+    await pricing.save();
+    await ServiceRequest.updateMany(
+      { serviceCategory: { $in: [previousLabel, currentSlug, currentSlug.toUpperCase()] } },
+      { $set: { serviceCategory: label } }
+    );
+    return res.json({ success: true, category: target });
+  } catch (error) {
+    console.error('ADMIN CATEGORY UPDATE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update service category.' });
+  }
+});
+
+router.delete("/categories/:slug", isSuperAdmin, async (req, res) => {
+  try {
+    const pricing = await Pricing.getPricing();
+    const categories = await Pricing.getCategories();
+    const slug = Pricing.normalizeCategorySlug(req.params.slug);
+    const target = categories.find((category) => category.slug === slug);
+    if (!target) return res.status(404).json({ success: false, message: 'Category not found.' });
+
+    target.isActive = false;
+    pricing.categories = categories;
+    pricing.markModified('categories');
+    await pricing.save();
+    return res.json({ success: true, category: target, message: 'Category hidden from the service directory.' });
+  } catch (error) {
+    console.error('ADMIN CATEGORY DELETE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to remove service category.' });
+  }
+});
+
+// 📥 FIXES 404 CONSOLE ERROR: UNIFIED CENTRAL PIPELINE FOR REQUEST ENTITIES
+// Handles pagination, matching statuses (pending, approved, completed), and coordinates cross-model streams.
+router.get("/requests", isAdmin, async (req, res) => {
+  try {
+    let { page = 1, limit = 20, status, category, serviceType, search, nin, userRole, fromDate, toDate, minAmount, maxAmount, sortBy = 'createdAt', order = 'desc' } = req.query;
+    page = Math.max(1, parseInt(page) || 1);
+    limit = Math.max(1, Math.min(100, parseInt(limit) || 20));
+
+    const normalizedStatus = String(status || "").trim().toLowerCase();
+    const normalizedCategory = normalizeServiceType(category || "").toLowerCase();
+    const normalizedServiceType = String(serviceType || "").trim().toLowerCase();
+    const searchTerm = String(search || "").trim();
+    const ninTerm = String(nin || "").trim();
+    const roleFilter = String(userRole || "").trim().toLowerCase();
+
+    const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    const setOrGroup = (query, conditions) => {
+      if (query.$or) {
+        query.$and = query.$and || [];
+        query.$and.push({ $or: query.$or });
+      }
+      query.$or = conditions;
+    };
+
+    const serviceQuery = {};
+    const cacQuery = {};
+
+    if (normalizedStatus) {
+      serviceQuery.status = normalizedStatus;
+      cacQuery.status = normalizedStatus;
+    }
+
+    if (normalizedCategory === "cac") {
+      serviceQuery.serviceCategory = { $in: ["CAC", "cac"] };
+      cacQuery.serviceCategory = { $in: ["CAC", "cac"] };
+    } else if (normalizedCategory === "nimc") {
+      serviceQuery.serviceCategory = { $in: ["NIN", "NIMC", "nin", "nimc"] };
+      cacQuery._id = null;
+    } else if (normalizedCategory) {
+      const escapedCategory = escapeRegex(normalizedCategory);
+      setOrGroup(serviceQuery, [
+        { serviceCategory: { $regex: escapedCategory, $options: "i" } },
+        { service: { $regex: escapedCategory, $options: "i" } },
+        { type: { $regex: escapedCategory, $options: "i" } }
+      ]);
+      cacQuery._id = null;
+    }
+
+    if (normalizedServiceType) {
+      // support comma-separated multi-select values
+      const parts = String(serviceType || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        const ors = parts.map(p => ({ service: { $regex: escapeRegex(p), $options: 'i' } }));
+        setOrGroup(serviceQuery, ors);
+        setOrGroup(cacQuery, parts.map(p => ({ serviceType: { $regex: escapeRegex(p), $options: 'i' } })));
+      } else {
+        const escapedType = escapeRegex(normalizedServiceType);
+        setOrGroup(serviceQuery, [
+          { service: { $regex: escapedType, $options: "i" } },
+          { type: { $regex: escapedType, $options: "i" } }
+        ]);
+        cacQuery.serviceType = { $regex: escapedType, $options: "i" };
+      }
+    }
+
+    if (ninTerm) {
+      const escapedNin = escapeRegex(ninTerm);
+      serviceQuery.nin = { $regex: escapedNin, $options: "i" };
+      cacQuery.nin = { $regex: escapedNin, $options: "i" };
+    }
+
+    // Date range filter
+    if (fromDate || toDate) {
+      const gte = fromDate ? new Date(fromDate) : null;
+      const lte = toDate ? new Date(`${toDate}T00:00:00`) : null;
+      const dateRange = {};
+      if (gte && !isNaN(gte)) dateRange.$gte = gte;
+      if (lte && !isNaN(lte)) {
+        lte.setDate(lte.getDate() + 1);
+        dateRange.$lt = lte;
+      }
+      if (Object.keys(dateRange).length > 0) {
+        serviceQuery.createdAt = dateRange;
+        cacQuery.createdAt = dateRange;
+      }
+    }
+
+    // Amount range filter
+    if (minAmount || maxAmount) {
+      const mn = minAmount ? Number(minAmount) : null;
+      const mx = maxAmount ? Number(maxAmount) : null;
+      const amtRange = {};
+      if (mn !== null && !isNaN(mn)) amtRange.$gte = mn;
+      if (mx !== null && !isNaN(mx)) amtRange.$lte = mx;
+      if (Object.keys(amtRange).length > 0) {
+        // apply to both amount and amountCharged by using $or in query
+        serviceQuery.$and = serviceQuery.$and || [];
+        serviceQuery.$and.push({ $or: [{ amount: amtRange }, { amountCharged: amtRange }] });
+        cacQuery.$and = cacQuery.$and || [];
+        cacQuery.$and.push({ $or: [{ amount: amtRange }, { amountCharged: amtRange }] });
+      }
+    }
+
+    if (searchTerm) {
+      const escapedSearch = escapeRegex(searchTerm);
+      const searchConditions = [
+        { nin: { $regex: escapedSearch, $options: "i" } },
+        { service: { $regex: escapedSearch, $options: "i" } },
+        { type: { $regex: escapedSearch, $options: "i" } }
+      ];
+      const cacSearchConditions = [
+        { nin: { $regex: escapedSearch, $options: "i" } },
+        { businessName1: { $regex: escapedSearch, $options: "i" } },
+        { businessName2: { $regex: escapedSearch, $options: "i" } },
+        { companyEmail: { $regex: escapedSearch, $options: "i" } },
+        { serviceType: { $regex: escapedSearch, $options: "i" } }
+      ];
+      if (mongoose.Types.ObjectId.isValid(searchTerm)) {
+        searchConditions.push({ _id: new mongoose.Types.ObjectId(searchTerm) });
+        cacSearchConditions.push({ _id: new mongoose.Types.ObjectId(searchTerm) });
+      }
+      setOrGroup(serviceQuery, searchConditions);
+      setOrGroup(cacQuery, cacSearchConditions);
+    }
+
+    if (roleFilter && roleFilter !== "all") {
+      const matchingUsers = await User.find({ role: roleFilter }).select("_id").lean();
+      const userIds = matchingUsers.map((user) => user._id);
+      if (userIds.length > 0) {
+        serviceQuery.userId = { $in: userIds };
+        cacQuery.userId = { $in: userIds };
+      } else {
+        serviceQuery.userId = null;
+        cacQuery.userId = null;
+      }
+    }
+
+    // ensure common indexes for performant queries (idempotent)
+    try {
+      ServiceRequest.collection.createIndex({ createdAt: -1 });
+      ServiceRequest.collection.createIndex({ status: 1 });
+      ServiceRequest.collection.createIndex({ serviceType: 1 });
+      ServiceRequest.collection.createIndex({ nin: 1 });
+      CACRequest.collection.createIndex({ createdAt: -1 });
+      CACRequest.collection.createIndex({ status: 1 });
+      CACRequest.collection.createIndex({ serviceType: 1 });
+      CACRequest.collection.createIndex({ nin: 1 });
+    } catch (idxErr) {
+      // non-fatal
+      console.warn('Index ensure skipped:', idxErr.message);
+    }
+
+    // Use aggregation with $unionWith to avoid loading all documents into memory.
+    const serviceColl = ServiceRequest.collection.name;
+    const cacColl = CACRequest.collection.name;
+    const sortField = String(sortBy || 'createdAt');
+    const sortOrder = (String(order || 'desc').toLowerCase() === 'asc') ? 1 : -1;
+
+    const serviceMatch = serviceQuery;
+    const cacMatch = cacQuery;
+
+    const startIndex = (page - 1) * limit;
+
+    const agg = [
+      { $match: serviceMatch },
+      { $addFields: { pipelineSource: 'service' } },
+      { $project: { __v: 0 } },
+      { $unionWith: { coll: cacColl, pipeline: [ { $match: cacMatch }, { $addFields: { pipelineSource: 'cac' } }, { $project: { __v: 0 } } ] } },
+      { $sort: { [sortField]: sortOrder } },
+      { $facet: {
+        data: [ { $skip: startIndex }, { $limit: limit } ],
+        meta: [ { $count: 'total' } ]
+      } }
+    ];
+
+    const aggResult = await ServiceRequest.aggregate(agg).allowDiskUse(true);
+    const pageData = (aggResult[0] && aggResult[0].data) || [];
+    const exactTotal = (aggResult[0] && aggResult[0].meta && aggResult[0].meta[0] && aggResult[0].meta[0].total) ? aggResult[0].meta[0].total : null;
+
+    let totalRecords;
+    if (exactTotal !== null) {
+      totalRecords = exactTotal;
+    } else {
+      // fallback to approximate counts if exact total not computed (large dataset)
+      try {
+        const [est1, est2] = await Promise.all([ServiceRequest.estimatedDocumentCount(), CACRequest.estimatedDocumentCount()]);
+        totalRecords = est1 + est2; // approximate
+      } catch (estErr) {
+        totalRecords = pageData.length; // best-effort
+      }
+    }
+
+    // Populate user data for returned page items
+    const userIds = Array.from(new Set(pageData.map(d => d.userId).filter(Boolean).map(String)));
+    let users = [];
+    if (userIds.length > 0) {
+      users = await User.find({ _id: { $in: userIds } }).select('email firstName lastName phoneNumber role').lean();
+    }
+    const userMap = users.reduce((acc, u) => { acc[String(u._id)] = u; return acc; }, {});
+    const populated = pageData.map((d) => ({ ...d, userId: d.userId ? (userMap[String(d.userId)] || { _id: d.userId }) : null }));
+
+    const totalPages = Math.max(1, Math.ceil((totalRecords || populated.length) / limit));
+
+    res.json({ success: true, data: populated, pagination: { total: totalRecords, page, pages: totalPages, limit, approximate: exactTotal === null } });
+  } catch (error) {
+    console.error("🔥 CENTRAL PIPELINE REQUEST STREAM ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to assemble systemic registration requests pipeline." });
+  }
+});
+
+// 🚀 FAST DASHBOARD PERFORMANCE STATS
+router.get("/stats", isSuperAdmin, async (req, res) => {
+  try {
+    const [totalUsers, totalTransactions, pendingPayments, balanceData] = await Promise.all([
+      User.countDocuments(),
+      Transaction.countDocuments(),
+      Transaction.countDocuments({ status: "pending", type: { $in: ["UNIT_ADD", "credit", "admin_credit"] } }),
+      User.aggregate([
+        { $group: { _id: null, total: { $sum: { $divide: [{ $ifNull: ["$walletBalanceKobo", 0] }, 100] } } } }
+      ])
+    ]);
+
+    res.json({
+      success: true,
+      totalUsers,
+      totalTransactions,
+      pendingPayments,
+      totalBalance: balanceData[0]?.total || 0
+    });
+  } catch (err) {
+    console.error("STATS ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to compile aggregate system dashboard stats" });
+  }
+});
+
+// � ADMIN OVERVIEW METRICS FOR OPERATIONS CONTROL CENTER
+router.get("/stats/overview", isAdmin, async (req, res) => {
+  try {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const successfulStatuses = ["success", "successful", "approved", "completed"];
+
+    const [dailyRevenueAgg, monthlyRevenueAgg, categories, cacRequestPending] = await Promise.all([
+      Transaction.aggregate([
+        { $match: { status: { $in: successfulStatuses }, createdAt: { $gte: todayStart } } },
+        { $group: { _id: null, amount: { $sum: { $cond: [{ $gt: ["$amount", null] }, "$amount", { $divide: ["$amountKobo", 100] }] } } } }
+      ]),
+      Transaction.aggregate([
+        { $match: { status: { $in: successfulStatuses }, createdAt: { $gte: monthStart } } },
+        { $group: { _id: null, amount: { $sum: { $cond: [{ $gt: ["$amount", null] }, "$amount", { $divide: ["$amountKobo", 100] }] } } } }
+      ]),
+      Pricing.getCategories(),
+      CACRequest.countDocuments({ status: { $in: ["pending", "processing", "in-progress"] } })
+    ]);
+
+    const dailyRevenue = dailyRevenueAgg[0]?.amount || 0;
+    const monthlyRevenue = monthlyRevenueAgg[0]?.amount || 0;
+    const pendingStatuses = ["pending", "processing", "in-progress"];
+    const pendingRequests = {};
+    await Promise.all(categories.filter((category) => category.isActive !== false).map(async (category) => {
+      const rawCategoryLabel = String(category.label || category.slug || "Service").trim();
+      const categoryLabel = rawCategoryLabel.toUpperCase() === "NIN" ? "NIMC" : rawCategoryLabel;
+      const categoryAliases = ["NIMC", "NIN"].includes(categoryLabel.toUpperCase())
+        ? ["NIMC", "NIN", "nimc", "nin"]
+        : [categoryLabel, categoryLabel.toUpperCase(), categoryLabel.toLowerCase()];
+      const serviceCount = await ServiceRequest.countDocuments({
+        status: { $in: pendingStatuses },
+        serviceCategory: { $in: categoryAliases }
+      });
+      pendingRequests[categoryLabel] = serviceCount;
+    }));
+    pendingRequests.CAC = (pendingRequests.CAC || 0) + cacRequestPending;
+    const systemStatus = {
+      apiGateway: "nominal",
+      verificationWorkers: "stable",
+      paymentGateway: "available",
+      lastCheckedAt: new Date().toISOString()
+    };
+
+    res.json({
+      success: true,
+      dailyRevenue,
+      monthlyRevenue,
+      pendingRequests,
+      systemStatus
+    });
+  } catch (err) {
+    console.error("OVERVIEW STATS ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to compile overview dashboard metrics." });
+  }
+});
+
+// �📥 NIMC PIPELINE ROUTE
+router.get("/nimc-requests", isSuperAdmin, async (req, res) => {
+  try {
+    const requests = await ServiceRequest.find()
+      .populate("userId", "email firstName lastName phoneNumber role")
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    res.json({ success: true, data: requests });
+  } catch (error) {
+    console.error("🔥 ADMIN NIMC REQUESTS api ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to api NIMC pipeline requests" });
+  }
+});
+
+// 🏢 CAC PIPELINE ROUTE
+router.get("/cac-requests", isSuperAdmin, async (req, res) => {
+  try {
+    const requests = await CACRequest.find()
+      .populate("userId", "email firstName lastName phoneNumber role")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({ success: true, data: requests });
+  } catch (error) {
+    console.error("🔥 ADMIN CAC REQUESTS api ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to api CAC business registry requests" });
+  }
+});
+
+// � COMMAND-GATEWAY: UNIFIED REQUEST STATUS MANAGEMENT
+router.post("/requests/:id/status", isAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { action, comment } = req.body;
+  const adminEmail = req.user.email;
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid request ID format." });
+    }
+
+    const normalizedAction = String(action || "").toLowerCase();
+    const allowedActions = ["approve", "reject", "flag", "in-progress", "complete"];
+    if (!allowedActions.includes(normalizedAction)) {
+      return res.status(400).json({ success: false, message: "Invalid action. Allowed values are approve, reject, flag, in-progress, complete." });
+    }
+
+    const [serviceRecord, cacRecord] = await Promise.all([
+      ServiceRequest.findById(id),
+      CACRequest.findById(id)
+    ]);
+
+    const record = serviceRecord || cacRecord;
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Request ID not found in any registered collection." });
+    }
+
+    const statusMap = {
+      approve: "approved",
+      reject: "rejected",
+      flag: "flagged"
+    };
+    const newStatus = statusMap[normalizedAction];
+
+    // SECURITY: Only super_admin may approve/reject requests that are currently in 'pending'
+    if (record.status === 'pending' && (normalizedAction === 'approve' || normalizedAction === 'reject') && req.user?.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Admin may approve or reject pending requests.' });
+    }
+
+    record.status = newStatus;
+    if (!Array.isArray(record.statusHistory)) {
+      record.statusHistory = [];
+    }
+    record.statusHistory.push({
+      status: newStatus,
+      note: comment || `${adminEmail} set request status to ${newStatus}`,
+      actorRole: req.user?.role || null,
+      createdAt: new Date()
+    });
+
+    // Push admin comment thread entry when a comment exists
+    if (comment && String(comment).trim().length > 0) {
+      if (!Array.isArray(record.adminComments)) record.adminComments = [];
+      record.adminComments.push({ comment, author: adminEmail, authorRole: req.user?.role || null, createdAt: new Date() });
+      record.markModified('adminComments');
+    }
+
+    record.markModified("status");
+    record.markModified("statusHistory");
+    await record.save();
+
+    try {
+      await AuditLog.create({
+        action: `REQUEST_${newStatus.toUpperCase()}`,
+        performedBy: adminEmail,
+        userId: record.userId || null,
+        amount: record.amount || 0,
+        note: `Action ${normalizedAction} performed on request ${id}. Comment: ${comment || "None"}`
+      });
+    } catch (auditErr) {
+      console.warn("Audit log skipped during status update:", auditErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: `Request successfully marked as ${newStatus}`,
+      data: record
+    });
+  } catch (err) {
+    console.error("🔥 REQUEST STATUS COMMAND ERROR:", err);
+    return res.status(500).json({ success: false, message: "Failed to update request status." });
+  }
+});
+
+// �🔄 UNIFIED OPERATIONS LIFECYCLE CONTROLLER
+router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
+  const { targetModule, id } = req.params;
+  const { status, note } = req.body; 
+  const adminEmail = req.user.email;
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid system document identification signature format." });
+    }
+
+    const normalizedModule = String(targetModule).toLowerCase();
+    if (!["cac", "nimc", "service"].includes(normalizedModule)) {
+      return res.status(400).json({ success: false, message: "Invalid pipeline module tracking assignment type profile." });
+    }
+
+    const TargetModel = normalizedModule === "cac" ? CACRequest : ServiceRequest;
+    const normalizedStatus = String(status).toLowerCase();
+
+    const record = await TargetModel.findById(id);
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
+    }
+    // SECURITY: Prevent non-super admins from transitioning requests that are currently 'pending'
+    if (record.status === 'pending' && req.user?.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Admin may change status on pending requests.' });
+    }
+
+    // Safely configure structural historical arrays using atomic paths to avoid Mongoose validation rejections
+    record.status = normalizedStatus;
+    
+    if (!record.statusHistory || !Array.isArray(record.statusHistory)) {
+      record.statusHistory = [];
+    }
+
+    record.statusHistory.push({
+      status: normalizedStatus,
+      note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`,
+      actorRole: req.user?.role || null,
+      createdAt: new Date()
+    });
+
+    // attach admin comment when provided
+    if (note && String(note).trim().length > 0) {
+      if (!Array.isArray(record.adminComments)) record.adminComments = [];
+      record.adminComments.push({ comment: note, author: adminEmail, authorRole: req.user?.role || null, createdAt: new Date() });
+      record.markModified('adminComments');
+    }
+
+    // Enforce modification flags for raw schemaless properties
+    record.markModified("status");
+    record.markModified("statusHistory");
+
+    await record.save();
+
+    if (normalizedStatus === "completed") {
+      try {
+        await awardCommissionIfEligible({ request: record });
+      } catch (commissionError) {
+        console.warn("Commission payout skipped for completed request:", commissionError.message);
+      }
+    }
+
+    // Secondary logging processing via sandboxed internal try-catch mechanics
+    try {
+      await AuditLog.create({
+        action: `UPDATE_${normalizedModule.toUpperCase()}_STATUS`,
+        performedBy: adminEmail,
+        userId: record.userId || null,
+        amount: record.amount || 0,
+        note: `Record ${id} shifted to ${normalizedStatus}. Comment: ${note || 'None'}`
+      });
+    } catch (logErr) {
+      console.warn("Audit log background compilation bypassed cleanly:", logErr.message);
+    }
+
+    res.json({ success: true, message: `Pipeline document successfully marked as ${normalizedStatus}`, data: record });
+  } catch (err) {
+    console.error("🔥 UNIFIED STATUS TRANSITION ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to transform application pipeline lifecycle state environment variables." });
+  }
+});
+
+// -------------------------------------------------------------------------
+// Backwards-compatible endpoints for older frontend paths
+//  - PUT /api/admin/status/:id           (used by some frontend builds)
+//  - PUT /api/update-status/:id          (older legacy path without module)
+// These will accept an optional `targetModule` in the body or query and
+// delegate to the unified handler logic above.
+// -------------------------------------------------------------------------
+router.put("/status/:id", isAdmin, async (req, res) => {
+  const id = req.params.id;
+  const { status, note } = req.body;
+  const adminEmail = req.user.email;
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid system document identification signature format." });
+    }
+
+    const [cacRecord, serviceRecord] = await Promise.all([
+      CACRequest.findById(id),
+      ServiceRequest.findById(id)
+    ]);
+
+    const record = cacRecord || serviceRecord;
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
+    }
+    const normalizedModule = cacRecord ? 'cac' : 'service';
+    const normalizedStatus = String(status).toLowerCase();
+
+    // SECURITY: Block non-super-admins from modifying pending requests
+    if (record.status === 'pending' && req.user?.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Admin may modify pending requests.' });
+    }
+
+    record.status = normalizedStatus;
+    if (!record.statusHistory || !Array.isArray(record.statusHistory)) record.statusHistory = [];
+    record.statusHistory.push({ status: normalizedStatus, note: note || `Application transition to ${normalizedStatus} authorized by ${adminEmail}`, actorRole: req.user?.role || null, createdAt: new Date() });
+    // attach admin comment when provided
+    if (note && String(note).trim().length > 0) {
+      if (!Array.isArray(record.adminComments)) record.adminComments = [];
+      record.adminComments.push({ comment: note, author: adminEmail, authorRole: req.user?.role || null, createdAt: new Date() });
+      record.markModified('adminComments');
+    }
+    record.markModified("status");
+    record.markModified("statusHistory");
+    await record.save();
+
+    try {
+      await AuditLog.create({
+        action: `UPDATE_${normalizedModule.toUpperCase()}_STATUS`,
+        performedBy: adminEmail,
+        userId: record.userId || null,
+        amount: record.amount || 0,
+        note: `Record ${id} shifted to ${normalizedStatus}. Comment: ${note || 'None'}`
+      });
+    } catch (logErr) {
+      console.warn("Audit log background compilation bypassed cleanly:", logErr.message);
+    }
+
+    return res.json({ success: true, message: `Pipeline document successfully marked as ${normalizedStatus}`, data: record });
+  } catch (err) {
+    console.error("🔥 BACKWARD STATUS UPDATE ERROR:", err);
+    return res.status(500).json({ success: false, message: "Failed to update status via compatibility endpoint." });
+  }
+});
+
+async function updateRequestStatus({
+  targetModule,
+  id,
+  status,
+  note,
+  adminEmail
+}) {
+  const TargetModel =
+    targetModule === "cac" ? CACRequest : ServiceRequest;
+
+  const record = await TargetModel.findById(id);
+
+  if (!record) {
+    throw new Error("Record not found");
+  }
+
+  record.status = status;
+
+  if (!Array.isArray(record.statusHistory)) {
+    record.statusHistory = [];
+  }
+
+  record.statusHistory.push({
+    status,
+    note,
+    createdAt: new Date()
+  });
+
+  await record.save();
+
+  return record;
+}
+
+// ✅ UNIVERSAL ADMIN REQUEST APPROVAL ENDPOINT
+router.put("/approve-request/:id", isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const note = req.body.note || `Approved by ${req.user.email}`;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid request ID format." });
+    }
+
+    const [serviceRecord, cacRecord] = await Promise.all([
+      ServiceRequest.findById(id),
+      CACRequest.findById(id)
+    ]);
+
+    const record = serviceRecord || cacRecord;
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Request ID not found in any registered collection." });
+    }
+
+    // SECURITY: Only super_admin may approve requests that are currently in 'pending'
+    if (record.status === 'pending' && req.user?.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Admin may approve pending requests.' });
+    }
+
+    record.status = 'approved';
+    if (!record.statusHistory || !Array.isArray(record.statusHistory)) {
+      record.statusHistory = [];
+    }
+    record.statusHistory.push({ status: 'approved', note, actorRole: req.user?.role || null, createdAt: new Date() });
+    if (note && String(note).trim().length > 0) {
+      if (!Array.isArray(record.adminComments)) record.adminComments = [];
+      record.adminComments.push({ comment: note, author: req.user.email, authorRole: req.user?.role || null, createdAt: new Date() });
+      record.markModified('adminComments');
+    }
+    record.markModified('status');
+    record.markModified('statusHistory');
+    await record.save();
+
+    try {
+      await AuditLog.create({
+        action: 'APPROVE_REQUEST',
+        performedBy: req.user.email,
+        userId: record.userId || null,
+        amount: record.amount || 0,
+        note: `Request ${id} approved. ${note}`
+      });
+    } catch (auditErr) {
+      console.warn('Audit log skipped during approval:', auditErr.message);
+    }
+
+    return res.json({ success: true, message: 'Request approved successfully.', data: record });
+  } catch (error) {
+    console.error('🔥 UNIFIED APPROVAL ROUTE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to approve request.' });
+  }
+});
+
+// 📥 PAYMENTS VERIFICATION SUB-SYSTEM
+router.get("/payments", isAdmin, async (req, res) => {
+  try {
+    const payments = await Transaction.find({ type: "UNIT_ADD" })
+      .populate("userId", "email units")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(payments);
+  } catch (error) {
+    console.error("🔥 api PAYMENTS ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to api ledger credit payment entries" });
+  }
+});
+
+const normalizePaymentStatus = (value) => String(value || "").trim().toLowerCase();
+const buildPaymentSource = (tx) => {
+  const reference = String(tx.reference || "").toUpperCase();
+  const description = String(tx.description || "").toLowerCase();
+
+  if (reference.startsWith("FLW_")) return "Flutterwave";
+  if (reference.startsWith("PAY_")) return "Paystack";
+  if (description.includes("bank transfer")) return "Bank Transfer";
+  if (description.includes("manual") || description.includes("receipt")) return "Manual Receipt";
+  if (String(tx.type).toUpperCase() === "CREDIT") return "Manual Receipt";
+  if (String(tx.type).toUpperCase() === "UNIT_ADD") return "Wallet Deposit";
+  return "Other";
+};
+
+router.get("/payments/ledger", isAdmin, async (req, res) => {
+  try {
+    let { page = 1, limit = 20, status, search } = req.query;
+    page = Math.max(1, parseInt(page, 10) || 1);
+    limit = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
+
+    const filter = {};
+    if (status && status !== "all") {
+      const normalized = normalizePaymentStatus(status);
+      if (normalized === "approved") {
+        filter.status = { $in: ["approved", "success", "successful"] };
+      } else if (normalized === "rejected") {
+        filter.status = { $in: ["rejected", "failed"] };
+      } else if (normalized === "pending") {
+        filter.status = "pending";
+      } else {
+        filter.status = normalized;
+      }
+    }
+
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&"), "i");
+      filter.$or = [
+        { reference: regex },
+        { description: regex },
+        { type: regex },
+      ];
+    }
+
+    const fundingTypes = ["UNIT_ADD", "credit", "admin_credit", "admin_debit"];
+    const paymentFilter = {
+      ...filter,
+      type: { $in: fundingTypes },
+    };
+
+    const [summaryRecords, pageRecords, totalCount] = await Promise.all([
+      Transaction.find(paymentFilter).select("status type amount amountKobo reference description").lean(),
+      Transaction.find(paymentFilter)
+        .populate("userId", "email role")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments(paymentFilter),
+    ]);
+
+    const enrichedSummary = summaryRecords.map((tx) => {
+      const amount = tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0;
+      return {
+        ...tx,
+        amount,
+        status: normalizePaymentStatus(tx.status),
+        paymentSource: buildPaymentSource(tx),
+      };
+    });
+
+    const summary = enrichedSummary.reduce(
+      (acc, tx) => {
+        acc.totalVolume += tx.amount;
+        acc.statusBreakdown[tx.status] = (acc.statusBreakdown[tx.status] || 0) + 1;
+        const source = tx.paymentSource;
+        acc.sourceBreakdown[source] = acc.sourceBreakdown[source] || { count: 0, total: 0 };
+        acc.sourceBreakdown[source].count += 1;
+        acc.sourceBreakdown[source].total += tx.amount;
+
+        if (["success", "successful", "approved"].includes(tx.status)) {
+          acc.approved += 1;
+        } else if (tx.status === "pending") {
+          acc.pending += 1;
+        } else if (tx.status === "rejected") {
+          acc.rejected += 1;
+        } else if (tx.status === "failed") {
+          acc.failed += 1;
+        } else {
+          acc.other += 1;
+        }
+
+        return acc;
+      },
+      {
+        totalCount: summaryRecords.length,
+        totalVolume: 0,
+        approved: 0,
+        pending: 0,
+        rejected: 0,
+        failed: 0,
+        other: 0,
+        statusBreakdown: {},
+        sourceBreakdown: {},
+      }
+    );
+
+    const transactions = pageRecords.map((tx) => ({
+      _id: tx._id,
+      userId: tx.userId?._id,
+      userEmail: tx.userId?.email || "Unknown",
+      userRole: tx.userId?.role || "user",
+      status: normalizePaymentStatus(tx.status),
+      amount: tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0,
+      paymentSource: buildPaymentSource(tx),
+      type: tx.type,
+      reference: tx.reference || "",
+      description: tx.description || "",
+      proof: tx.proof,
+      createdAt: tx.createdAt,
+    }));
+
+    res.json({
+      success: true,
+      summary,
+      data: transactions,
+      pagination: {
+        total: totalCount,
+        page,
+        pages: Math.ceil(totalCount / limit),
+        limit,
+      },
+    });
+  } catch (error) {
+    console.error("🔥 ADMIN PAYMENT LEDGER ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch payment ledger." });
+  }
+});
+
+// ✅ APPROVE LEDGER WALLET FUNDING CONTEXT
+router.post("/payments/:id/approve", isAdmin, async (req, res) => {
+  try {
+    const adminEmail = req.user.email;
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Malformed Transaction Reference ID token identifier" });
+    }
+
+    const payment = await Transaction.findById(req.params.id);
+    if (!payment) return res.status(404).json({ message: "Payment authorization intent profile not found" });
+
+    if (payment.status !== "pending") {
+      return res.status(400).json({ message: `Cannot authorize historical transaction mapped as: ${payment.status}` });
+    }
+
+    const user = await User.findById(payment.userId);
+    if (!user) return res.status(404).json({ message: "Target workspace wallet account structure absent" });
+
+    const pricing = await Pricing.findOne().lean();
+    const pricePerUnit = pricing?.nin?.unitPrice || 250;
+
+    let unitsToAdd = payment.units;
+    if (!unitsToAdd || unitsToAdd < 1) {
+      unitsToAdd = Math.floor(payment.amount / pricePerUnit);
+    }
+
+    if (unitsToAdd < 1) {
+      return res.status(400).json({ message: "Inbound capital allocation insufficient to generate minimal unit allocation thresholds" });
+    }
+
+    const beforeUnits = user.units || 0;
+
+    user.units = (user.units || 0) + unitsToAdd;
+    await user.save();
+
+    payment.status = "approved";
+    payment.units = unitsToAdd;
+    await payment.save();
+
+    try {
+      await AuditLog.create({
+        action: "APPROVE_PAYMENT",
+        performedBy: adminEmail,
+        userId: user._id,
+        amount: payment.amount,
+        unitsAdded: unitsToAdd,
+        unitsBefore: beforeUnits,
+        unitsAfter: user.units,
+      });
+    } catch (aud) {
+      console.warn("Telemetry entry dropped during core transaction settlement execution:", aud.message);
+    }
+
+    res.json({
+      message: `Systemic balance settlement finalized. ${unitsToAdd} resource units dispatched seamlessly.`,
+      units: user.units,
+    });
+  } catch (error) {
+    console.error("🔥 CLEARING SETTLEMENT ALLOCATION ERROR:", error);
+    res.status(500).json({ message: "Ledger transaction structural approval runtime crash", error: error.message });
+  }
+});
+
+// ❌ REJECT PAYMENT SEGMENT
+router.post("/payments/:id/reject", isAdmin, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Malformed pipeline unique transaction object footprint token signature" });
+    }
+
+    const payment = await Transaction.findById(req.params.id);
+    if (!payment) return res.status(404).json({ message: "Credit application target request profile context not found." });
+
+    if (payment.status !== "pending") {
+      return res.status(400).json({ message: `Cannot invalidate transaction currently processing state contexts labeled: ${payment.status}` });
+    }
+
+    payment.status = "rejected";
+    await payment.save();
+
+    res.json({ message: "Inbound resource verification request record canceled successfully." });
+  } catch (error) {
+    console.error("🔥 REJECT ROUTE RUNTIME CRASH:", error);
+    res.status(500).json({ message: "Transaction registry rejection failure status loop triggered" });
+  }
+});
+
+// 👥 PAGINATED USERS REGISTRY DIRECTORY
+router.get("/users", isSuperAdmin, async (req, res) => {
+  try {
+    let { page = 1, limit = 20, search = "", role = "", status = "", approvalStatus = "", sortBy = "newest", order = "desc" } = req.query;
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
+
+    const query = search
+      ? {
+          $or: [
+            { email: { $regex: String(search), $options: "i" } },
+            { firstName: { $regex: String(search), $options: "i" } },
+            { lastName: { $regex: String(search), $options: "i" } },
+            { phoneNumber: { $regex: String(search), $options: "i" } }
+          ]
+        }
+      : {};
+
+    // Role & status filters
+    const roleTerm = String(role || "").trim();
+    const statusTerm = String(status || "").trim();
+    if (roleTerm) {
+      query.role = roleTerm;
+    }
+    if (statusTerm) {
+      query.status = statusTerm;
+    }
+    const approvalTerm = String(approvalStatus || "").trim();
+    if (approvalTerm === "approved") {
+      const searchClause = query.$or ? { $or: query.$or } : null;
+      query.$and = [
+        ...(searchClause ? [searchClause] : []),
+        { $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }] },
+      ];
+      delete query.$or;
+    } else if (approvalTerm) {
+      query.approvalStatus = approvalTerm;
+    }
+
+    const total = await User.countDocuments(query);
+    const sortFields = {
+      newest: { createdAt: -1 },
+      balance: { walletBalanceKobo: -1, createdAt: -1 },
+      alphabetical: { firstName: 1, lastName: 1, createdAt: -1 },
+    };
+    const selectedSort = sortFields[sortBy] || sortFields.newest;
+    const direction = String(order).toLowerCase() === "asc" ? 1 : -1;
+    const sort = Object.fromEntries(
+      Object.entries(selectedSort).map(([field, value], index) => [field, index === 0 ? direction : value])
+    );
+
+    const users = await User.find(query)
+      .select("-password")
+      .sort(sort)
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    res.json({
+      data: users,
+      pagination: { total, page, pages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    console.error("FETCH USERS ERROR:", err);
+    res.status(500).json({ message: "Error mapping client network infrastructure logs." });
+  }
+});
+
+// Server-side CSV export for large datasets (streaming)
+router.get('/users/export', isSuperAdmin, async (req, res) => {
+  try {
+    let { search = '', role = '', status = '' } = req.query;
+    const query = search
+      ? {
+          $or: [
+            { email: { $regex: String(search), $options: 'i' } },
+            { firstName: { $regex: String(search), $options: 'i' } },
+            { lastName: { $regex: String(search), $options: 'i' } },
+            { phoneNumber: { $regex: String(search), $options: 'i' } }
+          ]
+        }
+      : {};
+    if (role) query.role = String(role).trim();
+    if (status) query.status = String(status).trim();
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="users_export_${Date.now()}.csv"`);
+
+    // write header
+    res.write('email,firstName,lastName,role,status,balance,registeredAt,lastLogin\n');
+
+    const cursor = User.find(query).select('-password').lean().cursor();
+    for await (const u of cursor) {
+      const row = [
+        u.email || '',
+        u.firstName || u.firstname || '',
+        u.lastName || u.lastname || '',
+        u.role || '',
+        u.status || '',
+        ((u.walletBalanceKobo || 0) / 100).toFixed(2),
+        u.createdAt ? new Date(u.createdAt).toISOString() : '',
+        (u.lastLoginAt || u.lastLogin || u.lastSeen) || ''
+      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',') + '\n';
+      if (!res.write(row)) {
+        // backpressure
+        await new Promise((resolve) => res.once('drain', resolve));
+      }
+    }
+
+    res.end();
+  } catch (err) {
+    console.error('EXPORT USERS ERROR:', err);
+    if (!res.headersSent) res.status(500).json({ message: 'Failed to export users' });
+  }
+});
+
+// =========================================================================
+// Requests: server-side CSV export (streaming)
+// =========================================================================
+router.get('/requests/export', isAdmin, async (req, res) => {
+  try {
+    let { search = '', category = '', serviceType = '', status = '', userRole = '', sortBy = 'createdAt', order = 'desc' } = req.query;
+
+    // build queries for both collections
+    const baseQuery = (isCAC) => {
+      const q = {};
+      if (status) q.status = status;
+      if (serviceType) q.serviceType = serviceType;
+      if (search) {
+        const esc = String(search).trim();
+        q.$or = [
+          { _id: { $regex: esc, $options: 'i' } },
+          { 'formData.nin': { $regex: esc, $options: 'i' } },
+          { nin: { $regex: esc, $options: 'i' } },
+          { service: { $regex: esc, $options: 'i' } },
+        ];
+      }
+      if (userRole && userRole !== 'all') {
+        // join via user role filter later by populating and filtering
+      }
+      return q;
+    };
+
+    // For predictable ordering we load both collections, normalize, sort, then stream.
+    const [nimcRequests, cacRequests] = await Promise.all([
+      ServiceRequest.find(baseQuery(false)).populate('userId', 'email role').lean(),
+      CACRequest.find(baseQuery(true)).populate('userId', 'email role').lean(),
+    ]);
+
+    const normalizedNimc = (nimcRequests || []).map((r) => ({ ...r, pipelineSource: 'nimc' }));
+    const normalizedCac = (cacRequests || []).map((r) => ({ ...r, pipelineSource: 'cac' }));
+    const combined = [...normalizedNimc, ...normalizedCac];
+
+    const sortField = String(sortBy || 'createdAt');
+    const sortOrder = (String(order || 'desc').toLowerCase() === 'asc') ? 1 : -1;
+    combined.sort((a, b) => {
+      const av = a[sortField];
+      const bv = b[sortField];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1 * sortOrder;
+      if (bv == null) return -1 * sortOrder;
+      if (sortField === 'createdAt' || sortField === 'amount' || sortField === 'amountCharged') {
+        return (new Date(av) - new Date(bv)) * sortOrder;
+      }
+      return String(av).localeCompare(String(bv)) * sortOrder;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="requests_export_${Date.now()}.csv"`);
+    res.write('id,email,service,amount,status,createdAt,category\n');
+
+    for (const r of combined) {
+      if (userRole && userRole !== 'all') {
+        if (!r.userId || String(r.userId.role) !== String(userRole)) continue;
+      }
+      const row = [r._id, r.userId?.email || '', r.service || r.serviceType || r.businessName1 || '', r.amount || r.amountCharged || 0, r.status || '', r.createdAt ? new Date(r.createdAt).toISOString() : '', r.pipelineSource || '']
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',') + '\n';
+      if (!res.write(row)) await new Promise((resolve) => res.once('drain', resolve));
+    }
+
+    res.end();
+  } catch (err) {
+    console.error('EXPORT REQUESTS ERROR:', err);
+    if (!res.headersSent) res.status(500).json({ message: 'Failed to export requests' });
+  }
+});
+
+// Immediate bulk for requests (approve/reject/status change)
+router.post('/requests/bulk', isAdmin, async (req, res) => {
+  try {
+    const { ids, action, note } = req.body; // action: approve | reject | set_status
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: 'ids required' });
+    if (!['approve', 'reject', 'set_status'].includes(action)) return res.status(400).json({ message: 'invalid action' });
+
+    const statusToSet = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : (req.body.status || null);
+
+    // Update both collections where id in ids
+    const updateObj = { status: statusToSet };
+    // push a statusHistory entry (same note for all)
+    const historyEntry = { status: statusToSet, note: note || `Bulk ${action} by admin`, actorRole: req.user?.role || null, createdAt: new Date() };
+
+    const [sRes, cRes] = await Promise.all([
+      ServiceRequest.updateMany({ _id: { $in: ids } }, { $set: updateObj, $push: { statusHistory: historyEntry } }),
+      CACRequest.updateMany({ _id: { $in: ids } }, { $set: updateObj, $push: { statusHistory: historyEntry } })
+    ]);
+
+    res.json({ message: 'Bulk requests updated', modified: (sRes.modifiedCount || sRes.nModified || 0) + (cRes.modifiedCount || cRes.nModified || 0) });
+  } catch (err) {
+    console.error('BULK REQUESTS ERROR:', err);
+    res.status(500).json({ message: 'Failed to perform bulk request action' });
+  }
+});
+
+// Background job for large bulk operations on requests
+router.post('/requests/bulk-job', isAdmin, async (req, res) => {
+  try {
+    const { ids, action, status } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: 'ids required' });
+    if (!['approve', 'reject', 'set_status'].includes(action)) return res.status(400).json({ message: 'invalid action' });
+
+    const job = await BulkJob.create({ action, ids, total: ids.length, status: 'pending', createdBy: req.user._id });
+
+    (async function processRequestJob(jobId) {
+      try {
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'processing', startedAt: new Date() });
+        const j = await BulkJob.findById(jobId).lean();
+        const allIds = (j.ids || []).map((v) => v.toString());
+        const batchSize = 100;
+        let processed = 0;
+        const errors = [];
+        const statusToSet = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : status || null;
+
+        for (let i = 0; i < allIds.length; i += batchSize) {
+          const batch = allIds.slice(i, i + batchSize);
+          try {
+            const historyEntry = { status: statusToSet, note: `Bulk job ${action}`, actorRole: req.user?.role || null, createdAt: new Date() };
+            await ServiceRequest.updateMany({ _id: { $in: batch } }, { $set: { status: statusToSet }, $push: { statusHistory: historyEntry } });
+            await CACRequest.updateMany({ _id: { $in: batch } }, { $set: { status: statusToSet }, $push: { statusHistory: historyEntry } });
+            processed += batch.length;
+            await BulkJob.findByIdAndUpdate(jobId, { processed, errors });
+          } catch (batchErr) {
+            console.error('BULK REQUEST JOB BATCH ERROR:', batchErr);
+            errors.push(String(batchErr.message || batchErr));
+            processed += batch.length;
+            await BulkJob.findByIdAndUpdate(jobId, { processed, errors });
+          }
+        }
+
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'completed', processed: allIds.length, finishedAt: new Date(), errors });
+      } catch (procErr) {
+        console.error('BULK REQUEST JOB ERROR:', procErr);
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'failed', finishedAt: new Date(), $push: { errors: String(procErr.message || procErr) } });
+      }
+    })(job._id).catch((e) => console.error('REQUEST JOB START ERROR:', e));
+
+    res.json({ message: 'Bulk job created', jobId: job._id });
+  } catch (err) {
+    console.error('CREATE BULK REQUEST JOB ERROR:', err);
+    res.status(500).json({ message: 'Failed to create bulk job' });
+  }
+});
+
+router.get('/requests/bulk-job/:id', isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid job id' });
+    const job = await BulkJob.findById(id).lean();
+    if (!job) return res.status(404).json({ message: 'Job not found' });
+    res.json({ data: job });
+  } catch (err) {
+    console.error('GET REQUEST BULK JOB ERROR:', err);
+    res.status(500).json({ message: 'Failed to fetch job' });
+  }
+});
+
+// List recent bulk jobs (for admin job panel)
+router.get('/requests/bulk-jobs', isAdmin, async (req, res) => {
+  try {
+    const { status, limit = 20 } = req.query;
+    const q = {};
+    if (status) q.status = String(status).toLowerCase();
+    const jobs = await BulkJob.find(q).sort({ createdAt: -1 }).limit(Math.min(100, parseInt(limit) || 20)).lean();
+    res.json({ data: jobs });
+  } catch (err) {
+    console.error('LIST BULK JOBS ERROR:', err);
+    res.status(500).json({ message: 'Failed to list bulk jobs' });
+  }
+});
+
+// 👥 USER ACTIVITY LEDGER / HISTORY
+router.get("/users/:userId/activity", isSuperAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user identifier." });
+    }
+
+    const [serviceRequests, transactions] = await Promise.all([
+      ServiceRequest.find({ userId }).lean(),
+      Transaction.find({ userId }).lean(),
+    ]);
+
+    const serviceRecords = serviceRequests.map((record) => ({
+      id: record._id,
+      timestamp: record.createdAt,
+      category: "Service",
+      transactionType: record.service || record.type || "Service Request",
+      description: record.service
+        ? `${record.service.replace(/_/g, " ")} ${record.type ? `(${record.type})` : ""}`.trim()
+        : record.type || "Service request",
+      amount: record.amount ? -Math.abs(record.amount) : record.amountKobo ? -Math.abs(record.amountKobo / 100) : 0,
+      raw: record,
+    }));
+
+    const transactionRecords = transactions.map((tx) => {
+      const amountNaira = tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0;
+      const fundingTypes = ["UNIT_ADD", "credit", "admin_credit"];
+      const category = fundingTypes.includes(tx.type) ? "Funding" : "Service";
+      const description = tx.description ||
+        (tx.type === "UNIT_ADD" ? "Wallet funding" :
+          tx.type === "NIN" ? "NIN verification" :
+          tx.type === "SERVICE" ? "Service transaction" :
+          tx.type || "Wallet transaction");
+
+      return {
+        id: tx._id,
+        timestamp: tx.createdAt,
+        category,
+        transactionType: tx.type || "Transaction",
+        description,
+        amount: category === "Funding" ? amountNaira : -Math.abs(amountNaira),
+        raw: tx,
+      };
+    });
+
+    const combinedActivity = [...serviceRecords, ...transactionRecords].sort(
+      (a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
+    );
+
+    res.json({ data: combinedActivity });
+  } catch (err) {
+    console.error("FETCH USER ACTIVITY ERROR:", err);
+    res.status(500).json({ message: "Failed to compile user activity history." });
+  }
+});
+
+// GET single user profile
+router.get('/user/:id', isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid user id' });
+    const user = await User.findById(id).select('-password').lean();
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ success: true, data: user });
+  } catch (err) {
+    console.error('GET USER ERROR:', err);
+    res.status(500).json({ message: 'Failed to fetch user' });
+  }
+});
+
+// GET combined user history (transactions + service requests)
+router.get('/users/:userId/history', isAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json({ message: 'Invalid user identifier.' });
+
+    const [serviceRequests, transactions] = await Promise.all([
+      ServiceRequest.find({ userId }).lean(),
+      Transaction.find({ userId }).lean(),
+    ]);
+
+    const serviceRecords = serviceRequests.map((record) => ({
+      id: record._id,
+      createdAt: record.createdAt,
+      type: 'Service Usage',
+      description: record.service || record.type || 'Service Request',
+      amount: record.amount != null ? -Math.abs(Number(record.amount)) : record.amountKobo ? -Math.abs(Number(record.amountKobo) / 100) : 0,
+      raw: record,
+    }));
+
+    const transactionRecords = transactions.map((tx) => {
+      const amountNaira = tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0;
+      const fundingTypes = ['UNIT_ADD', 'credit', 'admin_credit', 'admin_debit'];
+      const isFunding = fundingTypes.includes(String(tx.type));
+      return {
+        id: tx._id,
+        createdAt: tx.createdAt,
+        type: isFunding ? 'Wallet Funding' : 'Wallet Transaction',
+        description: tx.description || tx.type || 'Transaction',
+        amount: isFunding ? amountNaira : -Math.abs(amountNaira),
+        raw: tx,
+      };
+    });
+
+    const combined = [...serviceRecords, ...transactionRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json({ success: true, data: combined });
+  } catch (err) {
+    console.error('FETCH USER HISTORY ERROR:', err);
+    res.status(500).json({ message: 'Failed to compile user history.' });
+  }
+});
+
+// 📊 TRANSACTIONS LOG PIPELINE (PAGINATED)
+router.get("/transactions", isSuperAdmin, async (req, res) => {
+  try {
+    let { page = 1, limit = 20 } = req.query;
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
+
+    const total = await Transaction.countDocuments();
+    const transactions = await Transaction.find()
+      .populate("userId", "email")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    res.json({
+      data: transactions,
+      pagination: { total, page, pages: Math.ceil(total / limit) }
+    });
+  } catch (err) {
+    console.error("TRANSACTION ERROR:", err);
+    res.status(500).json({ message: "Error compiling enterprise transaction audit records" });
+  }
+});
+
+// 📜 SYSTEM AUDIT LOG REPOSITORY TRAIL
+router.get("/audit-logs", isSuperAdmin, async (req, res) => {
+  try {
+    let { page = 1, limit = 20 } = req.query;
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
+
+    const total = await AuditLog.countDocuments();
+    const logs = await AuditLog.find()
+      .populate("userId", "email")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    res.json({
+      data: logs,
+      pagination: { total, page, pages: Math.ceil(total / limit) }
+    });
+  } catch (err) {
+    console.error("AUDIT ERROR:", err);
+    res.status(500).json({ message: "Failed to pull infrastructure operational audit files" });
+  }
+});
+
+// =========================================================================
+// 🔥 ACCESS CONTROL CONTEXT MUTATORS (SUPER_ADMIN CONTROL LAYER)
+// =========================================================================
+router.put("/user/:id/make-admin", isAdmin, isSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User workspace identity profile not found" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Operation blocked: Immutable deployment target role signature" });
+
+    user.role = "admin";
+    await user.save();
+    res.json({ message: "Account mapping level successfully elevated to system administrator role configuration.", user });
+  } catch (err) {
+    console.error("MAKE ADMIN ERROR:", err);
+    res.status(500).json({ message: "Failed to elevate target workspace scope privileges" });
+  }
+});
+
+router.put("/user/:id/remove-admin", isAdmin, isSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User account node entity trace broken" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Operation rejected: Target security token instance immutable" });
+
+    user.role = "user";
+    await user.save();
+    res.json({ message: "Administrative privilege matrix flags de-allocated successfully.", user });
+  } catch (err) {
+    console.error("REMOVE ADMIN ERROR:", err);
+    res.status(500).json({ message: "Failed to downgrade targeted context node permissions" });
+  }
+});
+
+router.put("/user/:id/suspend", isSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User matching identifier signature not located" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Security rule exception: Base root admin node suspension blocked" });
+
+    user.status = "suspended";
+    await user.save();
+    res.json({ message: "Target account execution capability frozen successfully" });
+  } catch (err) {
+    console.error("SUSPEND ERROR:", err);
+    res.status(500).json({ message: "System failure during active worker thread isolation setup execution" });
+  }
+});
+
+router.put("/user/:id/activate", isSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "Requested operational user workspace matrix lost" });
+    
+    user.status = "active";
+    await user.save();
+    res.json({ message: "User communication channel metrics authorized and restored to active state successfully." });
+  } catch (err) {
+    console.error("ACTIVATE ERROR:", err);
+    res.status(500).json({ message: "Failed to dispatch restoration trigger state context updates" });
+  }
+});
+
+router.put("/user/:id/approve", isSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Super-admin accounts do not require agent approval" });
+    if (user.approvalStatus !== "pending") return res.status(409).json({ message: "Only pending agent applications can be approved" });
+
+    user.approvalStatus = "approved";
+    user.reviewedBy = req.user.id;
+    user.reviewedAt = new Date();
+    await user.save();
+    return res.json({ message: "Agent application approved", approvalStatus: user.approvalStatus });
+  } catch (error) {
+    console.error("APPROVE USER ERROR:", error);
+    return res.status(500).json({ message: "Failed to approve agent application" });
+  }
+});
+
+router.put("/user/:id/reject", isSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "Super-admin accounts cannot be rejected" });
+    if (user.approvalStatus !== "pending") return res.status(409).json({ message: "Only pending agent applications can be rejected" });
+
+    user.approvalStatus = "rejected";
+    user.reviewedBy = req.user.id;
+    user.reviewedAt = new Date();
+    await user.save();
+    return res.json({ message: "Agent application rejected", approvalStatus: user.approvalStatus });
+  } catch (error) {
+    console.error("REJECT USER ERROR:", error);
+    return res.status(500).json({ message: "Failed to reject agent application" });
+  }
+});
+
+router.delete("/user/:id", isAdmin, isSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User structural directory reference null" });
+    if (user.role === "super_admin") return res.status(400).json({ message: "System security protection: Core identity instance extraction forbidden" });
+
+    await User.findByIdAndDelete(req.params.id);
+    await Transaction.deleteMany({ userId: req.params.id });
+    res.json({ message: "Identity credentials mapping records permanently expunged from system nodes successfully." });
+  } catch (err) {
+    console.error("DELETE ERROR:", err);
+    res.status(500).json({ message: "Failed to complete account lifecycle destruction script routines" });
+  }
+});
+
+router.post("/user/:id/units", isSuperAdmin, async (req, res) => {
+  try {
+    const { units, action } = req.body;
+    const targetUnits = parseInt(units);
+    if (isNaN(targetUnits) || targetUnits <= 0) {
+      return res.status(400).json({ message: "Allocation value metrics must represent clean positive integers" });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "Target token node container context not identified" });
+
+    if (action === "add") {
+      user.units = (user.units || 0) + targetUnits;
+    } else if (action === "deduct") {
+      if ((user.units || 0) < targetUnits) return res.status(400).json({ message: "Account balance lacks sufficient capital depth to process deduction" });
+      user.units = (user.units || 0) - targetUnits;
+    } else {
+      return res.status(400).json({ message: "Invalid transaction state instruction argument value." });
+    }
+
+    await user.save();
+    res.json({ message: "Account system token properties re-indexed cleanly.", units: user.units });
+  } catch (err) {
+    console.error("UNITS ERROR:", err);
+    res.status(500).json({ message: "Error mutating targeted allocation balance value arrays" });
+  }
+});
+
+// =========================================================================
+// 🚀 Bulk user actions (suspend / activate / delete) - server-side batch
+// Requires super admin privileges. Excludes users with role 'super_admin'.
+// Body: { ids: ["id1","id2"], action: 'suspend' | 'activate' | 'delete' }
+// =========================================================================
+router.post("/users/bulk", isSuperAdmin, async (req, res) => {
+  try {
+    const { ids, action } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "ids array is required" });
+    }
+    if (!["suspend", "activate", "delete"].includes(action)) {
+      return res.status(400).json({ message: "action must be one of: suspend, activate, delete" });
+    }
+
+    // Load users and filter out super_admins
+    const targetUsers = await User.find({ _id: { $in: ids } }).select("_id role").lean();
+    const eligibleIds = targetUsers.filter((u) => u.role !== "super_admin").map((u) => u._id.toString());
+
+    if (eligibleIds.length === 0) {
+      return res.status(400).json({ message: "No eligible users to modify" });
+    }
+
+    if (action === "suspend") {
+      const result = await User.updateMany({ _id: { $in: eligibleIds } }, { $set: { status: "suspended" } });
+      return res.json({ message: "Bulk suspend completed", modified: result.modifiedCount || result.nModified || 0 });
+    }
+
+    if (action === "activate") {
+      const result = await User.updateMany({ _id: { $in: eligibleIds } }, { $set: { status: "active" } });
+      return res.json({ message: "Bulk activate completed", modified: result.modifiedCount || result.nModified || 0 });
+    }
+
+    if (action === "delete") {
+      // Remove transactions first, then users
+      await Transaction.deleteMany({ userId: { $in: eligibleIds } });
+      const result = await User.deleteMany({ _id: { $in: eligibleIds } });
+      return res.json({ message: "Bulk delete completed", deleted: result.deletedCount || result.n || 0 });
+    }
+
+    res.status(400).json({ message: "Unhandled action" });
+  } catch (err) {
+    console.error("BULK USERS ACTION ERROR:", err);
+    res.status(500).json({ message: "Failed to perform bulk action" });
+  }
+});
+
+// =========================================================================
+// 🔁 Background bulk job creation and status
+// POST /users/bulk-job  -> { ids: [], action }
+// GET  /users/bulk-job/:id -> job status
+// =========================================================================
+router.post('/users/bulk-job', isSuperAdmin, async (req, res) => {
+  try {
+    const { ids, action } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: 'ids array required' });
+    if (!['suspend', 'activate', 'delete'].includes(action)) return res.status(400).json({ message: 'invalid action' });
+
+    const job = await BulkJob.create({ action, ids, total: ids.length, status: 'pending', createdBy: req.user._id });
+
+    // start worker asynchronously (don't await)
+    (async function processJob(jobId) {
+      try {
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'processing', startedAt: new Date() });
+        const j = await BulkJob.findById(jobId).lean();
+        const allIds = (j.ids || []).map((v) => v.toString());
+        const batchSize = 100;
+        let processed = 0;
+        const errors = [];
+
+        for (let i = 0; i < allIds.length; i += batchSize) {
+          const batch = allIds.slice(i, i + batchSize);
+          try {
+            // exclude super_admins within the batch
+            const users = await User.find({ _id: { $in: batch } }).select('_id role').lean();
+            const eligibleIds = users.filter((u) => u.role !== 'super_admin').map((u) => u._id);
+            if (eligibleIds.length === 0) {
+              processed += batch.length;
+              await BulkJob.findByIdAndUpdate(jobId, { processed, errors });
+              continue;
+            }
+
+            if (action === 'suspend') {
+              await User.updateMany({ _id: { $in: eligibleIds } }, { $set: { status: 'suspended' } });
+            } else if (action === 'activate') {
+              await User.updateMany({ _id: { $in: eligibleIds } }, { $set: { status: 'active' } });
+            } else if (action === 'delete') {
+              await Transaction.deleteMany({ userId: { $in: eligibleIds } });
+              await User.deleteMany({ _id: { $in: eligibleIds } });
+            }
+
+            processed += batch.length;
+            await BulkJob.findByIdAndUpdate(jobId, { processed, errors });
+          } catch (batchErr) {
+            console.error('BULK JOB BATCH ERROR:', batchErr);
+            errors.push(String(batchErr.message || batchErr));
+            processed += batch.length;
+            await BulkJob.findByIdAndUpdate(jobId, { processed, errors });
+          }
+        }
+
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'completed', processed: allIds.length, finishedAt: new Date(), errors });
+      } catch (procErr) {
+        console.error('BULK JOB PROCESS ERROR:', procErr);
+        await BulkJob.findByIdAndUpdate(jobId, { status: 'failed', finishedAt: new Date(), $push: { errors: String(procErr.message || procErr) } });
+      }
+    })(job._id).catch((e) => console.error('JOB START ERROR:', e));
+
+    res.json({ message: 'Bulk job created', jobId: job._id });
+  } catch (err) {
+    console.error('CREATE BULK JOB ERROR:', err);
+    res.status(500).json({ message: 'Failed to create bulk job' });
+  }
+});
+
+router.get('/users/bulk-job/:id', isSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid job id' });
+    const job = await BulkJob.findById(id).lean();
+    if (!job) return res.status(404).json({ message: 'Job not found' });
+    res.json({ data: job });
+  } catch (err) {
+    console.error('GET BULK JOB ERROR:', err);
+    res.status(500).json({ message: 'Failed to fetch job' });
+  }
+});
+
+// =========================================================================
+// 💰 ADMIN WALLET BALANCE ADJUSTMENT (Creates Ledger Entry)
+// =========================================================================
+router.post("/adjust-funds", isSuperAdmin, async (req, res) => {
+  try {
+    const { userId, amount, action, note } = req.body;
+    const adminEmail = req.user.email;
+    
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID format." });
+    }
+
+    const amountKobo = Math.round((Number(amount) || 0) * 100);
+    if (amountKobo <= 0) {
+      return res.status(400).json({ message: "Amount must be greater than zero." });
+    }
+
+    if (!["add", "deduct"].includes(action)) {
+      return res.status(400).json({ message: "Action must be 'add' or 'deduct'." });
+    }
+
+    // Fetch user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (user.role === "super_admin") {
+      return res.status(400).json({ message: "Cannot adjust super admin balance." });
+    }
+
+    // Check balance for deduction
+    if (action === "deduct" && (user.walletBalanceKobo || 0) < amountKobo) {
+      return res.status(400).json({ message: "Insufficient balance to deduct." });
+    }
+
+    const balanceBefore = user.walletBalanceKobo || 0;
+    const incrementAmount = action === "add" ? amountKobo : -amountKobo;
+
+    // ATOMIC: Update wallet balance
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $inc: {
+          walletBalanceKobo: incrementAmount,
+          walletBalance: incrementAmount / 100,
+        },
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!updatedUser) {
+      return res.status(500).json({ message: "Failed to update user wallet." });
+    }
+
+    const balanceAfter = updatedUser.walletBalanceKobo;
+
+    // Create transaction ledger entry
+    const transactionType = action === "add" ? "credit" : "debit";
+    const transaction = new Transaction({
+      userId,
+      type: `admin_${transactionType}`,
+      amount: amount,
+      amountKobo,
+      status: "success",
+      description: `Admin ${action} by ${adminEmail}: ${note || "Manual adjustment"}`,
+      reference: `ADMIN_${action.toUpperCase()}_${Date.now()}`,
+    });
+
+    await transaction.save();
+
+    // Create audit log
+    try {
+      await AuditLog.create({
+        action: `ADJUST_WALLET_${action.toUpperCase()}`,
+        performedBy: adminEmail,
+        userId,
+        amount,
+        balanceBefore: balanceBefore / 100,
+        balanceAfter: balanceAfter / 100,
+        note: `Admin wallet adjustment: ${action} ₦${amount} | ${note || "No note"}`,
+      });
+    } catch (auditErr) {
+      console.warn("Audit log creation failed:", auditErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: `Wallet ${action === "add" ? "credited" : "debited"} successfully.`,
+      data: {
+        userId,
+        email: updatedUser.email,
+        balanceBefore: balanceBefore / 100,
+        balanceAfter: balanceAfter / 100,
+        adjustedAmount: amount,
+        action,
+        transactionId: transaction._id,
+      },
+    });
+  } catch (error) {
+    console.error("🔥 ADJUST FUNDS ERROR:", error);
+    res.status(500).json({ message: "Failed to adjust wallet balance.", error: error.message });
+  }
+});
+
+// Note: previously there was a malformed /user/:id/adjust-balance route here. Removed stray block.
+
+// =========================================================================
+// 💰 UNIFIED CORE PRICING MATRIX CONFIGURATION MANAGEMENT
+// =========================================================================
+router.put("/pricing", isSuperAdmin, async (req, res) => {
+  try {
+    let pricing = await Pricing.findOne();
+    if (!pricing) pricing = new Pricing({});
+
+    if (!pricing.nin) pricing.nin = {};
+    if (!pricing.ninServices) pricing.ninServices = { validation: {}, selfService: {}, ipe: {}, modification: {} };
+    if (!pricing.ninServices.selfService) pricing.ninServices.selfService = {};
+    if (!pricing.cacServices) pricing.cacServices = {};
+
+    Object.assign(pricing.nin, {
+      unitPrice: req.body.unitPrice ?? pricing.nin.unitPrice,
+      agentPrice: req.body.agentPrice ?? pricing.nin.agentPrice,
+      mode: req.body.mode ?? pricing.nin.mode,
+    });
+
+    if (req.body.validation) Object.assign(pricing.ninServices.validation, req.body.validation);
+    if (req.body.ipe) Object.assign(pricing.ninServices.ipe, req.body.ipe);
+    if (req.body.modification) Object.assign(pricing.ninServices.modification, req.body.modification);
+    if (req.body.slipPrice !== undefined) pricing.ninServices.slipPrice = req.body.slipPrice;
+
+    if (req.body.selfService) {
+      Object.assign(pricing.ninServices.selfService, {
+        emailRetrieval: req.body.selfService.emailRetrieval ?? pricing.ninServices.selfService.emailRetrieval,
+        deviceUnlink: req.body.selfService.deviceUnlink ?? pricing.ninServices.selfService.deviceUnlink,
+      });
+    }
+
+    if (req.body.cacServices) {
+      Object.assign(pricing.cacServices, {
+        soleProprietorship: req.body.cacServices.soleProprietorship ?? pricing.cacServices.soleProprietorship,
+        partnership: req.body.cacServices.partnership ?? pricing.cacServices.partnership,
+        limited1M: req.body.cacServices.limited1M ?? pricing.cacServices.limited1M,
+      });
+    }
+
+    pricing.markModified("nin");
+    pricing.markModified("ninServices");
+    pricing.markModified("ninServices.validation");
+    pricing.markModified("ninServices.selfService");
+    pricing.markModified("ninServices.ipe");
+    pricing.markModified("ninServices.modification");
+    pricing.markModified("cacServices");
+
+    await pricing.save();
+    res.json({ message: "Pricing engine models updated successfully across all matrix tiers.", pricing });
+  } catch (err) {
+    console.error("PRICING ERROR:", err);
+    res.status(500).json({ message: "Failed to update pricing engine registry thresholds" });
+  }
+});
+
+router.get("/services", isSuperAdmin, async (req, res) => {
+  try {
+    const category = String(req.query.category || '').trim();
+    let services = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+
+    try {
+      services = await Pricing.getServiceCatalog();
+    } catch (dbError) {
+      console.warn('ADMIN_SERVICE_CATALOG_FALLBACK_ACTIVE:', dbError.message);
+    }
+
+    const filteredServices = !category
+      ? services
+      : services.filter((service) => Pricing.normalizeCategorySlug(service.category) === Pricing.normalizeCategorySlug(category));
+
+    return res.json({ success: true, services: filteredServices, category: category || 'all' });
+  } catch (error) {
+    console.error('ADMIN SERVICE CATALOG ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load service catalog.' });
+  }
+});
+
+router.post("/services", isSuperAdmin, async (req, res) => {
+  try {
+    const { serviceCode, category = 'NIMC', name, status = 'active', price = 0, metadata = {} } = req.body || {};
+
+    if (!serviceCode || !name) {
+      return res.status(400).json({ success: false, message: 'serviceCode and name are required.' });
+    }
+
+    let catalog = [];
+    let pricing = null;
+
+    try {
+      pricing = await Pricing.getPricing();
+      catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    } catch (dbError) {
+      console.warn('ADMIN_SERVICE_CREATE_FALLBACK_ACTIVE:', dbError.message);
+      catalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+    }
+
+    const exists = catalog.some((service) => service.serviceCode === serviceCode);
+
+    if (exists) {
+      return res.status(409).json({ success: false, message: 'A service with this code already exists.' });
+    }
+
+    const newService = {
+      serviceCode,
+      category: Pricing.normalizeCategory({ label: category }).label,
+      name,
+      status: ['active', 'paused', 'disabled'].includes(status) ? status : 'active',
+      price: Number(price) || 0,
+      metadata,
+    };
+
+    catalog.push(newService);
+
+    if (pricing) {
+      pricing.serviceCatalog = catalog;
+      pricing.markModified('serviceCatalog');
+      await pricing.save();
+    } else if (typeof Pricing.replaceServiceCatalog === 'function') {
+      Pricing.replaceServiceCatalog(catalog);
+    }
+
+    return res.status(201).json({ success: true, service: newService, message: 'Service created successfully.' });
+  } catch (error) {
+    console.error('ADMIN SERVICE CREATE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create service.' });
+  }
+});
+
+router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
+  try {
+    const { serviceCode } = req.params;
+    let pricing = null;
+    let catalog = [];
+
+    try {
+      pricing = await Pricing.getPricing();
+      catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    } catch (dbError) {
+      console.warn('ADMIN_SERVICE_UPDATE_FALLBACK_ACTIVE:', dbError.message);
+      catalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+    }
+
+    const target = catalog.find((service) => service.serviceCode === serviceCode);
+
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'Service not found.' });
+    }
+
+    if (req.body.category !== undefined) {
+      target.category = Pricing.normalizeCategory({ label: req.body.category }).label;
+    }
+    if (req.body.name !== undefined) target.name = req.body.name;
+    if (req.body.status !== undefined) {
+      target.status = ['active', 'paused', 'disabled'].includes(req.body.status) ? req.body.status : target.status;
+    }
+    if (req.body.price !== undefined) target.price = Number(req.body.price) || 0;
+    if (req.body.metadata !== undefined) target.metadata = { ...(target.metadata || {}), ...req.body.metadata };
+
+    if (pricing) {
+      pricing.serviceCatalog = catalog;
+      pricing.markModified('serviceCatalog');
+      await pricing.save();
+    } else if (typeof Pricing.replaceServiceCatalog === 'function') {
+      Pricing.replaceServiceCatalog(catalog);
+    }
+
+    return res.json({ success: true, service: target, message: 'Service updated successfully.' });
+  } catch (error) {
+    console.error('ADMIN SERVICE UPDATE ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update service.' });
+  }
+});
+
+router.patch("/services/:serviceCode/status", isSuperAdmin, async (req, res) => {
+  try {
+    const { serviceCode } = req.params;
+    const { status } = req.body;
+    const allowed = ['active', 'paused', 'disabled'];
+
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status: active, paused, or disabled only.' });
+    }
+
+    let pricing = null;
+    let catalog = [];
+
+    try {
+      pricing = await Pricing.getPricing();
+      catalog = Array.isArray(pricing.serviceCatalog) ? pricing.serviceCatalog : [];
+    } catch (dbError) {
+      console.warn('ADMIN_SERVICE_STATUS_FALLBACK_ACTIVE:', dbError.message);
+      catalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+    }
+
+    const target = catalog.find((service) => service.serviceCode === serviceCode);
+
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'Service not found in catalog.' });
+    }
+
+    target.status = status;
+
+    if (pricing) {
+      pricing.serviceCatalog = catalog;
+      pricing.markModified('serviceCatalog');
+      await pricing.save();
+    } else if (typeof Pricing.replaceServiceCatalog === 'function') {
+      Pricing.replaceServiceCatalog(catalog);
+    }
+
+    return res.json({ success: true, message: `Service ${serviceCode} updated to ${status}.`, service: target });
+  } catch (error) {
+    console.error('ADMIN SERVICE STATUS ERROR:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update service status.' });
+  }
+});
+
+module.exports = router;
