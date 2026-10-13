@@ -341,47 +341,53 @@ const resolveServicePrice = (pricing, service, type, slipType, catalogService) =
 };
 
 const processServiceRequest = async ({ userId, service, type, nin, slipType, proof, passport, formData, paymentSource = 'main', category }) => {
-  let pricing = null;
-  try {
-    pricing = await Pricing.getPricing();
-  } catch (dbError) {
-    console.warn('SERVICE_REQUEST_PRICE_FALLBACK_ACTIVE:', dbError.message);
-    pricing = { ninServices: {}, cacServices: {} };
-  }
-
-  const fallbackCatalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
-  const catalogService = findCatalogService(
-    Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length ? pricing.serviceCatalog : fallbackCatalog,
-    service,
-    type
-  );
   const submittedFormData = formData && typeof formData === 'object' && !Array.isArray(formData)
     ? { ...formData }
     : {};
-  let totalUploadSize = 0;
 
-  for (const field of catalogService?.metadata?.formFields || []) {
-    if (field.type !== 'upload' || !submittedFormData[field.key]) continue;
-
-    const value = submittedFormData[field.key];
-    const dataUrlMatch = typeof value === 'string'
-      ? value.match(/^data:([\w.+-]+\/[\w.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/)
-      : null;
-    if (!dataUrlMatch) {
-      throw new Error(`Invalid file upload for ${field.label || field.key}. Please choose the file again.`);
+  const submittedFiles = Object.entries(submittedFormData)
+    .filter(([, value]) => typeof value === 'string' && value.startsWith('data:'));
+  if (submittedFiles.length) {
+    let uploadPricing = null;
+    try {
+      uploadPricing = await Pricing.getPricing();
+    } catch (dbError) {
+      console.warn('SERVICE_REQUEST_PRICE_FALLBACK_ACTIVE:', dbError.message);
+      uploadPricing = { ninServices: {}, cacServices: {} };
     }
 
-    const fileSize = Buffer.from(dataUrlMatch[2], 'base64').length;
-    totalUploadSize += fileSize;
-    if (fileSize > 5 * 1024 * 1024 || totalUploadSize > 6 * 1024 * 1024) {
-      throw new Error('Each uploaded file must be 5 MB or smaller, and all uploaded files together must be 6 MB or smaller.');
-    }
+    const fallbackCatalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+    const uploadCatalogService = findCatalogService(
+      Array.isArray(uploadPricing?.serviceCatalog) && uploadPricing.serviceCatalog.length ? uploadPricing.serviceCatalog : fallbackCatalog,
+      service,
+      type
+    );
+    const uploadFields = (uploadCatalogService?.metadata?.formFields || []).filter((field) => field.type === 'upload');
+    let totalUploadSize = 0;
 
-    const uploadedUrl = await ensureUploaded(value, 'service-uploads');
-    if (!uploadedUrl) {
-      throw new Error(`Unable to upload ${field.label || field.key}. Please try again.`);
+    for (const [key, value] of submittedFiles) {
+      const field = uploadFields.find((candidate) => candidate.key === key);
+      if (!field) {
+        throw new Error('A file was submitted for a field that does not accept uploads.');
+      }
+
+      const dataUrlMatch = value.match(/^data:([\w.+-]+\/[\w.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/);
+      if (!dataUrlMatch) {
+        throw new Error(`Invalid file upload for ${field.label || field.key}. Please choose the file again.`);
+      }
+
+      const fileSize = Buffer.from(dataUrlMatch[2], 'base64').length;
+      totalUploadSize += fileSize;
+      if (fileSize > 5 * 1024 * 1024 || totalUploadSize > 6 * 1024 * 1024) {
+        throw new Error('Each uploaded file must be 5 MB or smaller, and all uploaded files together must be 6 MB or smaller.');
+      }
+
+      const uploadedUrl = await ensureUploaded(value, 'service-uploads');
+      if (!uploadedUrl) {
+        throw new Error(`Unable to upload ${field.label || field.key}. Please try again.`);
+      }
+      submittedFormData[key] = uploadedUrl;
     }
-    submittedFormData[field.key] = uploadedUrl;
   }
 
   const session = await mongoose.startSession();
@@ -390,6 +396,22 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
 
   try {
     await session.withTransaction(async () => {
+      let pricing = null;
+      let catalogService = null;
+
+      try {
+        pricing = await Pricing.getPricing();
+      } catch (dbError) {
+        console.warn('SERVICE_REQUEST_PRICE_FALLBACK_ACTIVE:', dbError.message);
+        pricing = { ninServices: {}, cacServices: {} };
+      }
+
+      const fallbackCatalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+      catalogService = findCatalogService(
+        Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length ? pricing.serviceCatalog : fallbackCatalog,
+        service,
+        type
+      );
       const resolvedPrice = resolveServicePrice(pricing, service, type, slipType, catalogService);
 
       if (!resolvedPrice) {

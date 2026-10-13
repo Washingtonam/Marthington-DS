@@ -166,6 +166,7 @@ export default function AdminPricing() {
         formFields: Array.isArray(service.metadata?.formFields) && service.metadata.formFields.length
           ? service.metadata.formFields.map((field) => ({
               ...field,
+              required: field.type === "title" || field.type === "subtitle" ? false : Boolean(field.required),
               options: Array.isArray(field.options) ? field.options.join(", ") : field.options || "",
               id: field.id || crypto.randomUUID(),
             }))
