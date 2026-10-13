@@ -193,6 +193,9 @@ export default function AdminPricing() {
       }
 
       updatedField[target] = value;
+      if (target === "type" && (value === "title" || value === "subtitle")) {
+        updatedField.required = false;
+      }
       nextFields[index] = updatedField;
       return { ...prev, metadata: { ...prev.metadata, formFields: nextFields } };
     });
@@ -249,7 +252,7 @@ export default function AdminPricing() {
       key: normalizeServiceCode(String(field.key || field.label || "").trim() || "field"),
       label: String(field.label || field.key || "").trim(),
       type: field.type || "text",
-      required: Boolean(field.required),
+      required: field.type === "title" || field.type === "subtitle" ? false : Boolean(field.required),
       placeholder: field.placeholder || "",
       options: String(field.options || "")
         .split(",")
@@ -559,9 +562,11 @@ export default function AdminPricing() {
                     <Field label="Field Label">
                       <input value={field.label || ""} onChange={(e) => updateFormField(index, "label", e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5" />
                     </Field>
-                    <Field label="Field Key">
-                      <input value={field.key || ""} onChange={(e) => updateFormField(index, "key", e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5" />
-                    </Field>
+                    {field.type !== "title" && field.type !== "subtitle" && (
+                      <Field label="Field Key">
+                        <input value={field.key || ""} onChange={(e) => updateFormField(index, "key", e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5" />
+                      </Field>
+                    )}
                     <Field label="Type">
                       <select value={field.type || "text"} onChange={(e) => updateFormField(index, "type", e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5">
                         <option value="text">Text</option>
@@ -570,19 +575,33 @@ export default function AdminPricing() {
                         <option value="textarea">Textarea</option>
                         <option value="select">Select</option>
                         <option value="checkbox">Checkbox</option>
+                        <option value="title">Title</option>
+                        <option value="subtitle">Subtitle</option>
+                        <option value="upload">Upload file</option>
                       </select>
                     </Field>
-                    <Field label="Placeholder">
-                      <input value={field.placeholder || ""} onChange={(e) => updateFormField(index, "placeholder", e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5" />
-                    </Field>
-                    <Field label="Options (for select)" className="md:col-span-2">
-                      <input value={field.options || ""} onChange={(e) => updateFormField(index, "options", e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5" placeholder="Option 1, Option 2, Option 3" />
-                    </Field>
+                    {field.type !== "title" && field.type !== "subtitle" && (
+                      <>
+                        <Field label="Placeholder">
+                          <input value={field.placeholder || ""} onChange={(e) => updateFormField(index, "placeholder", e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5" />
+                        </Field>
+                        {field.type === "select" && (
+                          <Field label="Options (for select)" className="md:col-span-2">
+                            <input value={field.options || ""} onChange={(e) => updateFormField(index, "options", e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5" placeholder="Option 1, Option 2, Option 3" />
+                          </Field>
+                        )}
+                      </>
+                    )}
                   </div>
                   <div className="mt-3 flex items-center justify-between">
                     <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-                      <input type="checkbox" checked={Boolean(field.required)} onChange={(e) => updateFormField(index, "required", e.target.checked)} />
-                      Required
+                      <input
+                        type="checkbox"
+                        checked={Boolean(field.required)}
+                        disabled={field.type === "title" || field.type === "subtitle"}
+                        onChange={(e) => updateFormField(index, "required", e.target.checked)}
+                      />
+                      Required {field.type === "title" || field.type === "subtitle" ? "(not applicable)" : ""}
                     </label>
                     <button onClick={() => removeField(index)} className="text-red-600 text-sm flex items-center gap-1"><Trash2 size={14} />Remove</button>
                   </div>
@@ -600,18 +619,28 @@ export default function AdminPricing() {
                 <div className="space-y-3">
                   {normalizeFormFields(serviceForm.metadata?.formFields).map((field, index) => (
                     <div key={`${field.key || field.label || index}`} className="rounded-xl bg-white p-3 shadow-sm border border-slate-200">
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="text-sm font-medium text-slate-700">{field.label || field.key || `Field ${index + 1}`}</span>
-                        {field.required && <span className="text-[10px] uppercase tracking-wide text-red-500">Required</span>}
-                      </div>
-                      {field.type === "textarea" ? (
-                        <div className="h-20 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-400">Long text input</div>
-                      ) : field.type === "select" ? (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-400">Select: {field.options || "No options"}</div>
-                      ) : field.type === "checkbox" ? (
-                        <div className="flex items-center gap-2 text-xs text-slate-500"><span className="h-4 w-4 rounded border border-slate-300 bg-white" /> Checkbox</div>
+                      {field.type === "title" ? (
+                        <h3 className="text-lg font-bold text-slate-900">{field.label}</h3>
+                      ) : field.type === "subtitle" ? (
+                        <h4 className="text-sm font-semibold text-slate-600">{field.label}</h4>
                       ) : (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-400">{field.type === "number" ? "Number input" : field.type === "date" ? "Date input" : "Text input"}</div>
+                        <>
+                          <div className="mb-1 flex items-center justify-between">
+                            <span className="text-sm font-medium text-slate-700">{field.label || field.key || `Field ${index + 1}`}</span>
+                            {field.required && <span className="text-[10px] uppercase tracking-wide text-red-500">Required</span>}
+                          </div>
+                          {field.type === "textarea" ? (
+                            <div className="h-20 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-400">Long text input</div>
+                          ) : field.type === "select" ? (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-400">Select: {field.options || "No options"}</div>
+                          ) : field.type === "checkbox" ? (
+                            <div className="flex items-center gap-2 text-xs text-slate-500"><span className="h-4 w-4 rounded border border-slate-300 bg-white" /> Checkbox</div>
+                          ) : field.type === "upload" ? (
+                            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-400"><FileText size={14} /> File upload</div>
+                          ) : (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-400">{field.type === "number" ? "Number input" : field.type === "date" ? "Date input" : "Text input"}</div>
+                          )}
+                        </>
                       )}
                     </div>
                   ))}

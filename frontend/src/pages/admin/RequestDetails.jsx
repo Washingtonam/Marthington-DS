@@ -103,11 +103,16 @@ export default function RequestDetails({
               const raw = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? '');
               const display = raw.toUpperCase();
               const isLong = display.length > 160;
+              const isUploadedFile = typeof value === 'string' && /^https:\/\/res\.cloudinary\.com\//i.test(value);
               return (
                 <div key={key} className="flex gap-4 items-start">
                   <div className="w-40 text-sm text-slate-500">{key}</div>
                   <div className="flex-1 text-sm break-words">
-                    {!isLong ? (
+                    {isUploadedFile ? (
+                      <a href={value} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                        View uploaded file
+                      </a>
+                    ) : !isLong ? (
                       display
                     ) : (
                       <>

@@ -27,7 +27,11 @@ export default function ServiceDetailPage() {
 
   const submitService = async (payload) => {
     try {
-      const response = await api.post("/api/services/request", { ...payload, paymentSource: "main", nin: payload.nin || "N/A" });
+      const response = await api.post(
+        "/api/services/request",
+        { ...payload, paymentSource: "main", nin: payload.nin || "N/A" },
+        { timeout: 120000 }
+      );
       if (response?.data?.success) {
         alert("Your service request has been submitted successfully.");
         navigate("/my-requests");

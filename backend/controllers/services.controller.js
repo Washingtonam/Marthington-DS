@@ -8,6 +8,7 @@ const Pricing = require('../models/Pricing.model');
 const { validateServiceRequest } = require('../shared/validators');
 const { SUPER_ADMIN_EMAIL } = require('../config/constants');
 const { normalizeServiceType } = require('../config/serviceTypes');
+const { ensureUploaded } = require('../shared/cloudinary');
 
 const normalizeCategorySlug = (value = '') => String(value || '')
   .trim()
@@ -340,29 +341,55 @@ const resolveServicePrice = (pricing, service, type, slipType, catalogService) =
 };
 
 const processServiceRequest = async ({ userId, service, type, nin, slipType, proof, passport, formData, paymentSource = 'main', category }) => {
+  let pricing = null;
+  try {
+    pricing = await Pricing.getPricing();
+  } catch (dbError) {
+    console.warn('SERVICE_REQUEST_PRICE_FALLBACK_ACTIVE:', dbError.message);
+    pricing = { ninServices: {}, cacServices: {} };
+  }
+
+  const fallbackCatalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
+  const catalogService = findCatalogService(
+    Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length ? pricing.serviceCatalog : fallbackCatalog,
+    service,
+    type
+  );
+  const submittedFormData = formData && typeof formData === 'object' && !Array.isArray(formData)
+    ? { ...formData }
+    : {};
+  let totalUploadSize = 0;
+
+  for (const field of catalogService?.metadata?.formFields || []) {
+    if (field.type !== 'upload' || !submittedFormData[field.key]) continue;
+
+    const value = submittedFormData[field.key];
+    const dataUrlMatch = typeof value === 'string'
+      ? value.match(/^data:([\w.+-]+\/[\w.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/)
+      : null;
+    if (!dataUrlMatch) {
+      throw new Error(`Invalid file upload for ${field.label || field.key}. Please choose the file again.`);
+    }
+
+    const fileSize = Buffer.from(dataUrlMatch[2], 'base64').length;
+    totalUploadSize += fileSize;
+    if (fileSize > 5 * 1024 * 1024 || totalUploadSize > 6 * 1024 * 1024) {
+      throw new Error('Each uploaded file must be 5 MB or smaller, and all uploaded files together must be 6 MB or smaller.');
+    }
+
+    const uploadedUrl = await ensureUploaded(value, 'service-uploads');
+    if (!uploadedUrl) {
+      throw new Error(`Unable to upload ${field.label || field.key}. Please try again.`);
+    }
+    submittedFormData[field.key] = uploadedUrl;
+  }
+
   const session = await mongoose.startSession();
   let savedRequest = null;
   let walletBalance = 0;
 
   try {
     await session.withTransaction(async () => {
-      let pricing = null;
-      let catalogService = null;
-
-      try {
-        pricing = await Pricing.getPricing();
-      } catch (dbError) {
-        console.warn('SERVICE_REQUEST_PRICE_FALLBACK_ACTIVE:', dbError.message);
-        pricing = { ninServices: {}, cacServices: {} };
-      }
-
-      const fallbackCatalog = Pricing.getDefaultServiceCatalog ? Pricing.getDefaultServiceCatalog() : [];
-      catalogService = findCatalogService(
-        Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length ? pricing.serviceCatalog : fallbackCatalog,
-        service,
-        type
-      );
-
       const resolvedPrice = resolveServicePrice(pricing, service, type, slipType, catalogService);
 
       if (!resolvedPrice) {
@@ -428,7 +455,7 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
           proof: proof ? String(proof) : 'wallet',
           passport: passport ? String(passport) : 'wallet',
           paymentSource: normalizedPaymentSource,
-          formData: typeof formData === 'object' ? formData : {},
+          formData: submittedFormData,
           status: 'pending',
           statusHistory: [{ status: 'pending', note: 'Initialized manual pipeline sequence successfully.' }]
         }
@@ -456,7 +483,11 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
 };
 
 exports.submitServiceRequest = async (req, res) => {
-  console.log('TRANSACTION TRACE START:', { body: req.body, userId: req.user?.id });
+  console.log('TRANSACTION TRACE START:', {
+    service: req.body?.service,
+    type: req.body?.type,
+    userId: req.user?.id
+  });
   const { error } = validateServiceRequest.validate(req.body);
   if (error) {
     return res.status(400).json({ success: false, message: error.details[0].message });
