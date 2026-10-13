@@ -6,7 +6,11 @@ import { LogOut, MoonStar, SunMedium } from "lucide-react";
  */
 export default function SidebarFooter({ open, theme, onToggleTheme, onLogout }) {
   return (
+<<<<<<< HEAD
     <div className={`${open ? "p-6" : "p-2"} border-t border-white/10`}>
+=======
+    <div className="p-6 border-t border-white/10">
+>>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
       <button
         onClick={onToggleTheme}
         className="w-full mb-3 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl transition flex items-center justify-center gap-2 font-semibold text-xs"

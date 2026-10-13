@@ -31,9 +31,16 @@ const API_BASE = "https://xcombinator.onrender.com";
  * Collapsible sidebar with user profile, navigation sections, and admin controls
  * Features: theme toggle, logout, badge notifications, responsive design
  */
+<<<<<<< HEAD
 export default function Sidebar({ open, isMobile, onToggle, onClose }) {
   const { theme, toggleTheme } = useTheme();
 
+=======
+export default function Sidebar() {
+  const { theme, toggleTheme } = useTheme();
+
+  const [open, setOpen] = useState(window.innerWidth >= 1024);
+>>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
   const [pendingPayments, setPendingPayments] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [serviceCategories, setServiceCategories] = useState([]);
@@ -48,6 +55,29 @@ export default function Sidebar({ open, isMobile, onToggle, onClose }) {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
+<<<<<<< HEAD
+=======
+  // Toggle sidebar and notify Layout.jsx
+  const toggleSidebar = () => {
+    const nextState = !open;
+    setOpen(nextState);
+    window.dispatchEvent(
+      new CustomEvent("sidebar-toggle", { detail: nextState })
+    );
+  };
+
+  // Handle responsive sidebar on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      const isLarge = window.innerWidth >= 1024;
+      setOpen(isLarge);
+      window.dispatchEvent(new CustomEvent("sidebar-toggle", { detail: isLarge }));
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+>>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
   const handleLogout = () => {
     localStorage.clear();
     window.location.href = "/login";
@@ -111,13 +141,20 @@ export default function Sidebar({ open, isMobile, onToggle, onClose }) {
   }, [token]);
 
   const handleNavClick = () => {
+<<<<<<< HEAD
     if (isMobile) onClose();
+=======
+    if (window.innerWidth < 1024) {
+      toggleSidebar();
+    }
+>>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
   };
 
   return (
     <>
       {/* Toggle Button */}
       <button
+<<<<<<< HEAD
         onClick={onToggle}
         className="fixed left-4 top-4 z-[60] rounded-2xl bg-gradient-to-r from-blue-700 to-indigo-700 p-3 text-white shadow-2xl transition hover:scale-105"
         aria-label={isMobile ? (open ? "Close navigation menu" : "Open navigation menu") : (open ? "Collapse sidebar" : "Expand sidebar")}
@@ -132,21 +169,44 @@ export default function Sidebar({ open, isMobile, onToggle, onClose }) {
         <div
           onClick={onClose}
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+=======
+        onClick={toggleSidebar}
+        className="fixed top-4 left-4 z-50 bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-3 rounded-2xl shadow-2xl hover:scale-105 transition"
+        aria-label="Toggle sidebar"
+      >
+        {open ? <X size={20} /> : <Menu size={20} />}
+      </button>
+
+      {/* Mobile Backdrop */}
+      {open && (
+        <div
+          onClick={toggleSidebar}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+>>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
         />
       )}
 
       {/* Sidebar Panel */}
       <aside
+<<<<<<< HEAD
         id="app-sidebar"
         className={`fixed left-0 top-0 z-50 h-screen overflow-hidden transition-all duration-300 ${
           open
             ? "w-[min(310px,calc(100vw-3rem))] translate-x-0 lg:w-[310px]"
             : "-translate-x-full lg:w-[85px] lg:translate-x-0"
+=======
+        className={`fixed top-0 left-0 h-screen z-50 transition-all duration-300 overflow-hidden ${
+          open ? "translate-x-0 w-[310px]" : "-translate-x-full lg:translate-x-0 lg:w-[85px]"
+>>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
         }`}
       >
         <div className="h-full overflow-y-auto bg-gradient-to-b from-[#020617] via-[#0F172A] to-[#172554] text-white flex flex-col justify-between border-r border-white/10 shadow-2xl scrollbar-none">
           {/* Content */}
+<<<<<<< HEAD
           <div className={`${open ? "p-6" : "p-2"} pt-20`}>
+=======
+          <div className="p-6 pt-20">
+>>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
             {/* Logo */}
             <div className="flex items-center justify-between mb-8 overflow-hidden h-10">
               <div className="transition-all duration-300">
