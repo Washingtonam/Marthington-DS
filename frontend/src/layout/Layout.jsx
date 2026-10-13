@@ -3,7 +3,6 @@ import Sidebar from "../components/Sidebar";
 import Footer from "../components/Footer";
 
 export default function Layout({ children }) {
-<<<<<<< HEAD
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
 
@@ -36,33 +35,6 @@ export default function Layout({ children }) {
         className={`flex min-h-screen min-w-0 flex-1 flex-col transition-all duration-300 ${
           sidebarOpen ? "lg:pl-[310px]" : "lg:pl-[85px]"
         }`}
-=======
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
-
-  useEffect(() => {
-    const handleToggle = (e) => {
-      setSidebarOpen(e.detail);
-    };
-
-    window.addEventListener("sidebar-toggle", handleToggle);
-    return () => {
-      window.removeEventListener("sidebar-toggle", handleToggle);
-    };
-  }, []);
-
-  return (
-    <div className="min-h-screen flex bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300">
-      
-      {/* SIDEBAR */}
-      <Sidebar />
-
-      {/* MAIN VIEWPORT WORKSPACE — FORCED VIA INLINE STYLE MARGINS */}
-      <main 
-        className="min-h-screen flex flex-1 flex-col transition-all duration-300"
-        style={{
-          paddingLeft: window.innerWidth >= 1024 ? (sidebarOpen ? "310px" : "85px") : "0px"
-        }}
->>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
       >
         {/* TOP STATUS CONTROL BAR */}
         <div className="sticky top-0 z-30 backdrop-blur-xl bg-white/70 dark:bg-slate-950/70 border-b border-gray-200 dark:border-slate-800">
@@ -84,11 +56,7 @@ export default function Layout({ children }) {
         </div>
 
         {/* INJECTED PAGE BODY */}
-<<<<<<< HEAD
         <div className="min-w-0 w-full flex-1 p-3 animate-fadeIn sm:p-4 md:p-6 lg:p-8">
-=======
-        <div className="flex-1 p-4 md:p-6 lg:p-8 animate-fadeIn">
->>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
           {children}
         </div>
 

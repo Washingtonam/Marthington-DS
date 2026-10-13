@@ -140,7 +140,6 @@ export default function UserRequests() {
   }
 
   return (
-<<<<<<< HEAD
     <div className="mx-auto min-w-0 w-full max-w-5xl p-2 sm:p-4 md:p-6">
       <div className="mb-8">
         <h1 className="break-words text-2xl font-bold text-[var(--text)] sm:text-3xl">Requests</h1>
@@ -152,19 +151,6 @@ export default function UserRequests() {
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           className="min-w-0 w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-=======
-    <div className="max-w-5xl mx-auto p-4 md:p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[var(--text)]">Requests</h1>
-        <p className="text-[var(--muted)] mt-2">Track your submitted NIN services and processing updates</p>
-      </div>
-
-      <div className="mb-6 grid gap-3 md:grid-cols-[1.2fr_0.8fr_1fr_auto_auto]">
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
->>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
         >
           {SERVICE_TYPE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -176,21 +162,13 @@ export default function UserRequests() {
           value={nin}
           onChange={(e) => setNin(e.target.value)}
           placeholder="Filter by NIN"
-<<<<<<< HEAD
           className="min-w-0 w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-=======
-          className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
->>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
         />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by service or ID"
-<<<<<<< HEAD
           className="min-w-0 w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-=======
-          className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
->>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
         />
         <button onClick={applyFilters} className="btn-primary">Apply</button>
         <button onClick={clearFilters} className="rounded-2xl border border-slate-300 px-3 py-2 text-sm dark:border-slate-700">Clear</button>
@@ -254,29 +232,17 @@ export default function UserRequests() {
 
       {/* MODAL */}
       {active && (
-<<<<<<< HEAD
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm sm:p-4">
           <div className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-3xl border bg-[var(--card)] text-[var(--text)] shadow-2xl">
             <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-[var(--card)] p-4 sm:p-5">
               <div>
                 <h2 className="break-words text-xl font-bold capitalize sm:text-2xl">{active.service}</h2>
-=======
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
-          <div className="bg-[var(--card)] text-[var(--text)] rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl border">
-            <div className="sticky top-0 bg-[var(--card)] border-b p-5 flex justify-between items-center z-10">
-              <div>
-                <h2 className="text-2xl font-bold capitalize">{active.service}</h2>
->>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
                 <p className="text-sm text-gray-500 capitalize">{active.type}</p>
               </div>
               <button onClick={() => setActive(null)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 transition">✕</button>
             </div>
 
-<<<<<<< HEAD
             <div className="space-y-6 p-4 sm:p-6">
-=======
-            <div className="p-6 space-y-6">
->>>>>>> d4cb33e076cfba75ed2c13d09116b79746f82851
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <span className={`px-4 py-2 rounded-full text-sm font-medium ${statusStyle(active.status)}`}>
                   {statusText(active.status)}
