@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { formatNaira } from "../../lib/currency";
 import { motion } from "framer-motion";
+import AppearanceSettings from "../../components/AppearanceSettings";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -60,6 +61,8 @@ export default function Profile() {
           </div>
         </div>
       </motion.div>
+
+      <AppearanceSettings />
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* SIDEBAR: Info & Actions */}

@@ -1,316 +1,269 @@
+import React, { createElement, useEffect, useMemo, useState } from "react";
 import {
-  LayoutDashboard,
-  ShieldCheck,
-  Wallet,
-  ScrollText,
-  Users,
-  CreditCard,
-  Settings,
-  Bell,
-  Menu,
-  X,
-  Briefcase,
-  Sparkles,
-  Sliders,
+  Activity,
   BookOpenText,
+  BriefcaseBusiness,
+  CreditCard,
+  LayoutDashboard,
+  LogOut,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  SlidersHorizontal,
+  Users,
+  Wallet,
+  Bell,
+  X,
 } from "lucide-react";
-
-import { useState, useEffect } from "react";
-import axios from "axios";
-import { useTheme } from "../context/ThemeContext";
-
+import { useLocation, useNavigate } from "react-router-dom";
+import api from "../lib/axios";
+import { useUser } from "../context/UserContext";
 import SidebarNavItem from "./Sidebar/SidebarNavItem";
-import SidebarUserCard from "./Sidebar/SidebarUserCard";
 import SidebarNavSection from "./Sidebar/SidebarNavSection";
-import SidebarFooter from "./Sidebar/SidebarFooter";
 
-const API_BASE = "https://xcombinator.onrender.com";
+const userGroups = [
+  {
+    id: "overview",
+    title: "Overview",
+    icon: LayoutDashboard,
+    links: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard }],
+  },
+  {
+    id: "services",
+    title: "Services",
+    icon: BriefcaseBusiness,
+    links: [
+      { to: "/verify-nin", label: "Verify NIN", icon: ShieldCheck },
+      { to: "/verify-bvn", label: "Verify BVN", icon: ShieldCheck },
+      { to: "/nin-services", label: "NIN Services", icon: BriefcaseBusiness },
+      { to: "/cac-services", label: "CAC Services", icon: BriefcaseBusiness },
+    ],
+  },
+  {
+    id: "activity",
+    title: "Activity",
+    icon: ScrollText,
+    links: [
+      { to: "/my-requests", label: "Service Requests", icon: BriefcaseBusiness },
+      { to: "/my-verification-requests", label: "Verification Requests", icon: ShieldCheck },
+      { to: "/transactions", label: "Transactions", icon: ScrollText },
+    ],
+  },
+  {
+    id: "account",
+    title: "Account",
+    icon: Wallet,
+    links: [
+      { to: "/wallet", label: "Wallet", icon: Wallet },
+      { to: "/profile", label: "Profile & settings", icon: Settings },
+    ],
+  },
+];
 
-/**
- * Sidebar - Main navigation component
- * Collapsible sidebar with user profile, navigation sections, and admin controls
- * Features: theme toggle, logout, badge notifications, responsive design
- */
-export default function Sidebar({ open, isMobile, onToggle, onClose }) {
-  const { theme, toggleTheme } = useTheme();
+const adminGroups = [
+  {
+    id: "admin-overview",
+    title: "Overview",
+    icon: LayoutDashboard,
+    links: [{ to: "/admin", label: "Admin dashboard", icon: LayoutDashboard }],
+  },
+  {
+    id: "operations",
+    title: "Operations",
+    icon: Activity,
+    links: [
+      { to: "/admin/payments", label: "Payment requests", icon: CreditCard },
+      { to: "/admin/requests", label: "Service requests", icon: BriefcaseBusiness },
+      { to: "/admin/verification-requests", label: "Verification requests", icon: ShieldCheck },
+    ],
+  },
+  {
+    id: "management",
+    title: "Management",
+    icon: Settings,
+    links: [
+      { to: "/admin/users", label: "Manage users", icon: Users, superAdminOnly: true },
+      { to: "/admin/services-engine", label: "Services & pricing", icon: SlidersHorizontal, superAdminOnly: true },
+      { to: "/admin/notifications", label: "Notification center", icon: Bell, superAdminOnly: true },
+      { to: "/admin/articles", label: "Guides & updates", icon: BookOpenText, superAdminOnly: true },
+    ],
+  },
+];
 
-  const [pendingPayments, setPendingPayments] = useState(0);
-  const [pendingRequests, setPendingRequests] = useState(0);
-  const [serviceCategories, setServiceCategories] = useState([]);
+function activeGroupForPath(pathname, isAdminWorkspace) {
+  if (isAdminWorkspace && (
+    pathname.startsWith("/admin/pricing")
+    || pathname.startsWith("/admin/services-engine")
+    || pathname.startsWith("/admin/user/")
+  )) {
+    return "management";
+  }
+  if (!isAdminWorkspace && (pathname.startsWith("/services/") || pathname.startsWith("/nin-services/") || pathname.startsWith("/cac-services/") || pathname.startsWith("/verify-result"))) {
+    return "services";
+  }
+  const groups = isAdminWorkspace ? adminGroups : userGroups;
+  return groups.find((group) => group.links.some(({ to }) => (
+    pathname === to || (to !== "/dashboard" && to !== "/admin" && pathname.startsWith(`${to}/`))
+  )))?.id || groups[0].id;
+}
 
-  const user = JSON.parse(localStorage.getItem("user")) || {};
-  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+export default function Sidebar({ open, isMobile, onClose }) {
+  const { user, clearUser } = useUser();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isAdminWorkspace = location.pathname.startsWith("/admin");
   const isSuperAdmin = user?.role === "super_admin";
+  const userRole = user?.role;
+  const [serviceCategories, setServiceCategories] = useState([]);
+  const [pendingPayments, setPendingPayments] = useState(0);
+  const [openGroup, setOpenGroup] = useState("");
+  const activeGroup = activeGroupForPath(location.pathname, isAdminWorkspace);
 
-  const token = localStorage.getItem("token")?.replace(/['"]+/g, "") || "";
-  const headers = {
-    email: user?.email || "",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/api/services/categories").then((response) => {
+      if (!cancelled) {
+        setServiceCategories(Array.isArray(response.data?.categories) ? response.data.categories : []);
+      }
+    }).catch((error) => {
+      console.error("Sidebar categories fetch failed:", error?.message || error);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!isAdminWorkspace || !["admin", "super_admin"].includes(userRole)) return undefined;
+    let cancelled = false;
+    const fetchPayments = async () => {
+      let response;
+      try {
+        response = await api.get("/api/admin/payments");
+      } catch (primaryError) {
+        try {
+          response = await api.get("/api/finance/payments");
+        } catch (fallbackError) {
+          console.error("Sidebar payment count fetch failed:", fallbackError?.message || primaryError?.message);
+          return;
+        }
+      }
+
+      const payments = response.data?.data || response.data || [];
+      if (!cancelled && Array.isArray(payments)) {
+        setPendingPayments(payments.filter((payment) => payment?.status === "pending").length);
+      }
+    };
+    fetchPayments();
+    return () => { cancelled = true; };
+  }, [isAdminWorkspace, userRole]);
+
+  const groups = useMemo(() => {
+    if (isAdminWorkspace) {
+      return adminGroups.map((group) => ({
+        ...group,
+        links: group.links.filter((link) => !link.superAdminOnly || isSuperAdmin)
+          .map((link) => link.to === "/admin/payments" ? { ...link, badge: pendingPayments } : link),
+      })).filter((group) => group.links.length > 0);
+    }
+
+    const categories = serviceCategories
+      .filter((category) => category?.slug && category.slug !== "nin" && category.slug !== "cac")
+      .map((category) => ({
+        to: `/services/${category.slug}`,
+        label: `${category.label} services`,
+        icon: BriefcaseBusiness,
+      }));
+    return userGroups.map((group) => group.id === "services"
+      ? { ...group, links: [...group.links, ...categories] }
+      : group);
+  }, [isAdminWorkspace, isSuperAdmin, pendingPayments, serviceCategories]);
 
   const handleLogout = () => {
-    localStorage.clear();
-    window.location.href = "/login";
-  };
-
-  // Fetch admin notification counts
-  useEffect(() => {
-    if (!isAdmin) return;
-
-    const fetchCounts = async () => {
-      try {
-        let paymentsData = [];
-        try {
-          const payRes = await axios.get(`${API_BASE}/api/admin/payments`, {
-            headers,
-          });
-          paymentsData = payRes.data?.data || payRes.data || [];
-        } catch (err) {
-          try {
-            const alt = await axios.get(`${API_BASE}/api/finance/payments`, {
-              headers,
-            });
-            paymentsData = alt.data?.data || alt.data || [];
-          } catch (err2) {
-            console.error("Payments fetch failed:", err2?.message || err?.message);
-            paymentsData = [];
-          }
-        }
-
-        if (Array.isArray(paymentsData)) {
-          setPendingPayments(
-            paymentsData.filter((p) => p && p.status === "pending").length
-          );
-        } else {
-          setPendingPayments(0);
-        }
-
-        setPendingRequests(0);
-      } catch (err) {
-        console.error("Sidebar fetch error:", err.message);
-        setPendingPayments(0);
-        setPendingRequests(0);
-      }
-    };
-
-    fetchCounts();
-  }, [isAdmin, headers]);
-
-  useEffect(() => {
-    const fetchServiceCategories = async () => {
-      try {
-        const response = await axios.get(`${API_BASE}/api/services/categories`, { headers });
-        setServiceCategories(Array.isArray(response.data?.categories) ? response.data.categories : []);
-      } catch (err) {
-        console.error("Sidebar categories fetch failed:", err?.message || err);
-        setServiceCategories([]);
-      }
-    };
-
-    fetchServiceCategories();
-  }, [token]);
-
-  const handleNavClick = () => {
-    if (isMobile) onClose();
+    clearUser();
+    navigate("/login", { replace: true });
   };
 
   return (
-    <>
-      {/* Toggle Button */}
-      <button
-        onClick={onToggle}
-        className="fixed left-4 top-4 z-[60] rounded-2xl bg-gradient-to-r from-blue-700 to-indigo-700 p-3 text-white shadow-2xl transition hover:scale-105"
-        aria-label={isMobile ? (open ? "Close navigation menu" : "Open navigation menu") : (open ? "Collapse sidebar" : "Expand sidebar")}
-        aria-expanded={open}
-        aria-controls="app-sidebar"
-      >
-        {isMobile && open ? <X size={20} /> : <Menu size={20} />}
-      </button>
+    <aside
+      id="app-sidebar"
+      role={isMobile && open ? "dialog" : undefined}
+      aria-modal={isMobile && open ? true : undefined}
+      aria-hidden={isMobile && !open}
+      inert={isMobile && !open ? true : undefined}
+      aria-label={isAdminWorkspace ? `${isSuperAdmin ? "Super Admin" : "Admin"} navigation` : "User navigation"}
+      className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white shadow-xl transition-[width,transform] duration-200 dark:border-slate-800 dark:bg-slate-950 ${
+        isMobile
+          ? `w-[min(18rem,calc(100vw-2rem))] ${open ? "translate-x-0" : "-translate-x-full"}`
+          : `${open ? "w-72" : "w-[5.25rem]"} translate-x-0`
+      }`}
+    >
+      <div className="flex h-20 shrink-0 items-center gap-3 border-b border-slate-200 px-5 dark:border-slate-800">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-[var(--accent-foreground)]">
+          <Activity size={21} aria-hidden="true" />
+        </div>
+        {(open || isMobile) && (
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white">Marthington</p>
+            <p className="truncate text-xs text-slate-500 dark:text-slate-400">Digital Services</p>
+          </div>
+        )}
+        {isMobile && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close sidebar drawer"
+            data-drawer-close
+            className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-2 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <X size={19} aria-hidden="true" />
+          </button>
+        )}
+      </div>
 
-      {/* Mobile Backdrop */}
-      {isMobile && open && (
-        <div
-          onClick={onClose}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-        />
-      )}
-
-      {/* Sidebar Panel */}
-      <aside
-        id="app-sidebar"
-        className={`fixed left-0 top-0 z-50 h-screen overflow-hidden transition-all duration-300 ${
-          open
-            ? "w-[min(310px,calc(100vw-3rem))] translate-x-0 lg:w-[310px]"
-            : "-translate-x-full lg:w-[85px] lg:translate-x-0"
-        }`}
-      >
-        <div className="h-full overflow-y-auto bg-gradient-to-b from-[#020617] via-[#0F172A] to-[#172554] text-white flex flex-col justify-between border-r border-white/10 shadow-2xl scrollbar-none">
-          {/* Content */}
-          <div className={`${open ? "p-6" : "p-2"} pt-20`}>
-            {/* Logo */}
-            <div className="flex items-center justify-between mb-8 overflow-hidden h-10">
-              <div className="transition-all duration-300">
-                {open ? (
-                  <img
-                    src="/logofull.png"
-                    alt="Marthington"
-                    className="h-10 object-contain animate-fadeIn"
-                  />
-                ) : (
-                  <Sparkles size={28} className="text-blue-400 ml-1.5" />
-                )}
-              </div>
-            </div>
-
-            {/* User Card */}
-            <SidebarUserCard
-              user={user}
-              isSuperAdmin={isSuperAdmin}
-              open={open}
-            />
-
-            {/* Main Navigation */}
-            <SidebarNavSection title="Navigation" dotColor="blue" open={open}>
-              <SidebarNavItem
-                to="/dashboard"
-                label="Dashboard"
-                icon={<LayoutDashboard size={18} />}
-                open={open}
-                onNavigate={handleNavClick}
-              />
-              <SidebarNavItem
-                to="/verify-nin"
-                label="Verify NIN"
-                icon={<ShieldCheck size={18} />}
-                open={open}
-                onNavigate={handleNavClick}
-              />
-              {serviceCategories.map((category) => (
+      <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-5" aria-label="Dashboard">
+        {groups.map((group) => {
+          const GroupIcon = group.icon;
+          const expanded = activeGroup === group.id || openGroup === group.id;
+          return (
+            <SidebarNavSection
+              key={group.id}
+              id={group.id}
+              title={group.title}
+              icon={<GroupIcon size={18} aria-hidden="true" />}
+              open={open || isMobile}
+              expanded={expanded}
+              canToggle={activeGroup !== group.id}
+              onToggle={() => setOpenGroup(openGroup === group.id ? "" : group.id)}
+            >
+              {group.links.map(({ to, label, icon: Icon, badge }) => (
                 <SidebarNavItem
-                  key={category.slug}
-                  to={`/services/${category.slug}`}
-                  label={`${category.label} Services`}
-                  icon={<Briefcase size={18} />}
-                  open={open}
-                  onNavigate={handleNavClick}
+                  key={to}
+                  to={to}
+                  label={label}
+                  icon={createElement(Icon, { size: 18, "aria-hidden": true })}
+                  badge={badge}
+                  open={open || isMobile}
+                  onNavigate={() => { if (isMobile) onClose(); }}
                 />
               ))}
-              <SidebarNavItem
-                to="/wallet"
-                label="Wallet"
-                icon={<Wallet size={18} />}
-                open={open}
-                onNavigate={handleNavClick}
-              />
-              <SidebarNavItem
-                to="/transactions"
-                label="Transactions"
-                icon={<ScrollText size={18} />}
-                open={open}
-                onNavigate={handleNavClick}
-              />
-              <SidebarNavItem
-                to="/my-requests"
-                label="Service Requests"
-                icon={<Briefcase size={18} />}
-                open={open}
-                onNavigate={handleNavClick}
-              />
-              <SidebarNavItem
-                to="/my-verification-requests"
-                label="Verification Requests"
-                icon={<ShieldCheck size={18} />}
-                open={open}
-                onNavigate={handleNavClick}
-              />
             </SidebarNavSection>
+          );
+        })}
+      </nav>
 
-            {/* Admin Navigation */}
-            {isAdmin && (
-              <div className="mt-8">
-                <SidebarNavSection
-                  title="Admin"
-                  dotColor="yellow"
-                  open={open}
-                >
-                  <SidebarNavItem
-                    to="/admin"
-                    label="Admin Dashboard"
-                    icon={<Settings size={18} />}
-                    open={open}
-                    onNavigate={handleNavClick}
-                  />
-                  {isSuperAdmin && (
-                    <SidebarNavItem
-                      to="/admin/users"
-                      label="Manage Users"
-                      icon={<Users size={18} />}
-                      open={open}
-                      onNavigate={handleNavClick}
-                    />
-                  )}
-                  <SidebarNavItem
-                    to="/admin/payments"
-                    label="Payment Requests"
-                    icon={<CreditCard size={18} />}
-                    badge={pendingPayments}
-                    open={open}
-                    onNavigate={handleNavClick}
-                  />
-                  <SidebarNavItem
-                    to="/admin/requests"
-                    label="Service Requests"
-                    icon={<Bell size={18} />}
-                    badge={pendingRequests}
-                    open={open}
-                    onNavigate={handleNavClick}
-                  />
-                  <SidebarNavItem
-                    to="/admin/verification-requests"
-                    label="Verification Requests"
-                    icon={<ShieldCheck size={18} />}
-                    open={open}
-                    onNavigate={handleNavClick}
-                  />
-                  {isSuperAdmin && (
-                    <>
-                      <SidebarNavItem
-                        to="/admin/services-engine"
-                        label="Services Engine"
-                        icon={<Sliders size={18} />}
-                        open={open}
-                        onNavigate={handleNavClick}
-                      />
-                      <SidebarNavItem
-                        to="/admin/notifications"
-                        label="Notification Center"
-                        icon={<Bell size={18} />}
-                        open={open}
-                        onNavigate={handleNavClick}
-                      />
-                      <SidebarNavItem
-                        to="/admin/articles"
-                        label="Guides & Updates"
-                        icon={<BookOpenText size={18} />}
-                        open={open}
-                        onNavigate={handleNavClick}
-                      />
-                    </>
-                  )}
-                </SidebarNavSection>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <SidebarFooter
-            open={open}
-            theme={theme}
-            onToggleTheme={toggleTheme}
-            onLogout={handleLogout}
-          />
-        </div>
-      </aside>
-    </>
+      <div className="border-t border-slate-200 p-3 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={handleLogout}
+          title={open || isMobile ? undefined : "Sign out"}
+          aria-label="Sign out"
+          className={`flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white ${
+            open || isMobile ? "gap-3" : "justify-center"
+          }`}
+        >
+          <LogOut size={18} aria-hidden="true" />
+          {(open || isMobile) && <span>Sign out</span>}
+        </button>
+      </div>
+    </aside>
   );
 }

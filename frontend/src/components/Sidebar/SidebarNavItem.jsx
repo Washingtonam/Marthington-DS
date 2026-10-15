@@ -1,50 +1,35 @@
+import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
 
-/**
- * SidebarNavItem - Reusable navigation item component for the sidebar
- * Handles active states, badges, and icon display based on sidebar open/close state
- */
 export default function SidebarNavItem({ to, icon, label, badge = 0, open, onNavigate }) {
   const location = useLocation();
-  const isActive = location.pathname === to;
-
-  const linkClass = `group relative flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 ${
-    isActive
-      ? "bg-white text-blue-900 shadow-2xl scale-[1.02]"
-      : "text-white/75 hover:bg-white/10 hover:text-white"
-  }`;
+  const isActive = location.pathname === to
+    || (to !== "/dashboard" && to !== "/admin" && location.pathname.startsWith(`${to}/`));
 
   return (
     <Link
       to={to}
       onClick={onNavigate}
-      className={linkClass}
+      title={open ? undefined : label}
+      aria-label={label}
+      aria-current={isActive ? "page" : undefined}
+      className={`group flex min-h-10 items-center rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
+        open ? "gap-3" : "justify-center"
+      } ${
+        isActive
+          ? "bg-[var(--accent)] text-[var(--accent-foreground)] shadow-sm"
+          : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white"
+      }`}
     >
-      <div className="flex items-center gap-3">
-        <div className={`transition ${isActive ? "scale-110" : "group-hover:scale-105"}`}>
-          {icon}
-        </div>
-        <span
-          className={`font-medium text-sm transition-all duration-200 whitespace-nowrap ${
-            open ? "opacity-100 max-w-xs" : "opacity-0 max-w-0 overflow-hidden"
-          }`}
-        >
-          {label}
+      <span className="flex shrink-0 items-center justify-center">{icon}</span>
+      {open && <span className="min-w-0 flex-1 truncate">{label}</span>}
+      {open && badge > 0 && (
+        <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold ${
+          isActive ? "bg-black/10" : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-200"
+        }`}>
+          {badge}
         </span>
-      </div>
-
-      <div className={`flex items-center gap-2 ${!open && "hidden"}`}>
-        {badge > 0 && (
-          <span className="bg-red-500 text-white text-[11px] px-2 py-1 rounded-full min-w-[22px] text-center shadow-lg font-bold">
-            {badge}
-          </span>
-        )}
-        <ChevronRight
-          size={15}
-          className={`transition ${isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-        />
-      </div>
+      )}
     </Link>
   );
 }
