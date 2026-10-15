@@ -154,7 +154,7 @@ describe("dashboard shell navigation", () => {
     expect(await screen.findByRole("link", { name: "NIMC services" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "CAC services" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "JAMB services" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Verify BVN" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Verify BVN" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Verify NIN" })).toBeNull();
     expect(screen.getByRole("link", { name: "Chat with support" })).toBeTruthy();
     fireEvent.click(screen.getByRole("link", { name: "Chat with support" }));

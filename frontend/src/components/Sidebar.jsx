@@ -36,9 +36,7 @@ const userGroups = [
     id: "services",
     title: "Services",
     icon: BriefcaseBusiness,
-    links: [
-      { to: "/verify-bvn", label: "Verify BVN", icon: ShieldCheck },
-    ],
+    links: [],
   },
   {
     id: "activity",
