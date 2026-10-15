@@ -4,9 +4,11 @@ import api from "../../lib/axios";
 import DynamicServiceForm from "../../components/DynamicServiceForm";
 import { ArrowRight, FileCheck, Loader2, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
+import { useBranding } from "../../context/BrandingContext";
 
 export default function NINServices() {
   const navigate = useNavigate();
+  const { businessName } = useBranding();
   const [services, setServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -62,9 +64,9 @@ export default function NINServices() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-slate-950 to-blue-900 text-white p-10 rounded-[2rem] shadow-2xl mb-10">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10 rounded-[2rem] p-10 shadow-2xl" style={{ background: "linear-gradient(115deg, var(--accent), var(--accent-strong))", color: "var(--accent-foreground)" }}>
         <h1 className="text-4xl font-black mb-2">NIMC Services</h1>
-        <p className="text-white/70">Professional identity infrastructure powered by Marthington.</p>
+        <p className="opacity-80">Professional identity infrastructure powered by {businessName}.</p>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">

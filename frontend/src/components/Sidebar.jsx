@@ -19,6 +19,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../lib/axios";
 import { useUser } from "../context/UserContext";
+import { useBranding } from "../context/BrandingContext";
 import SidebarNavItem from "./Sidebar/SidebarNavItem";
 import SidebarNavSection from "./Sidebar/SidebarNavSection";
 
@@ -87,6 +88,7 @@ const adminGroups = [
       { to: "/admin/services-engine", label: "Services & pricing", icon: SlidersHorizontal, superAdminOnly: true },
       { to: "/admin/notifications", label: "Notification center", icon: Bell, superAdminOnly: true },
       { to: "/admin/articles", label: "Guides & updates", icon: BookOpenText, superAdminOnly: true },
+      { to: "/admin/settings", label: "Business settings", icon: Settings, superAdminOnly: true },
       { to: "/admin/agents", label: "Agents & jobs", icon: Users, superAdminOnly: true },
       { to: "/admin/communications", label: "Communications", icon: MessageCircle, superAdminOnly: true },
     ],
@@ -100,6 +102,7 @@ function activeGroupForPath(pathname, isAdminWorkspace) {
     || pathname.startsWith("/admin/user/")
     || pathname.startsWith("/admin/agents")
     || pathname.startsWith("/admin/communications")
+    || pathname.startsWith("/admin/settings")
   )) {
     return "management";
   }
@@ -114,6 +117,7 @@ function activeGroupForPath(pathname, isAdminWorkspace) {
 
 export default function Sidebar({ open, isMobile, onClose }) {
   const { user, clearUser } = useUser();
+  const { businessName, businessTagline, businessLogoUrl } = useBranding();
   const location = useLocation();
   const navigate = useNavigate();
   const isAdminWorkspace = location.pathname.startsWith("/admin");
@@ -202,13 +206,15 @@ export default function Sidebar({ open, isMobile, onClose }) {
       }`}
     >
       <div className="flex h-20 shrink-0 items-center gap-3 border-b border-slate-200 px-5 dark:border-slate-800">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-[var(--accent-foreground)]">
-          <Activity size={21} aria-hidden="true" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[rgba(var(--accent-rgb),0.10)] text-[var(--accent-text)]">
+          {businessLogoUrl
+            ? <img src={businessLogoUrl} alt="" className="h-full w-full object-contain p-1" />
+            : <Activity size={21} aria-hidden="true" />}
         </div>
         {(open || isMobile) && (
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white">Marthington</p>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400">Digital Services</p>
+            <p className="truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white">{businessName}</p>
+            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{businessTagline}</p>
           </div>
         )}
         {isMobile && (

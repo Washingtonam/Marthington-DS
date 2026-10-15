@@ -3,7 +3,6 @@ import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
 import { Loader2, ShieldCheck, CreditCard, User } from "lucide-react";
-import { motion } from "framer-motion";
 
 export default function VerifyBVN() {
   const [bvn, setBvn] = useState("");
@@ -16,9 +15,8 @@ export default function VerifyBVN() {
   useEffect(() => {
     const fetchPricing = async () => {
       try {
-        const res = await api("https://xcombinator.onrender.com/api/pricing");
-        const data = await res;
-        setPrice(data?.bvn?.price || 0);
+        const { data } = await api.get("/api/pricing");
+        setPrice(Number(data?.bvn?.unitPrice ?? data?.bvn?.price ?? 0));
       } catch (err) {
         console.error("Failed to load pricing", err);
       }

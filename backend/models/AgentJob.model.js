@@ -5,6 +5,7 @@ const AgentJobSchema = new mongoose.Schema({
   registeredUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   customerType: { type: String, enum: ["manual", "registered"], required: true },
   agentName: { type: String, required: true, trim: true, maxlength: 120 },
+  agentEmail: { type: String, trim: true, lowercase: true, maxlength: 254, default: "" },
   agentWhatsapp: { type: String, trim: true, maxlength: 20, default: "" },
   serviceType: { type: String, required: true, trim: true, maxlength: 100 },
   formData: { type: mongoose.Schema.Types.Mixed, default: {} },

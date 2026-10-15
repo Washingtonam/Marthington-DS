@@ -134,6 +134,21 @@ function AccountThemeProvider({ accountId, children }) {
     root.style.setProperty("--accent-text", readableAccent(appearance.accent, appearance.theme));
     root.style.setProperty("--accent-focus", readableAccent(appearance.accent, appearance.theme));
     root.style.setProperty("--accent-rgb", `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+    if (appearance.theme === "dark") {
+      root.style.setProperty("--footer-from", mixColors(appearance.accent, "#0f172a", 0.2));
+      root.style.setProperty("--footer-to", mixColors(appearance.accent, "#020617", 0.1));
+      root.style.setProperty("--footer-text", "#f8fafc");
+      root.style.setProperty("--footer-muted", "#cbd5e1");
+      root.style.setProperty("--footer-border", "rgba(148, 163, 184, 0.18)");
+      root.style.setProperty("--footer-panel", "rgba(15, 23, 42, 0.55)");
+    } else {
+      root.style.setProperty("--footer-from", mixColors(appearance.accent, "#e2e8f0", 0.12));
+      root.style.setProperty("--footer-to", mixColors(appearance.accent, "#f8fafc", 0.06));
+      root.style.setProperty("--footer-text", "#0f172a");
+      root.style.setProperty("--footer-muted", "#475569");
+      root.style.setProperty("--footer-border", "rgba(15, 23, 42, 0.12)");
+      root.style.setProperty("--footer-panel", "rgba(255, 255, 255, 0.55)");
+    }
     localStorage.setItem("theme", appearance.theme);
 
     if (accountId) {

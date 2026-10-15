@@ -112,29 +112,32 @@ export default function Dashboard() {
           <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#0F172A] via-[#172554] to-[#2563EB] p-8 text-white shadow-2xl mb-8"
+        className="relative mb-8 overflow-hidden rounded-[2rem] p-8 shadow-2xl"
+        style={{
+          background: "linear-gradient(125deg, var(--accent), var(--accent-strong))",
+          color: "var(--accent-foreground)",
+        }}
       >
-        <div className="absolute -top-20 right-0 w-72 h-72 bg-blue-400/20 blur-3xl rounded-full" />
-        
+        <div className="absolute -top-20 right-0 h-72 w-72 rounded-full blur-3xl" style={{ backgroundColor: "rgba(var(--accent-rgb), 0.3)" }} />
         <div className="relative z-10 flex flex-col lg:flex-row justify-between gap-8">
           <div>
-            <p className="text-white/70 text-sm mb-3">Available Wallet Balance</p>
+            <p className="text-sm opacity-80 mb-3">Available Wallet Balance</p>
             <h1 className="text-6xl font-black tracking-tight">{formatNaira(contextWalletBalance ?? 0)}</h1>
             <div className="flex gap-3 mt-6">
-              <Button onClick={() => navigate("/wallet")} className="bg-white text-blue-700 hover:bg-gray-100 font-bold px-6 py-2.5 rounded-xl">Fund Wallet</Button>
-              <Button onClick={() => navigate("/my-requests")} className="bg-white/10 border border-white/20 text-white px-6 py-2.5 rounded-xl">View Requests</Button>
+              <Button onClick={() => navigate("/wallet")} className="rounded-xl px-6 py-2.5 font-bold text-[var(--accent-text)]" style={{ backgroundColor: "#ffffff" }}>Fund Wallet</Button>
+              <Button onClick={() => navigate("/my-requests")} className="rounded-xl border px-6 py-2.5" style={{ backgroundColor: "rgba(var(--accent-rgb), 0.14)", borderColor: "color-mix(in srgb, var(--accent-foreground) 35%, transparent)", color: "var(--accent-foreground)" }}>View Requests</Button>
             </div>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 min-w-[280px]">
+          <div className="rounded-3xl border p-6 min-w-[280px] backdrop-blur-xl" style={{ backgroundColor: "color-mix(in srgb, var(--accent-foreground) 10%, transparent)", borderColor: "color-mix(in srgb, var(--accent-foreground) 18%, transparent)" }}>
             <h3 className="font-semibold mb-4 tracking-wide">Platform Status</h3>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between items-center">
-                <span className="text-white/70">Verification System</span>
+                <span className="opacity-75">Verification System</span>
                 <span className="text-green-300 font-semibold bg-green-500/20 px-2 py-0.5 rounded-md text-xs">Online</span>
               </div>
-              <div className="flex justify-between"><span className="text-white/70">Requests Processed</span><span className="font-medium">{stats.total}</span></div>
-              <div className="flex justify-between"><span className="text-white/70">Completed Tasks</span><span className="text-blue-200 font-medium">{stats.completed}</span></div>
+              <div className="flex justify-between"><span className="opacity-75">Requests Processed</span><span className="font-medium">{stats.total}</span></div>
+              <div className="flex justify-between"><span className="opacity-75">Completed Tasks</span><span className="font-medium">{stats.completed}</span></div>
             </div>
           </div>
         </div>

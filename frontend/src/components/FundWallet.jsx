@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMemo } from "react";
 import { useUser } from "../../context/UserContext";
+import { useBranding } from "../../context/BrandingContext";
 import { useToast } from "../../context/ToastContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
@@ -9,6 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function FundWallet({ isOpen, onClose }) {
   const { user, updateWalletBalance, refreshBalance } = useUser();
+  const { businessName, businessLogoUrl } = useBranding();
   const { success, error: errorToast } = useToast();
 
   const [amount, setAmount] = useState("");
@@ -40,7 +42,7 @@ export default function FundWallet({ isOpen, onClose }) {
   };
 
   const handlePayment = async () => {
-    const token = localStorage.getItem("token")?.replace(/[\'"]+/g, "");
+    const token = localStorage.getItem("token")?.replace(/['"]+/g, "");
     let storedUser = null;
     try {
       storedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -107,9 +109,9 @@ export default function FundWallet({ isOpen, onClose }) {
           name: `${checkoutUser?.firstName || ""} ${checkoutUser?.lastName || ""}`.trim() || checkoutUser.email,
         },
         customizations: {
-          title: "Marthington Wallet Funding",
+          title: `${businessName} Wallet Funding`,
           description: "Top up your wallet",
-          logo: "/logo.png",
+          logo: businessLogoUrl || "/logo.png",
         },
         callback: async () => {
           try {

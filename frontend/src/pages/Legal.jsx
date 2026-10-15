@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { ArrowLeft, Shield, FileText, Lock, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useBranding } from "../context/BrandingContext";
 
-const LEGAL_DOCUMENTS = {
+const LEGAL_DOCUMENTS = (businessName) => ({
   privacy: {
     title: "Privacy Policy",
     icon: <Lock className="w-8 h-8" />,
@@ -13,7 +13,7 @@ const LEGAL_DOCUMENTS = {
         <section>
           <h2 className="text-2xl font-bold mb-3">Privacy Policy</h2>
           <p className="text-gray-600">
-            Marthington ("we," "our," or "us") operates the Marthington platform. 
+            {businessName} ("we," "our," or "us") operates the {businessName} platform.
             This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our service.
           </p>
         </section>
@@ -105,7 +105,7 @@ const LEGAL_DOCUMENTS = {
         <section>
           <h2 className="text-2xl font-bold mb-3">Terms of Service</h2>
           <p className="text-gray-600">
-            These Terms of Service ("Terms") govern your use of the Marthington platform and services. 
+            These Terms of Service ("Terms") govern your use of the {businessName} platform and services.
             By accessing or using our service, you agree to be bound by these Terms.
           </p>
         </section>
@@ -113,7 +113,7 @@ const LEGAL_DOCUMENTS = {
         <section>
           <h3 className="text-xl font-bold mb-3">1. Use License</h3>
           <p className="text-gray-600">
-            Permission is granted to temporarily download one copy of the materials (information or software) on Marthington's platform for personal, 
+            Permission is granted to temporarily download one copy of the materials (information or software) on {businessName}'s platform for personal,
             non-commercial transitory viewing only. This is the grant of a license, not a transfer of title, and under this license you may not:
           </p>
           <ul className="list-disc pl-6 space-y-2 text-gray-600 mt-3">
@@ -128,7 +128,7 @@ const LEGAL_DOCUMENTS = {
         <section>
           <h3 className="text-xl font-bold mb-3">2. Disclaimer of Warranties</h3>
           <p className="text-gray-600">
-            The materials on Marthington's platform are provided on an 'as is' basis. Marthington makes no warranties, 
+            The materials on {businessName}'s platform are provided on an 'as is' basis. {businessName} makes no warranties,
             expressed or implied, and hereby disclaims and negates all other warranties including, without limitation, 
             implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.
           </p>
@@ -137,18 +137,18 @@ const LEGAL_DOCUMENTS = {
         <section>
           <h3 className="text-xl font-bold mb-3">3. Limitations of Liability</h3>
           <p className="text-gray-600">
-            In no event shall Marthington or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit, 
-            or due to business interruption) arising out of the use or inability to use the materials on Marthington's platform, 
-            even if Marthington or a representative has been notified orally or in writing of the possibility of such damage.
+            In no event shall {businessName} or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit,
+            or due to business interruption) arising out of the use or inability to use the materials on {businessName}'s platform,
+            even if {businessName} or a representative has been notified orally or in writing of the possibility of such damage.
           </p>
         </section>
 
         <section>
           <h3 className="text-xl font-bold mb-3">4. Accuracy of Materials</h3>
           <p className="text-gray-600">
-            The materials appearing on Marthington's platform could include technical, typographical, or photographic errors. 
-            Marthington does not warrant that any of the materials on its platform are accurate, complete, or current. 
-            Marthington may make changes to the materials contained on its platform at any time without notice.
+            The materials appearing on {businessName}'s platform could include technical, typographical, or photographic errors.
+            {businessName} does not warrant that any of the materials on its platform are accurate, complete, or current.
+            {businessName} may make changes to the materials contained on its platform at any time without notice.
           </p>
         </section>
 
@@ -194,7 +194,7 @@ const LEGAL_DOCUMENTS = {
         <section>
           <h2 className="text-2xl font-bold mb-3">Compliance & NDPR Statement</h2>
           <p className="text-gray-600">
-            Marthington is committed to maintaining the highest standards of data protection and regulatory compliance.
+            {businessName} is committed to maintaining the highest standards of data protection and regulatory compliance.
           </p>
         </section>
 
@@ -203,7 +203,7 @@ const LEGAL_DOCUMENTS = {
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-3">
             <p className="font-semibold text-green-900 mb-2">✓ NDPR Registered Data Processor</p>
             <p className="text-gray-700">
-              Marthington complies with all provisions of the Nigeria Data Protection Regulation and maintains full transparency 
+              {businessName} complies with all provisions of the Nigeria Data Protection Regulation and maintains full transparency
               in our data handling practices.
             </p>
           </div>
@@ -253,7 +253,7 @@ const LEGAL_DOCUMENTS = {
         <section>
           <h3 className="text-xl font-bold mb-3">Regular Audits & Assessments</h3>
           <p className="text-gray-600">
-            Marthington undergoes quarterly security audits and annual compliance reviews to ensure ongoing adherence to NDPR 
+            {businessName} undergoes quarterly security audits and annual compliance reviews to ensure ongoing adherence to NDPR
             and international data protection standards.
           </p>
         </section>
@@ -285,7 +285,7 @@ const LEGAL_DOCUMENTS = {
         <section>
           <h2 className="text-2xl font-bold mb-3">Security Statement</h2>
           <p className="text-gray-600">
-            At Marthington, security is at the core of everything we do. We implement enterprise-grade security measures 
+            At {businessName}, security is at the core of everything we do. We implement enterprise-grade security measures
             to protect your sensitive identity and financial data.
           </p>
         </section>
@@ -350,11 +350,13 @@ const LEGAL_DOCUMENTS = {
       </div>
     )
   }
-};
+});
 
 export default function Legal() {
   const { docType = "privacy" } = useParams();
-  const doc = LEGAL_DOCUMENTS[docType] || LEGAL_DOCUMENTS.privacy;
+  const { businessName } = useBranding();
+  const legalDocuments = LEGAL_DOCUMENTS(businessName);
+  const doc = legalDocuments[docType] || legalDocuments.privacy;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -379,7 +381,7 @@ export default function Legal() {
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6">
           <div className="flex gap-8 overflow-x-auto">
-            {Object.entries(LEGAL_DOCUMENTS).map(([key, item]) => (
+            {Object.entries(legalDocuments).map(([key, item]) => (
               <Link
                 key={key}
                 to={`/legal/${key}`}

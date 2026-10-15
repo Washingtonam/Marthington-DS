@@ -17,6 +17,24 @@ const systemSettingsSchema = new mongoose.Schema({
     min: 0.01,
     default: 2000,
   },
+  businessName: {
+    type: String,
+    trim: true,
+    maxlength: 100,
+    default: "Marthington",
+  },
+  businessTagline: {
+    type: String,
+    trim: true,
+    maxlength: 120,
+    default: "Digital Services",
+  },
+  businessLogoUrl: {
+    type: String,
+    trim: true,
+    maxlength: 2048,
+    default: "",
+  },
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",

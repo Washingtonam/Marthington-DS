@@ -76,6 +76,7 @@ export default function AgentManagement() {
   const [query, setQuery] = useState("");
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [showAgentForm, setShowAgentForm] = useState(false);
+  const [editingAgent, setEditingAgent] = useState(null);
   const [showJobForm, setShowJobForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [agentForm, setAgentForm] = useState({ name: "", whatsapp: "" });
@@ -125,20 +126,41 @@ export default function AgentManagement() {
       && String(job.agentId || job.registeredUserId) === String(selectedAgent._id))
     : [];
 
-  const handleCreateAgent = async (event) => {
+  const handleSaveAgent = async (event) => {
     event.preventDefault();
     setBusy(true);
     try {
-      await api.post("/api/admin/agents", agentForm);
+      if (editingAgent) {
+        await api.put(`/api/admin/agents/${editingAgent._id}`, agentForm);
+      } else {
+        await api.post("/api/admin/agents", agentForm);
+      }
       setAgentForm({ name: "", whatsapp: "" });
+      setEditingAgent(null);
       setShowAgentForm(false);
       await loadData();
-      success("Agent added.");
+      success(editingAgent ? "Agent details updated." : "Agent added.");
     } catch (saveError) {
-      console.error("Agent creation failed:", saveError);
-      toastError(saveError.response?.data?.message || "Could not add this agent.");
+      console.error("Agent save failed:", saveError);
+      toastError(saveError.response?.data?.message || "Could not save this agent.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const setAgentActive = async (agent, active) => {
+    try {
+      const response = await api.put(`/api/admin/agents/${agent._id}`, { active });
+      setManualAgents((current) => current.map((item) => item._id === agent._id
+        ? { ...item, ...response.data.agent }
+        : item));
+      setSelectedAgent((current) => current?._id === agent._id
+        ? { ...current, ...response.data.agent }
+        : current);
+      success(active ? "Agent reactivated." : "Agent archived.");
+    } catch (updateError) {
+      console.error("Agent status update failed:", updateError);
+      toastError(updateError.response?.data?.message || "Could not update this agent.");
     }
   };
 
@@ -275,7 +297,7 @@ export default function AgentManagement() {
             />
           </label>
           {tab === "agents" && (
-            <button type="button" onClick={() => setShowAgentForm(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+            <button type="button" onClick={() => { setEditingAgent(null); setAgentForm({ name: "", whatsapp: "" }); setShowAgentForm(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
               <Plus size={16} aria-hidden="true" /> Add manual agent
             </button>
           )}
@@ -305,7 +327,7 @@ export default function AgentManagement() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold text-slate-900 dark:text-white">{contact.name}</span>
-                    <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{contact.source}</span>
+                    <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{contact.source}{contact.contactType === "manual" && contact.active === false ? " · Archived" : ""}</span>
                   </span>
                   <ArrowUpRight size={16} className="shrink-0 text-slate-400" aria-hidden="true" />
                 </div>
@@ -416,8 +438,8 @@ export default function AgentManagement() {
         </div>
       )}
 
-      <SlideOver isOpen={showAgentForm} onClose={() => setShowAgentForm(false)} title="Add manual agent">
-        <form onSubmit={handleCreateAgent} className="space-y-5">
+      <SlideOver isOpen={showAgentForm} onClose={() => { setShowAgentForm(false); setEditingAgent(null); }} title={editingAgent ? "Edit manual agent" : "Add manual agent"}>
+        <form onSubmit={handleSaveAgent} className="space-y-5">
           <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">Manual agents are contact records created here and are kept distinct from accounts registered on BMS.</p>
           <label className="block text-sm font-semibold">Agent name
             <input required maxLength={120} value={agentForm.name} onChange={(event) => setAgentForm((current) => ({ ...current, name: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
@@ -425,7 +447,7 @@ export default function AgentManagement() {
           <label className="block text-sm font-semibold">WhatsApp number
             <input required type="tel" maxLength={20} value={agentForm.whatsapp} onChange={(event) => setAgentForm((current) => ({ ...current, whatsapp: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
           </label>
-          <button type="submit" disabled={busy} className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--accent-foreground)] disabled:opacity-60">{busy ? "Saving…" : "Save agent"}</button>
+          <button type="submit" disabled={busy} className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--accent-foreground)] disabled:opacity-60">{busy ? "Saving…" : editingAgent ? "Save changes" : "Save agent"}</button>
         </form>
       </SlideOver>
 
@@ -486,6 +508,17 @@ export default function AgentManagement() {
               <Summary label="WhatsApp" value={selectedAgent.whatsapp || "Not listed"} />
               <Summary label="Jobs logged" value={selectedAgentJobs.length} />
             </div>
+            {selectedAgent.contactType === "manual" && (
+              <>
+                <Summary label="Agent status" value={selectedAgent.active === false ? "Archived" : "Active"} />
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={() => { setEditingAgent(selectedAgent); setAgentForm({ name: selectedAgent.name, whatsapp: selectedAgent.whatsapp }); setSelectedAgent(null); setShowAgentForm(true); }} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 focus-visible:outline-2 dark:border-slate-700 dark:hover:bg-slate-800">Edit agent</button>
+                  <button type="button" onClick={() => setAgentActive(selectedAgent, selectedAgent.active === false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                    {selectedAgent.active === false ? "Reactivate agent" : "Archive agent"}
+                  </button>
+                </div>
+              </>
+            )}
             {selectedAgent.email && <p className="text-sm text-slate-600 dark:text-slate-300">{selectedAgent.email} · {selectedAgent.role}</p>}
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-bold">Jobs from this contact</h3>
@@ -501,7 +534,7 @@ export default function AgentManagement() {
                 ))}
               </div>
             ) : <EmptyState message="No jobs have been logged for this contact yet." />}
-            <button type="button" onClick={() => { setCustomerType(selectedAgent.contactType); setCustomerId(selectedAgent._id); setSelectedAgent(null); setShowJobForm(true); }} className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--accent-foreground)]"><Plus size={16} className="mr-2 inline" />Log a job for this contact</button>
+            <button type="button" disabled={selectedAgent.contactType === "manual" && selectedAgent.active === false} onClick={() => { setCustomerType(selectedAgent.contactType); setCustomerId(selectedAgent._id); setSelectedAgent(null); setShowJobForm(true); }} className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--accent-foreground)] disabled:cursor-not-allowed disabled:opacity-50"><Plus size={16} className="mr-2 inline" />Log a job for this contact</button>
           </div>
         )}
       </SlideOver>

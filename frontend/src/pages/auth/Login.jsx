@@ -3,10 +3,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { login } from "../../services/api";
 import { useUser } from "../../context/UserContext";
+import { useBranding } from "../../context/BrandingContext";
 
 export default function Login() {
   const navigate = useNavigate();
   const { setUser } = useUser();
+  const { businessName, businessTagline, businessLogoUrl } = useBranding();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -59,13 +61,13 @@ export default function Login() {
 
       <div className="relative z-10 w-full max-w-5xl">
         <div className="mb-5 flex items-center justify-between px-1 sm:px-2">
-          <Link to="/" className="inline-flex items-center gap-2.5" aria-label="Marthington home">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/20">
-              <ShieldCheck size={21} />
+          <Link to="/" className="inline-flex items-center gap-2.5" aria-label={`${businessName} home`}>
+            <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/20">
+              {businessLogoUrl ? <img src={businessLogoUrl} alt="" className="h-full w-full bg-white object-contain p-1" /> : <ShieldCheck size={21} />}
             </span>
             <span>
-              <span className="block text-base font-bold tracking-tight">Marthington</span>
-              <span className="block text-xs text-slate-500">Identity Platform</span>
+              <span className="block text-base font-bold tracking-tight">{businessName}</span>
+              <span className="block text-xs text-slate-500">{businessTagline}</span>
             </span>
           </Link>
           <p className="text-sm text-slate-600">
@@ -88,7 +90,7 @@ export default function Login() {
                   Sign in to manage service requests, account activity, and your wallet.
                 </p>
               </div>
-              <p className="relative text-xs text-white/60">Secure access for Marthington agents and teams.</p>
+              <p className="relative text-xs text-white/60">Secure access for {businessName} agents and teams.</p>
             </aside>
 
             <div className="flex items-center p-5 sm:p-10 lg:p-12">

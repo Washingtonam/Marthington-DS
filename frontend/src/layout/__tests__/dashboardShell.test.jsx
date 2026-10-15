@@ -25,6 +25,16 @@ vi.mock("../../context/ThemeContext", () => ({
   useTheme: () => ({ theme: "light", toggleTheme: vi.fn() }),
 }));
 
+vi.mock("../../context/BrandingContext", () => ({
+  useBranding: () => ({
+    businessName: "Marthington",
+    businessTagline: "Digital Services",
+    businessLogoUrl: "",
+    applyBranding: vi.fn(),
+    refreshBranding: vi.fn(),
+  }),
+}));
+
 vi.mock("../../context/ToastContext", () => ({
   useToast: () => ({ error: mocks.error }),
 }));

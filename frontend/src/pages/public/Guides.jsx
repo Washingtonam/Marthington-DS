@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, BookOpenText, Search } from "lucide-react";
 import api from "../../lib/axios";
+import { useBranding } from "../../context/BrandingContext";
 
 export default function Guides() {
+  const { businessName } = useBranding();
   const [articles, setArticles] = useState([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -28,7 +30,7 @@ export default function Guides() {
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
-          <Link to="/" className="font-bold text-slate-900">Marthington <span className="font-normal text-slate-500">/ Guides</span></Link>
+          <Link to="/" className="font-bold text-slate-900">{businessName} <span className="font-normal text-slate-500">/ Guides</span></Link>
           <nav className="flex items-center gap-4 text-sm font-semibold">
             <Link to="/login" className="text-slate-600 hover:text-slate-900">Login</Link>
             <Link to="/register" className="rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-blue-700">Apply for access</Link>
@@ -83,7 +85,7 @@ export default function Guides() {
           <div><h2 className="font-bold">Need help with a process?</h2><p className="mt-1 text-sm text-slate-600">Talk with our team about available assistance.</p></div>
           <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" className="shrink-0 text-sm font-bold text-emerald-800 underline">WhatsApp Support</a>
         </aside>
-        <p className="mt-6 text-xs leading-5 text-slate-500">These resources are general guidance from Marthington and are not official NIMC notices or a guarantee of service outcomes. Check the linked source for current requirements.</p>
+        <p className="mt-6 text-xs leading-5 text-slate-500">These resources are general guidance from {businessName} and are not official NIMC notices or a guarantee of service outcomes. Check the linked source for current requirements.</p>
       </section>
     </main>
   );

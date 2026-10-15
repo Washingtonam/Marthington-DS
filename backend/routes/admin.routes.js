@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const mongoose = require("mongoose");
+const multer = require("multer");
 
 const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
@@ -8,6 +9,7 @@ const AuditLog = require("../models/AuditLog.model");
 const Pricing = require("../models/Pricing.model");
 const BulkJob = require("../models/BulkJob.model");
 const SystemSettings = require("../models/SystemSettings.model");
+const { uploadToCloudinary } = require("../shared/cloudinary");
 const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
@@ -40,6 +42,73 @@ const isSuperAdmin = (req, res, next) => {
   }
   next();
 };
+
+const brandingImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, callback) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) {
+      return callback(new Error("Upload a JPG, PNG, or WebP logo."));
+    }
+    callback(null, true);
+  },
+});
+
+const handleBrandingImageUpload = (req, res, next) => brandingImageUpload.single("logo")(req, res, (error) => {
+  if (!error) return next();
+  return res.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({
+    success: false,
+    message: error.message || "Unable to process the logo upload.",
+  });
+});
+
+const publicBranding = (settings) => ({
+  businessName: settings?.businessName || "Marthington",
+  businessTagline: settings?.businessTagline || "Digital Services",
+  businessLogoUrl: settings?.businessLogoUrl || "",
+});
+
+router.put("/settings/branding", isSuperAdmin, handleBrandingImageUpload, async (req, res) => {
+  try {
+    const businessName = String(req.body?.businessName || "").trim();
+    const businessTagline = String(req.body?.businessTagline || "").trim();
+    const removeLogo = req.body?.removeLogo === "true";
+
+    if (!businessName || businessName.length > 100) {
+      return res.status(400).json({ success: false, message: "Business name is required and must be 100 characters or fewer." });
+    }
+    if (!businessTagline || businessTagline.length > 120) {
+      return res.status(400).json({ success: false, message: "Business tagline is required and must be 120 characters or fewer." });
+    }
+    if (removeLogo && req.file) {
+      return res.status(400).json({ success: false, message: "Choose either a new logo or remove the current logo, not both." });
+    }
+
+    let businessLogoUrl;
+    if (req.file) {
+      const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+      businessLogoUrl = await uploadToCloudinary(dataUrl, "branding");
+    } else if (removeLogo) {
+      businessLogoUrl = "";
+    }
+
+    const updates = { businessName, businessTagline, updatedBy: req.user.id };
+    if (businessLogoUrl !== undefined) updates.businessLogoUrl = businessLogoUrl;
+    const settings = await SystemSettings.findOneAndUpdate(
+      { key: "global" },
+      { $set: updates, $setOnInsert: { key: "global" } },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+    );
+    return res.json({
+      success: true,
+      message: "Business branding updated.",
+      branding: publicBranding(settings),
+    });
+  } catch (error) {
+    console.error("ADMIN BRANDING UPDATE ERROR:", error);
+    return res.status(502).json({ success: false, message: "Could not update business branding." });
+  }
+});
 
 const normalizeWhatsapp = (value) => {
   const input = String(value || "").trim();
@@ -191,6 +260,7 @@ router.post("/agents/jobs", isSuperAdmin, async (req, res) => {
     } else {
       customer = await User.findOne({
         _id: customerId,
+        role: "user",
         status: { $ne: "suspended" },
         approvalStatus: "approved",
       }).select("firstName lastName email phone").lean();
@@ -206,6 +276,7 @@ router.post("/agents/jobs", isSuperAdmin, async (req, res) => {
       registeredUserId: customerType === "registered" ? customer._id : null,
       customerType,
       agentName: customer.name,
+      agentEmail: customer.email || "",
       agentWhatsapp: customer.whatsapp,
       serviceType,
       formData,
@@ -543,6 +614,7 @@ router.get("/requests", isAdmin, async (req, res) => {
       ];
       const agentJobSearchConditions = [
         { agentName: { $regex: escapedSearch, $options: "i" } },
+        { agentEmail: { $regex: escapedSearch, $options: "i" } },
         { serviceType: { $regex: escapedSearch, $options: "i" } },
         { "formData.nin": { $regex: escapedSearch, $options: "i" } },
         { "formData.firstName": { $regex: escapedSearch, $options: "i" } },
@@ -572,6 +644,7 @@ router.get("/requests", isAdmin, async (req, res) => {
     }
 
     if (roleFilter && roleFilter !== "all") {
+      agentJobQuery._id = null;
       const matchingUsers = await User.find({ role: roleFilter }).select("_id").lean();
       const userIds = matchingUsers.map((user) => user._id);
       if (userIds.length > 0) {
@@ -580,7 +653,6 @@ router.get("/requests", isAdmin, async (req, res) => {
       } else {
         serviceQuery.userId = null;
         cacQuery.userId = null;
-        agentJobQuery._id = null;
       }
     }
 
@@ -626,7 +698,7 @@ router.get("/requests", isAdmin, async (req, res) => {
 
     const aggResult = await ServiceRequest.aggregate(agg).allowDiskUse(true);
     const pageData = (aggResult[0] && aggResult[0].data) || [];
-    const exactTotal = (aggResult[0] && aggResult[0].meta && aggResult[0].meta[0] && aggResult[0].meta[0].total) ? aggResult[0].meta[0].total : null;
+    const exactTotal = aggResult[0]?.meta?.[0]?.total ?? null;
 
     let totalRecords;
     if (exactTotal !== null) {
@@ -2195,12 +2267,35 @@ router.post("/adjust-funds", isSuperAdmin, async (req, res) => {
 // =========================================================================
 router.put("/pricing", isSuperAdmin, async (req, res) => {
   try {
+    const priceValues = [
+      req.body.unitPrice,
+      req.body.agentPrice,
+      req.body.bvn?.unitPrice,
+      ...Object.values(req.body.validation || {}),
+      ...Object.values(req.body.ipe || {}),
+      ...Object.values(req.body.modification || {}),
+      ...Object.values(req.body.selfService || {}),
+      req.body.slipPrice,
+      ...Object.values(req.body.cacServices || {}),
+    ].filter((value) => value !== undefined && value !== null);
+    if (priceValues.some((value) => !Number.isFinite(Number(value)) || Number(value) < 0)) {
+      return res.status(400).json({ success: false, message: "Service prices must be valid non-negative amounts." });
+    }
+    if (
+      (req.body.unitPrice !== undefined && Number(req.body.unitPrice) <= 0)
+      || (req.body.agentPrice !== undefined && Number(req.body.agentPrice) <= 0)
+      || (req.body.bvn?.unitPrice !== undefined && Number(req.body.bvn.unitPrice) <= 0)
+    ) {
+      return res.status(400).json({ success: false, message: "NIN and BVN verification prices must be greater than zero." });
+    }
+
     let pricing = await Pricing.findOne();
     if (!pricing) pricing = new Pricing({});
 
     if (!pricing.nin) pricing.nin = {};
     if (!pricing.ninServices) pricing.ninServices = { validation: {}, selfService: {}, ipe: {}, modification: {} };
     if (!pricing.ninServices.selfService) pricing.ninServices.selfService = {};
+    if (!pricing.bvn) pricing.bvn = {};
     if (!pricing.cacServices) pricing.cacServices = {};
 
     Object.assign(pricing.nin, {
@@ -2208,6 +2303,12 @@ router.put("/pricing", isSuperAdmin, async (req, res) => {
       agentPrice: req.body.agentPrice ?? pricing.nin.agentPrice,
       mode: req.body.mode ?? pricing.nin.mode,
     });
+
+    if (req.body.bvn) {
+      Object.assign(pricing.bvn, {
+        unitPrice: req.body.bvn.unitPrice ?? pricing.bvn.unitPrice,
+      });
+    }
 
     if (req.body.validation) Object.assign(pricing.ninServices.validation, req.body.validation);
     if (req.body.ipe) Object.assign(pricing.ninServices.ipe, req.body.ipe);
@@ -2230,6 +2331,7 @@ router.put("/pricing", isSuperAdmin, async (req, res) => {
     }
 
     pricing.markModified("nin");
+    pricing.markModified("bvn");
     pricing.markModified("ninServices");
     pricing.markModified("ninServices.validation");
     pricing.markModified("ninServices.selfService");

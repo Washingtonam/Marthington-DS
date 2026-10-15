@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import nigeriaLocationData from "nigeria-state-lga-data";
 import api from "../../lib/axios";
+import { useBranding } from "../../context/BrandingContext";
 
 const { getStates, getLgas } = nigeriaLocationData;
 const STATES = getStates();
@@ -47,6 +48,7 @@ function Field({ label, icon: Icon, children, className = "" }) {
 
 export default function Register() {
   const navigate = useNavigate();
+  const { businessName, businessTagline, businessLogoUrl } = useBranding();
   const [form, setForm] = useState(initialForm);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -116,13 +118,13 @@ export default function Register() {
 
       <div className="relative z-10 w-full max-w-6xl">
         <div className="mb-5 flex items-center justify-between px-1 sm:px-2">
-          <Link to="/" className="inline-flex items-center gap-2.5" aria-label="Marthington home">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/20">
-              <ShieldCheck size={21} />
+          <Link to="/" className="inline-flex items-center gap-2.5" aria-label={`${businessName} home`}>
+            <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/20">
+              {businessLogoUrl ? <img src={businessLogoUrl} alt="" className="h-full w-full bg-white object-contain p-1" /> : <ShieldCheck size={21} />}
             </span>
             <span>
-              <span className="block text-base font-bold tracking-tight">Marthington</span>
-              <span className="block text-xs text-slate-500">Identity Platform</span>
+              <span className="block text-base font-bold tracking-tight">{businessName}</span>
+              <span className="block text-xs text-slate-500">{businessTagline}</span>
             </span>
           </Link>
           <p className="text-sm text-slate-600">

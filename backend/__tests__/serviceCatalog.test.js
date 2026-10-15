@@ -3,6 +3,7 @@ jest.mock('../models/User.model', () => ({ findById: jest.fn() }));
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User.model');
+const Pricing = require('../models/Pricing.model');
 const app = require('../app');
 
 const makeSuperAdminToken = () => jwt.sign({
@@ -106,5 +107,30 @@ describe('service catalog API', () => {
     expect(catalogResponse.body.services.some((service) => service.serviceCode === 'jamb-application')).toBe(true);
     expect(catalogResponse.body.services.find((service) => service.serviceCode === 'jamb-application').price).toBe(4200);
     expect(catalogResponse.body.services.find((service) => service.serviceCode === 'jamb-application').commissionValue).toBe(12);
+  });
+
+  it('saves BVN verification pricing through the admin pricing endpoint', async () => {
+    User.findById.mockResolvedValue({
+      id: 'admin-user-1',
+      _id: 'admin-user-1',
+      email: 'admin@xcombinator.com',
+      role: 'super_admin',
+      status: 'active',
+      approvalStatus: 'approved',
+    });
+    const pricing = new Pricing();
+    jest.spyOn(Pricing, 'findOne').mockResolvedValue(pricing);
+    const markModified = jest.spyOn(pricing, 'markModified');
+    const save = jest.spyOn(pricing, 'save').mockResolvedValue(pricing);
+
+    const response = await request(app)
+      .put('/api/admin/pricing')
+      .set('Authorization', `Bearer ${makeSuperAdminToken()}`)
+      .send({ bvn: { unitPrice: 425 } });
+
+    expect(response.status).toBe(200);
+    expect(pricing.bvn.unitPrice).toBe(425);
+    expect(markModified).toHaveBeenCalledWith('bvn');
+    expect(save).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,12 +1,13 @@
+/** @vitest-environment jsdom */
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { vi } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import SlideOver from '../SlideOver';
 
 describe('SlideOver', () => {
   test('renders a centered dialog and closes on Escape and backdrop click', async () => {
     const onClose = vi.fn();
-    const { container } = render(
+    render(
       <SlideOver isOpen={true} onClose={onClose} title="Test Slide">
         <div>Inner Content</div>
       </SlideOver>

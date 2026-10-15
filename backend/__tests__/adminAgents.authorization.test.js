@@ -1,4 +1,4 @@
-jest.mock("../models/User.model", () => ({ findById: jest.fn() }));
+jest.mock("../models/User.model", () => ({ findById: jest.fn(), findOne: jest.fn() }));
 jest.mock("../models/Agent.model", () => ({
   find: jest.fn(),
   create: jest.fn(),
@@ -85,5 +85,82 @@ describe("agent management authorization", () => {
       whatsapp: "+2348000000000",
       createdBy: "super-admin",
     });
+  });
+
+  it("updates a manual agent and rejects invalid phone numbers", async () => {
+    User.findById.mockResolvedValue({
+      id: "super-admin",
+      _id: "super-admin",
+      email: "root@example.test",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    const savedAgent = {
+      _id: "507f1f77bcf86cd799439011",
+      name: "Updated Agent",
+      whatsapp: "+2348000000000",
+      active: true,
+    };
+    Agent.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockResolvedValue(savedAgent),
+    });
+
+    const response = await request(app)
+      .put("/api/admin/agents/507f1f77bcf86cd799439011")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Updated Agent", whatsapp: "+234 800 000 0000" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.agent.name).toBe("Updated Agent");
+    expect(Agent.findByIdAndUpdate).toHaveBeenCalledWith(
+      "507f1f77bcf86cd799439011",
+      { name: "Updated Agent", whatsapp: "+2348000000000" },
+      { new: true, runValidators: true },
+    );
+
+    const invalidResponse = await request(app)
+      .put("/api/admin/agents/507f1f77bcf86cd799439011")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ whatsapp: "invalid" });
+
+    expect(invalidResponse.status).toBe(400);
+    expect(Agent.findByIdAndUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("only links logged work to approved registered user accounts", async () => {
+    User.findById.mockResolvedValue({
+      id: "super-admin",
+      _id: "super-admin",
+      email: "root@example.test",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    User.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue(null),
+      }),
+    });
+
+    const response = await request(app)
+      .post("/api/admin/agents/jobs")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        customerType: "registered",
+        registeredUserId: "507f1f77bcf86cd799439011",
+        serviceType: "name-modification",
+        amount: 100,
+        formData: {},
+      });
+
+    expect(response.status).toBe(404);
+    expect(User.findOne).toHaveBeenCalledWith({
+      _id: "507f1f77bcf86cd799439011",
+      role: "user",
+      status: { $ne: "suspended" },
+      approvalStatus: "approved",
+    });
+    expect(AgentJob.create).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ export default function Button({
   variant = "primary",
   disabled = false,
   type = "button",
+  style,
 }) {
   const styles = {
     primary: "btn-primary",
@@ -16,6 +17,7 @@ export default function Button({
       type={type}
       onClick={onClick}
       disabled={disabled}
+      style={style}
       className={`
         ${styles[variant]}
         disabled:opacity-50

@@ -53,6 +53,8 @@ import Contact from "./pages/Contact";
 import Layout from "./layout/Layout";
 import NotificationHost from "./components/NotificationHost";
 import { ThemeProvider } from "./context/ThemeContext";
+import { BrandingProvider } from "./context/BrandingContext";
+import BrandingSettings from "./pages/admin/BrandingSettings";
 
 // ==============================
 // AUTH HELPERS
@@ -176,6 +178,7 @@ function AppRoutes() {
       <Route path="/admin/services-engine" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/notifications" element={<SuperAdminRoute><Layout><AdminNotifications /></Layout></SuperAdminRoute>} />
       <Route path="/admin/articles" element={<SuperAdminRoute><Layout><AdminArticles /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/settings" element={<SuperAdminRoute><Layout><BrandingSettings /></Layout></SuperAdminRoute>} />
       <Route path="/admin/agents" element={<SuperAdminRoute><Layout><AgentManagement /></Layout></SuperAdminRoute>} />
       <Route path="/admin/communications" element={<SuperAdminRoute><Layout><AgentManagement /></Layout></SuperAdminRoute>} />
       <Route path="/admin/user/:userId/details" element={<AdminRoute><Layout><UserDetailView /></Layout></AdminRoute>} />
@@ -191,9 +194,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <AppRoutes />
-      </BrowserRouter>
+      <BrandingProvider>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <AppRoutes />
+        </BrowserRouter>
+      </BrandingProvider>
     </ThemeProvider>
   );
 }

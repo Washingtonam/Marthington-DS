@@ -18,9 +18,11 @@ import {
   Search,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useBranding } from "../../context/BrandingContext";
 
 export default function Home() {
   const navigate = useNavigate();
+  const { businessName, businessTagline, businessLogoUrl } = useBranding();
   const [pricing, setPricing] = useState({ verification: 1000, name: 12000, slip: 150 });
   const [articles, setArticles] = useState([]);
 
@@ -87,11 +89,13 @@ export default function Home() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/20">
-              <ShieldCheck size={18} />
+              {businessLogoUrl
+                ? <img src={businessLogoUrl} alt="" className="h-full w-full rounded-2xl object-contain p-1" />
+                : <ShieldCheck size={18} />}
             </div>
             <div>
-              <p className="text-base font-semibold tracking-tight text-slate-900">Marthington</p>
-              <p className="text-xs text-slate-500">Identity Platform</p>
+              <p className="text-base font-semibold tracking-tight text-slate-900">{businessName}</p>
+              <p className="text-xs text-slate-500">{businessTagline}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -179,7 +183,7 @@ export default function Home() {
           <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-emerald-400"><MessageCircle size={18} /> WhatsApp Support</a>
         </div>
       </section>
-      <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" aria-label="Contact Marthington support on WhatsApp" className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-xl shadow-emerald-900/25 transition hover:scale-105 hover:bg-emerald-400"><MessageCircle size={24} /></a>
+      <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" aria-label={`Contact ${businessName} support on WhatsApp`} className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-xl shadow-emerald-900/25 transition hover:scale-105 hover:bg-emerald-400"><MessageCircle size={24} /></a>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useUser } from "../../context/UserContext";
+import { useBranding } from "../../context/BrandingContext";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
 import { Wallet2, Loader2 } from "lucide-react";
@@ -7,6 +8,7 @@ import { motion } from "framer-motion";
 
 export default function Wallet() {
   const { user, setBalance, refreshBalance } = useUser();
+  const { businessName, businessLogoUrl } = useBranding();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const gatewayMode = useMemo(() => {
@@ -22,7 +24,7 @@ export default function Wallet() {
       return;
     }
 
-    const token = localStorage.getItem("token")?.replace(/[\'"]+/g, "");
+    const token = localStorage.getItem("token")?.replace(/['"]+/g, "");
     let storedUser = null;
     try {
       storedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -85,9 +87,9 @@ export default function Wallet() {
           name: `${checkoutUser?.firstName || ""} ${checkoutUser?.lastName || ""}`.trim() || checkoutUser.email,
         },
         customizations: {
-          title: "Marthington Wallet Funding",
+          title: `${businessName} Wallet Funding`,
           description: "Top up your wallet",
-          logo: "/logo.png",
+          logo: businessLogoUrl || "/logo.png",
         },
         callback: async (response) => {
           try {

@@ -17,6 +17,7 @@ import Footer from "../components/Footer";
 import WorkspaceSwitcher from "../components/WorkspaceSwitcher";
 import { useUser } from "../context/UserContext";
 import { useTheme } from "../context/ThemeContext";
+import { useBranding } from "../context/BrandingContext";
 import { formatNaira } from "../lib/currency";
 
 const pageTitles = [
@@ -44,6 +45,7 @@ const pageTitles = [
   ["/admin/articles", "Guides & updates"],
   ["/admin/agents", "Agents & jobs"],
   ["/admin/communications", "Communications"],
+  ["/admin/settings", "Business settings"],
   ["/admin/user", "User details"],
 ];
 
@@ -60,6 +62,7 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const { user, walletBalance, isBalanceLoading, clearUser } = useUser();
   const { theme, toggleTheme } = useTheme();
+  const { businessName, businessTagline } = useBranding();
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
   const [mobileDrawerPath, setMobileDrawerPath] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -197,7 +200,7 @@ export default function Layout({ children }) {
                 )}
               </div>
               <p className="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
-                {isAdminWorkspace ? "Administration workspace" : "Marthington Digital Services"}
+                {isAdminWorkspace ? "Administration workspace" : `${businessName} ${businessTagline}`}
               </p>
             </div>
 

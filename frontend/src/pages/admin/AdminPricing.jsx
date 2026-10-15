@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "../../lib/axios";
 import { parseImportedFormText } from "../../lib/formTextParser";
 import AgentCommissionSettings from "../../components/admin/AgentCommissionSettings";
+import CoreServicePricing from "../../components/admin/CoreServicePricing";
+import ServiceFormEditor from "../../components/admin/ServiceFormEditor";
+import SlideOver from "../../components/ui/SlideOver";
 import {
   Loader2,
   Plus,
@@ -14,6 +17,9 @@ import {
   BadgeDollarSign,
   FileText,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Star,
 } from "lucide-react";
 
 const emptyFormField = () => ({
@@ -47,9 +53,18 @@ const normalizeServiceCode = (value = "") => String(value || "")
   .replace(/^-+|-+$/g, "")
   .replace(/-+/g, "-");
 
+const SERVICE_PAGE_SIZE = 10;
+const FEATURED_SERVICE_ORDER = [
+  "modification-name",
+  "modification-dob",
+  "validation-noRecord",
+  "validation-vnin",
+  "modification-phone",
+];
+
 export default function AdminPricing() {
   const user = JSON.parse(localStorage.getItem("user")) || {};
-  const headers = { email: user?.email || "" };
+  const headers = useMemo(() => ({ email: user?.email || "" }), [user?.email]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,6 +75,9 @@ export default function AdminPricing() {
   const [selectedService, setSelectedService] = useState(null);
   const [serviceForm, setServiceForm] = useState(defaultServiceModel);
   const [isCreating, setIsCreating] = useState(false);
+  const [isServiceEditorOpen, setIsServiceEditorOpen] = useState(false);
+  const [isFormEditorOpen, setIsFormEditorOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [importedFormText, setImportedFormText] = useState("");
 
   const groupedSummary = useMemo(() => {
@@ -70,6 +88,24 @@ export default function AdminPricing() {
     });
     return summary;
   }, [categories, services]);
+
+  const featuredServices = useMemo(() => {
+    const priority = new Map(FEATURED_SERVICE_ORDER.map((code, index) => [code, index]));
+    return [...services]
+      .sort((first, second) => {
+        const firstPriority = priority.get(first.serviceCode);
+        const secondPriority = priority.get(second.serviceCode);
+        if (firstPriority !== undefined || secondPriority !== undefined) {
+          return (firstPriority ?? Number.MAX_SAFE_INTEGER) - (secondPriority ?? Number.MAX_SAFE_INTEGER);
+        }
+        return Number(Boolean(second.metadata?.trending)) - Number(Boolean(first.metadata?.trending))
+          || String(first.name).localeCompare(String(second.name));
+      })
+      .slice(0, 5);
+  }, [services]);
+
+  const pageCount = Math.max(1, Math.ceil(services.length / SERVICE_PAGE_SIZE));
+  const paginatedServices = services.slice((currentPage - 1) * SERVICE_PAGE_SIZE, currentPage * SERVICE_PAGE_SIZE);
 
   const fetchCategories = async () => {
     try {
@@ -93,9 +129,7 @@ export default function AdminPricing() {
       const res = await api.get("/api/admin/services", { params: { category: targetCategory }, headers });
       const catalog = Array.isArray(res.data?.services) ? res.data.services : [];
       setServices(catalog);
-      if (!selectedService && catalog[0]) {
-        setSelectedService(catalog[0]);
-      }
+      setCurrentPage(1);
     } catch (err) {
       console.error("FETCH SERVICES ERROR:", err);
       setServices([]);
@@ -105,9 +139,44 @@ export default function AdminPricing() {
   };
 
   useEffect(() => {
-    fetchCategories();
-    fetchServices(category);
-  }, [category]);
+    let isCurrent = true;
+
+    const loadPageData = async () => {
+      const [categoryResult, serviceResult] = await Promise.allSettled([
+        api.get("/api/admin/categories", { headers }),
+        api.get("/api/admin/services", { params: { category }, headers }),
+      ]);
+      if (!isCurrent) return;
+
+      if (categoryResult.status === "fulfilled") {
+        const categoryData = categoryResult.value.data;
+        const nextCategories = Array.isArray(categoryData?.categories)
+          ? categoryData.categories.filter((item) => item.isActive !== false)
+          : [];
+        setCategories(nextCategories);
+        setCategory((current) => nextCategories.some((item) => item.label === current)
+          ? current
+          : (nextCategories[0]?.label || "NIMC"));
+      } else {
+        console.error("FETCH CATEGORIES ERROR:", categoryResult.reason);
+        setCategories([]);
+      }
+
+      if (serviceResult.status === "fulfilled") {
+        setServices(Array.isArray(serviceResult.value.data?.services) ? serviceResult.value.data.services : []);
+        setCurrentPage(1);
+      } else {
+        console.error("FETCH SERVICES ERROR:", serviceResult.reason);
+        setServices([]);
+      }
+      setLoading(false);
+    };
+
+    loadPageData();
+    return () => {
+      isCurrent = false;
+    };
+  }, [category, headers]);
 
   const createCategory = async () => {
     const label = window.prompt("Category name");
@@ -146,6 +215,8 @@ export default function AdminPricing() {
   const openCreateModal = () => {
     setIsCreating(true);
     setSelectedService(null);
+    setIsServiceEditorOpen(true);
+    setIsFormEditorOpen(false);
     setServiceForm({
       ...defaultServiceModel,
       category,
@@ -161,6 +232,8 @@ export default function AdminPricing() {
   const openEditService = (service) => {
     setIsCreating(false);
     setSelectedService(service);
+    setIsServiceEditorOpen(true);
+    setIsFormEditorOpen(false);
     setServiceForm({
       serviceCode: service.serviceCode || "",
       category: service.category || category,
@@ -181,6 +254,22 @@ export default function AdminPricing() {
           : [emptyFormField()],
       },
     });
+  };
+
+  const closeServiceEditor = () => {
+    setIsServiceEditorOpen(false);
+    setIsFormEditorOpen(false);
+    setIsCreating(false);
+  };
+
+  const openFormEditor = () => {
+    setIsServiceEditorOpen(false);
+    setIsFormEditorOpen(true);
+  };
+
+  const returnToServiceEditor = () => {
+    setIsFormEditorOpen(false);
+    setIsServiceEditorOpen(true);
   };
 
   const updateField = (field, value) => {
@@ -353,6 +442,7 @@ export default function AdminPricing() {
 
       setIsCreating(false);
       setSelectedService(null);
+      closeServiceEditor();
       await fetchServices(category);
     } catch (err) {
       console.error("SERVICE SAVE ERROR:", err);
@@ -403,7 +493,13 @@ export default function AdminPricing() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 pb-20 pt-6">
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-900 to-blue-900 rounded-3xl p-8 text-white shadow-2xl mb-8">
+      <div
+        className="mb-8 rounded-3xl p-8 shadow-2xl"
+        style={{
+          background: "linear-gradient(115deg, var(--accent), var(--accent-strong))",
+          color: "var(--accent-foreground)",
+        }}
+      >
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -411,13 +507,13 @@ export default function AdminPricing() {
               <span className="uppercase tracking-widest text-xs opacity-80">SERVICE CONTROL CENTER</span>
             </div>
             <h1 className="text-4xl font-bold mb-3">Services Engine</h1>
-            <p className="text-blue-100 max-w-2xl">
+            <p className="max-w-2xl opacity-80">
               Manage service catalog, pricing, live availability, and form definitions from one control panel.
             </p>
           </div>
           <button
             onClick={openCreateModal}
-            className="bg-white text-slate-900 px-5 py-3 rounded-2xl font-semibold flex items-center gap-2 shadow-lg hover:scale-[1.02] transition"
+            className="flex items-center gap-2 rounded-2xl bg-white px-5 py-3 font-semibold text-[var(--accent-text)] shadow-lg transition hover:scale-[1.02]"
           >
             <Plus size={18} />
             Add Service
@@ -426,9 +522,13 @@ export default function AdminPricing() {
       </div>
 
       <AgentCommissionSettings onSettingsLoaded={setCommissionDefaults} />
+      <CoreServicePricing />
 
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-bold text-slate-800 dark:text-white">Service categories</h2>
+        <div>
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white">NIMC and CAC service catalog</h2>
+          <p className="mt-1 text-xs text-slate-500">Edit service details, availability, forms, and catalog prices.</p>
+        </div>
         <button onClick={createCategory} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
           <Plus size={16} /> Add category
         </button>
@@ -437,7 +537,10 @@ export default function AdminPricing() {
         {categories.map((item) => (
           <button
             key={item.slug}
-            onClick={() => setCategory(item.label)}
+            onClick={() => {
+              setCategory(item.label);
+              setCurrentPage(1);
+            }}
             className={`rounded-2xl border p-4 text-left transition ${
               category === item.label
                 ? "border-blue-500 bg-blue-50 text-blue-700"
@@ -457,37 +560,77 @@ export default function AdminPricing() {
         ))}
       </div>
 
-      <div className="grid gap-8 xl:grid-cols-[1.1fr,1.5fr]">
-        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden">
-          <div className="p-5 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-            <h2 className="text-xl font-bold">{category} Services</h2>
-            <span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full">{services.length} total</span>
+      {featuredServices.length > 0 && (
+        <section className="mb-6">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Quick access</p>
+              <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Featured {category} services</h2>
+            </div>
+            <span className="hidden text-xs text-slate-500 sm:block">Frequently managed services</span>
           </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {featuredServices.map((service) => (
+              <button
+                type="button"
+                key={`featured-${service.serviceCode}`}
+                onClick={() => openEditService(service)}
+                className="group rounded-2xl border border-blue-100 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900"
+              >
+                <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white dark:bg-blue-950/50">
+                  <Star size={17} />
+                </span>
+                <span className="block font-bold text-slate-900 dark:text-white">{service.name}</span>
+                <span className="mt-1 block text-xs text-slate-500">{service.serviceCode}</span>
+                <span className="mt-3 block text-sm font-semibold text-slate-700 dark:text-slate-300">₦{Number(service.price || 0).toLocaleString()}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-xl dark:border-gray-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-3 border-b border-gray-200 p-5 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">{category} Services</h2>
+            <p className="mt-1 text-xs text-slate-500">Select a service to edit its details and pricing.</p>
+          </div>
+          <span className="w-fit rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">{services.length} total</span>
+        </div>
           <div className="divide-y divide-gray-200 dark:divide-gray-800">
             {services.length === 0 ? (
               <div className="p-8 text-sm text-gray-500">No services found for this category.</div>
             ) : (
-              services.map((service) => (
+              paginatedServices.map((service) => (
                 <div
                   key={service.serviceCode}
-                  className={`p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition ${selectedService?.serviceCode === service.serviceCode ? "bg-blue-50 dark:bg-blue-950/30" : ""}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openEditService(service)}
+                  onKeyDown={(event) => {
+                    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                      event.preventDefault();
+                      openEditService(service);
+                    }
+                  }}
+                  className="cursor-pointer p-4 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:hover:bg-slate-800"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <button onClick={() => openEditService(service)} className="text-left flex-1">
+                    <div className="min-w-0 flex-1 text-left">
                       <div className="font-bold text-lg">{service.name}</div>
                       <div className="text-xs text-gray-500 mt-1">{service.serviceCode}</div>
-                    </button>
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${getStatusStyles(service.status)}`}>
                         {service.status === "active" ? <ToggleRight size={12} className="text-emerald-600" /> : <ToggleLeft size={12} className="text-slate-500" />}
                         {service.status}
                       </span>
-                      <button onClick={() => toggleServiceStatus(service)} className="text-xs font-medium rounded-full px-2 py-1 border border-slate-200 flex items-center gap-1 hover:bg-slate-100">
+                      <button type="button" onClick={(event) => { event.stopPropagation(); toggleServiceStatus(service); }} className="text-xs font-medium rounded-full px-2 py-1 border border-slate-200 flex items-center gap-1 hover:bg-slate-100">
                         Toggle
                       </button>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-500">
                     <div className="flex items-center gap-2">
                       <span>₦{Number(service.price || 0).toLocaleString()}</span>
                       <span className="text-xs text-emerald-700">
@@ -499,19 +642,40 @@ export default function AdminPricing() {
                       {service.status === "active" ? <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-600">Public</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Hidden</span>}
                     </div>
                     <div className="flex items-center gap-3">
-                      <button onClick={() => openEditService(service)} className="hover:text-blue-600"><Pencil size={15} /></button>
-                      <button onClick={() => removeService(service)} className="hover:text-red-600"><Trash2 size={15} /></button>
+                      <button type="button" aria-label={`Edit ${service.name}`} onClick={(event) => { event.stopPropagation(); openEditService(service); }} className="hover:text-blue-600"><Pencil size={15} /></button>
+                      <button type="button" aria-label={`Disable ${service.name}`} onClick={(event) => { event.stopPropagation(); removeService(service); }} className="hover:text-red-600"><Trash2 size={15} /></button>
                     </div>
                   </div>
                 </div>
               ))
             )}
           </div>
-        </div>
+        {services.length > SERVICE_PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 dark:border-slate-800">
+            <p className="text-xs text-slate-500">
+              Showing {(currentPage - 1) * SERVICE_PAGE_SIZE + 1}–{Math.min(currentPage * SERVICE_PAGE_SIZE, services.length)} of {services.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
+                <ChevronLeft size={16} /> Previous
+              </button>
+              <span className="text-xs font-medium text-slate-500">Page {currentPage} of {pageCount}</span>
+              <button type="button" disabled={currentPage === pageCount} onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 p-6">
+      <SlideOver
+        isOpen={isServiceEditorOpen}
+        onClose={closeServiceEditor}
+        title={isCreating ? "Create Service" : "Edit Service"}
+      >
+        <div className="space-y-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">{isCreating ? "Create Service" : "Edit Service"}</h2>
+            <p className="text-sm text-slate-500">{isCreating ? "Add the service details and pricing." : "Update the selected service details and pricing."}</p>
             {selectedService && !isCreating && (
               <span className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-full">{selectedService.serviceCode}</span>
             )}
@@ -577,10 +741,27 @@ export default function AdminPricing() {
             </Field>
           </div>
 
-          <div className="mt-8 border-t pt-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white">Service form</h3>
+                <p className="mt-1 text-xs text-slate-500">{serviceForm.metadata?.formFields?.length || 0} form fields configured</p>
+              </div>
+              <button type="button" onClick={openFormEditor} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 dark:border-slate-600 dark:bg-slate-900 dark:text-blue-300">
+                <Pencil size={15} /> Edit form fields
+              </button>
+            </div>
+          </div>
+
+          <SlideOver
+            isOpen={isFormEditorOpen}
+            onClose={returnToServiceEditor}
+            title={`Edit ${serviceForm.name || "Service"} Form`}
+          >
+            <div className="space-y-6">
+            <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">Form Fields</h3>
-              <button onClick={addField} className="text-sm text-blue-600 font-medium flex items-center gap-2">
+              <button type="button" onClick={addField} className="text-sm text-blue-600 font-medium flex items-center gap-2">
                 <Plus size={16} /> Add field
               </button>
             </div>
@@ -659,7 +840,6 @@ export default function AdminPricing() {
                 </div>
               ))}
             </div>
-          </div>
 
           <div className="mt-8 border-t pt-6">
             <h3 className="text-lg font-bold mb-4">Live Form Preview</h3>
@@ -700,15 +880,37 @@ export default function AdminPricing() {
             </div>
           </div>
 
+            <div className="flex justify-end border-t border-slate-200 pt-5 dark:border-slate-700">
+              <button type="button" onClick={returnToServiceEditor} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
+                Done editing form
+              </button>
+            </div>
+            </div>
+          </SlideOver>
+
           <button
+            type="button"
             onClick={saveService}
             disabled={saving}
-            className="mt-8 w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-2xl font-semibold flex items-center justify-center gap-2"
+            className="w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? <><Loader2 className="animate-spin" size={18} /> Saving...</> : <><CheckCircle2 size={18} /> Save Service</>}
           </button>
         </div>
-      </div>
+    </SlideOver>
+      <ServiceFormEditor
+        isOpen={isFormEditorOpen}
+        onClose={returnToServiceEditor}
+        serviceName={serviceForm.name}
+        fields={serviceForm.metadata?.formFields || []}
+        importedFormText={importedFormText}
+        onImportedFormTextChange={setImportedFormText}
+        onAddField={addField}
+        onImportFormText={importFormText}
+        onUpdateField={updateFormField}
+        onRemoveField={removeField}
+        normalizeFormFields={normalizeFormFields}
+      />
     </div>
   );
 }
