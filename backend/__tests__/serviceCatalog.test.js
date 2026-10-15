@@ -87,11 +87,17 @@ describe('service catalog API', () => {
         name: 'JAMB Application',
         status: 'active',
         price: 4200,
+        commissionType: 'PERCENTAGE',
+        commissionValue: 12,
         metadata: { description: 'JAMB form intake', formFields: [] }
       });
 
     expect(createResponse.status).toBe(201);
     expect(createResponse.body.success).toBe(true);
+    expect(createResponse.body.service).toEqual(expect.objectContaining({
+      commissionType: 'PERCENTAGE',
+      commissionValue: 12,
+    }));
 
     const catalogResponse = await request(app)
       .get('/api/services/catalog?category=JAMB');
@@ -99,5 +105,6 @@ describe('service catalog API', () => {
     expect(catalogResponse.status).toBe(200);
     expect(catalogResponse.body.services.some((service) => service.serviceCode === 'jamb-application')).toBe(true);
     expect(catalogResponse.body.services.find((service) => service.serviceCode === 'jamb-application').price).toBe(4200);
+    expect(catalogResponse.body.services.find((service) => service.serviceCode === 'jamb-application').commissionValue).toBe(12);
   });
 });

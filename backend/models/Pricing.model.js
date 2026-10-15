@@ -139,6 +139,8 @@ const pricingSchema = new mongoose.Schema({
       type: { type: String, default: '' },
       status: { type: String, enum: ['active', 'paused', 'disabled'], default: 'active' },
       price: { type: Number, default: 0 },
+      commissionType: { type: String, enum: ['FLAT', 'PERCENTAGE'], default: undefined },
+      commissionValue: { type: Number, min: 0, default: undefined },
       metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     }],
     default: () => defaultServiceCatalog,

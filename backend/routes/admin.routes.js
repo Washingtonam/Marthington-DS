@@ -2269,11 +2269,22 @@ router.get("/services", isSuperAdmin, async (req, res) => {
 
 router.post("/services", isSuperAdmin, async (req, res) => {
   try {
-    const { serviceCode, category = 'NIMC', name, status = 'active', price = 0, metadata = {} } = req.body || {};
+    const {
+      serviceCode,
+      category = 'NIMC',
+      name,
+      status = 'active',
+      price = 0,
+      commissionType,
+      commissionValue,
+      metadata = {},
+    } = req.body || {};
 
     if (!serviceCode || !name) {
       return res.status(400).json({ success: false, message: 'serviceCode and name are required.' });
     }
+    const commissionError = validateServiceCommission(commissionType, commissionValue);
+    if (commissionError) return res.status(400).json({ success: false, message: commissionError });
 
     let catalog = [];
     let pricing = null;
@@ -2298,6 +2309,7 @@ router.post("/services", isSuperAdmin, async (req, res) => {
       name,
       status: ['active', 'paused', 'disabled'].includes(status) ? status : 'active',
       price: Number(price) || 0,
+      ...(commissionType !== undefined ? { commissionType, commissionValue: Number(commissionValue) } : {}),
       metadata,
     };
 
@@ -2321,6 +2333,9 @@ router.post("/services", isSuperAdmin, async (req, res) => {
 router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
   try {
     const { serviceCode } = req.params;
+    const { commissionType, commissionValue } = req.body || {};
+    const commissionError = validateServiceCommission(commissionType, commissionValue);
+    if (commissionError) return res.status(400).json({ success: false, message: commissionError });
     let pricing = null;
     let catalog = [];
 
@@ -2346,6 +2361,10 @@ router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
       target.status = ['active', 'paused', 'disabled'].includes(req.body.status) ? req.body.status : target.status;
     }
     if (req.body.price !== undefined) target.price = Number(req.body.price) || 0;
+    if (commissionType !== undefined) {
+      target.commissionType = commissionType;
+      target.commissionValue = Number(commissionValue);
+    }
     if (req.body.metadata !== undefined) target.metadata = { ...(target.metadata || {}), ...req.body.metadata };
 
     if (pricing) {
@@ -2362,6 +2381,21 @@ router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to update service.' });
   }
 });
+
+function validateServiceCommission(commissionType, commissionValue) {
+  if (commissionType === undefined && commissionValue === undefined) return '';
+  if (!['FLAT', 'PERCENTAGE'].includes(commissionType)) {
+    return 'Service commission type must be FLAT or PERCENTAGE.';
+  }
+  const value = Number(commissionValue);
+  if (!Number.isFinite(value) || value < 0) {
+    return 'Service commission must be zero or greater.';
+  }
+  if (commissionType === 'PERCENTAGE' && value > 100) {
+    return 'Percentage commission cannot exceed 100%.';
+  }
+  return '';
+}
 
 router.patch("/services/:serviceCode/status", isSuperAdmin, async (req, res) => {
   try {

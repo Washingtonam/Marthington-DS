@@ -32,6 +32,8 @@ const defaultServiceModel = {
   name: "",
   status: "active",
   price: 0,
+  commissionType: "FLAT",
+  commissionValue: 0,
   metadata: {
     description: "",
     formFields: [emptyFormField()],
@@ -54,6 +56,7 @@ export default function AdminPricing() {
   const [category, setCategory] = useState("NIMC");
   const [categories, setCategories] = useState([]);
   const [services, setServices] = useState([]);
+  const [commissionDefaults, setCommissionDefaults] = useState({ commissionType: "FLAT", commissionValue: 2000 });
   const [selectedService, setSelectedService] = useState(null);
   const [serviceForm, setServiceForm] = useState(defaultServiceModel);
   const [isCreating, setIsCreating] = useState(false);
@@ -146,6 +149,8 @@ export default function AdminPricing() {
     setServiceForm({
       ...defaultServiceModel,
       category,
+      commissionType: commissionDefaults.commissionType,
+      commissionValue: commissionDefaults.commissionValue,
       metadata: {
         description: "",
         formFields: [emptyFormField()],
@@ -162,6 +167,8 @@ export default function AdminPricing() {
       name: service.name || "",
       status: service.status || "active",
       price: service.price || 0,
+      commissionType: service.commissionType || commissionDefaults.commissionType,
+      commissionValue: service.commissionValue ?? commissionDefaults.commissionValue,
       metadata: {
         description: service.metadata?.description || "",
         formFields: Array.isArray(service.metadata?.formFields) && service.metadata.formFields.length
@@ -304,6 +311,8 @@ export default function AdminPricing() {
         name: String(serviceForm.name).trim(),
         status: serviceForm.status,
         price: Number(serviceForm.price) || 0,
+        commissionType: serviceForm.commissionType,
+        commissionValue: Number(serviceForm.commissionValue),
         metadata: {
           description: serviceForm.metadata?.description || "",
           formFields,
@@ -312,6 +321,14 @@ export default function AdminPricing() {
 
       if (!payload.serviceCode || !payload.name) {
         alert("Service code and service name are required.");
+        return;
+      }
+      if (!Number.isFinite(payload.commissionValue) || payload.commissionValue < 0) {
+        alert("Service commission must be zero or greater.");
+        return;
+      }
+      if (payload.commissionType === "PERCENTAGE" && payload.commissionValue > 100) {
+        alert("Percentage commission cannot exceed 100%.");
         return;
       }
 
@@ -408,7 +425,7 @@ export default function AdminPricing() {
         </div>
       </div>
 
-      <AgentCommissionSettings />
+      <AgentCommissionSettings onSettingsLoaded={setCommissionDefaults} />
 
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-slate-800 dark:text-white">Service categories</h2>
@@ -473,6 +490,12 @@ export default function AdminPricing() {
                   <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
                     <div className="flex items-center gap-2">
                       <span>₦{Number(service.price || 0).toLocaleString()}</span>
+                      <span className="text-xs text-emerald-700">
+                        {service.commissionType === "PERCENTAGE"
+                          ? `${Number(service.commissionValue ?? commissionDefaults.commissionValue)}% commission`
+                          : `₦${Number(service.commissionValue ?? commissionDefaults.commissionValue).toLocaleString()} commission`}
+                        {service.commissionValue === undefined ? " (default)" : ""}
+                      </span>
                       {service.status === "active" ? <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-600">Public</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Hidden</span>}
                     </div>
                     <div className="flex items-center gap-3">
@@ -522,6 +545,30 @@ export default function AdminPricing() {
               <div className="relative">
                 <BadgeDollarSign size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="number" value={serviceForm.price} onChange={(e) => updateField("price", e.target.value)} className="w-full border border-gray-200 rounded-xl p-3 pl-11" />
+              </div>
+            </Field>
+            <Field label="Commission Type">
+              <select
+                value={serviceForm.commissionType}
+                onChange={(e) => updateField("commissionType", e.target.value)}
+                className="w-full border border-gray-200 rounded-xl p-3"
+              >
+                <option value="FLAT">Flat amount (₦)</option>
+                <option value="PERCENTAGE">Percentage of service price (%)</option>
+              </select>
+            </Field>
+            <Field label={serviceForm.commissionType === "PERCENTAGE" ? "Commission (%)" : "Commission (₦)"}>
+              <div>
+                <input
+                  type="number"
+                  min="0"
+                  max={serviceForm.commissionType === "PERCENTAGE" ? "100" : undefined}
+                  step="0.01"
+                  value={serviceForm.commissionValue}
+                  onChange={(e) => updateField("commissionValue", e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl p-3"
+                />
+                <p className="mt-1 text-xs text-slate-500">Set to 0 to disable commission for this service.</p>
               </div>
             </Field>
 

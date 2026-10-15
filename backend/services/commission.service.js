@@ -1,6 +1,7 @@
 const User = require('../models/User.model');
 const Transaction = require('../models/transaction.model');
 const SystemSettings = require('../models/SystemSettings.model');
+const Pricing = require('../models/Pricing.model');
 
 const resolveDefaultCommissionValue = () => Number(
   process.env.DEFAULT_COMMISSION_AMOUNT_NAIRA
@@ -20,12 +21,35 @@ const resolveJobPriceNaira = (request) => {
 };
 
 const normalizePaymentSource = (value) => String(value || 'main').toLowerCase();
+const normalizeCatalogCategory = (value) => {
+  const category = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return category === 'nin' ? 'nimc' : category;
+};
+
+const findCatalogService = (request, catalog) => {
+  const category = normalizeCatalogCategory(request.serviceCategory || request.category);
+  const serviceCode = String(request.serviceCode || '').trim().toLowerCase();
+  const service = String(request.service || '').trim().toLowerCase();
+  const requestType = String(request.serviceType || request.type || '').trim().toLowerCase();
+
+  return catalog.find((entry) => {
+    const code = String(entry.serviceCode || '').trim().toLowerCase();
+    const type = String(entry.type || '').trim().toLowerCase();
+    const entryCategory = normalizeCatalogCategory(entry.category);
+    if (category && entryCategory && category !== entryCategory) return false;
+    return (serviceCode && serviceCode === code)
+      || (service && service === code)
+      || (requestType && (requestType === type || requestType === code))
+      || (service && requestType && code === `${service}-${requestType}`);
+  });
+};
 
 const awardCommissionIfEligible = async ({
   request,
   UserModel = User,
   TransactionModel = Transaction,
   SystemSettingsModel = SystemSettings,
+  PricingModel = Pricing,
   userUpdate = UserModel,
 }) => {
   if (!request) {
@@ -60,17 +84,30 @@ const awardCommissionIfEligible = async ({
   }
 
   const settings = await SystemSettingsModel.findOne({ key: 'global' });
-  const commissionType = settings?.commissionType || 'FLAT';
-  const rateOrAmountApplied = settings
-    ? Number(settings.commissionValue)
-    : resolveDefaultCommissionValue();
+  let serviceCommission;
+  if (request.service || request.serviceType || request.serviceCode || request.type) {
+    const catalog = await PricingModel.getServiceCatalog();
+    serviceCommission = findCatalogService(request, catalog);
+  }
+  const hasServiceCommission = serviceCommission
+    && serviceCommission.commissionType !== undefined
+    && serviceCommission.commissionValue !== undefined;
+  const commissionType = hasServiceCommission
+    ? serviceCommission.commissionType
+    : (settings?.commissionType || 'FLAT');
+  const rateOrAmountApplied = hasServiceCommission
+    ? Number(serviceCommission.commissionValue)
+    : (settings ? Number(settings.commissionValue) : resolveDefaultCommissionValue());
   if (
     !['FLAT', 'PERCENTAGE'].includes(commissionType)
     || !Number.isFinite(rateOrAmountApplied)
-    || rateOrAmountApplied <= 0
+    || rateOrAmountApplied < 0
     || (commissionType === 'PERCENTAGE' && rateOrAmountApplied > 100)
   ) {
     return { awarded: false, reason: 'invalid_commission_settings' };
+  }
+  if (hasServiceCommission && rateOrAmountApplied === 0) {
+    return { awarded: false, reason: 'zero_amount' };
   }
   const jobPriceNaira = resolveJobPriceNaira(request);
   if (commissionType === 'PERCENTAGE' && jobPriceNaira <= 0) {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { BadgeDollarSign, Loader2 } from "lucide-react";
 import api from "../../lib/axios";
 
-export default function AgentCommissionSettings() {
+export default function AgentCommissionSettings({ onSettingsLoaded }) {
   const [commissionType, setCommissionType] = useState("FLAT");
   const [commissionValue, setCommissionValue] = useState("2000");
   const [loading, setLoading] = useState(true);
@@ -17,6 +17,10 @@ export default function AgentCommissionSettings() {
         const { data } = await api.get("/api/admin/settings/commission");
         setCommissionType(data?.settings?.commissionType || "FLAT");
         setCommissionValue(String(data?.settings?.commissionValue ?? 2000));
+        onSettingsLoaded?.({
+          commissionType: data?.settings?.commissionType || "FLAT",
+          commissionValue: Number(data?.settings?.commissionValue ?? 2000),
+        });
         setSettingsLoaded(true);
       } catch (requestError) {
         console.error("LOAD COMMISSION SETTINGS ERROR:", requestError);
@@ -68,9 +72,9 @@ export default function AgentCommissionSettings() {
           <BadgeDollarSign size={20} />
         </span>
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Agent Commission Settings</h2>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Default Commission (Fallback)</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Choose a flat amount per completed request or a percentage of its service fee.
+            Used only for services without their own commission rule. Set service-specific commissions in each service below.
           </p>
         </div>
       </div>

@@ -10,15 +10,18 @@ const createMocks = (user, settings) => {
   const findByIdAndUpdate = jest.fn().mockResolvedValue(updatedUser);
   const transactionCreate = jest.fn().mockResolvedValue([{ _id: 'tx-1' }]);
   const settingsFindOne = jest.fn().mockResolvedValue(settings);
+  const getServiceCatalog = jest.fn().mockResolvedValue([]);
   return {
     updatedUser,
     findById,
     findByIdAndUpdate,
     transactionCreate,
     settingsFindOne,
+    getServiceCatalog,
     UserModel: { findById },
     TransactionModel: { create: transactionCreate },
     SystemSettingsModel: { findOne: settingsFindOne },
+    PricingModel: { getServiceCatalog },
     userUpdate: { findByIdAndUpdate },
   };
 };
@@ -93,6 +96,40 @@ describe('commission payouts', () => {
       commissionTypeUsed: 'PERCENTAGE',
       rateOrAmountApplied: 10,
       calculatedAmountKobo: 12500,
+    })]);
+  });
+
+  it('uses the matching service commission rule instead of the global fallback', async () => {
+    const user = { _id: 'user-service', role: 'user' };
+    const mocks = createMocks(user, { commissionType: 'FLAT', commissionValue: 2000 });
+    mocks.getServiceCatalog.mockResolvedValue([{
+      serviceCode: 'validation-vnin',
+      category: 'NIMC',
+      type: 'vnin',
+      commissionType: 'PERCENTAGE',
+      commissionValue: 15,
+    }]);
+    const request = {
+      _id: 'request-service',
+      userId: 'user-service',
+      service: 'validation',
+      type: 'vnin',
+      serviceCategory: 'NIN',
+      status: 'completed',
+      paymentSource: 'main',
+      priceAtTimeOfRequest: 1250,
+      commissionAwarded: false,
+      save: jest.fn(),
+    };
+
+    const result = await awardCommissionIfEligible({ request, ...mocks });
+
+    expect(result.awarded).toBe(true);
+    expect(result.amountKobo).toBe(18750);
+    expect(mocks.transactionCreate).toHaveBeenCalledWith([expect.objectContaining({
+      commissionTypeUsed: 'PERCENTAGE',
+      rateOrAmountApplied: 15,
+      amountKobo: 18750,
     })]);
   });
 
