@@ -1,22 +1,31 @@
 const User = require('../models/User.model');
 const Transaction = require('../models/transaction.model');
+const SystemSettings = require('../models/SystemSettings.model');
 
-const resolveCommissionAmountKobo = (commissionAmountKobo) => {
-  if (typeof commissionAmountKobo === 'number' && Number.isFinite(commissionAmountKobo) && commissionAmountKobo > 0) {
-    return Math.round(commissionAmountKobo);
-  }
+const resolveDefaultCommissionValue = () => Number(
+  process.env.DEFAULT_COMMISSION_AMOUNT_NAIRA
+  || process.env.COMMISSION_AMOUNT_NAIRA
+  || 2000
+);
 
-  const configuredAmount = Number(process.env.DEFAULT_COMMISSION_AMOUNT_NAIRA || process.env.COMMISSION_AMOUNT_NAIRA || 2000);
-  return Math.round(configuredAmount * 100);
+const resolveJobPriceNaira = (request) => {
+  const candidates = [request.priceAtTimeOfRequest, request.amountCharged, request.amount];
+  const value = candidates.find((candidate) => (
+    candidate !== undefined
+    && candidate !== null
+    && Number.isFinite(Number(candidate))
+    && Number(candidate) > 0
+  ));
+  return value === undefined ? 0 : Math.max(Number(value), 0);
 };
 
 const normalizePaymentSource = (value) => String(value || 'main').toLowerCase();
 
 const awardCommissionIfEligible = async ({
   request,
-  commissionAmountKobo = resolveCommissionAmountKobo(),
   UserModel = User,
   TransactionModel = Transaction,
+  SystemSettingsModel = SystemSettings,
   userUpdate = UserModel,
 }) => {
   if (!request) {
@@ -46,11 +55,32 @@ const awardCommissionIfEligible = async ({
   }
 
   const role = String(user.role || '').toLowerCase();
-  if (!['admin', 'super_admin'].includes(role)) {
+  if (!['user', 'admin', 'super_admin'].includes(role)) {
     return { awarded: false, reason: 'ineligible_role' };
   }
 
-  const amountKobo = Math.max(Number(commissionAmountKobo) || 0, 0);
+  const settings = await SystemSettingsModel.findOne({ key: 'global' });
+  const commissionType = settings?.commissionType || 'FLAT';
+  const rateOrAmountApplied = settings
+    ? Number(settings.commissionValue)
+    : resolveDefaultCommissionValue();
+  if (
+    !['FLAT', 'PERCENTAGE'].includes(commissionType)
+    || !Number.isFinite(rateOrAmountApplied)
+    || rateOrAmountApplied <= 0
+    || (commissionType === 'PERCENTAGE' && rateOrAmountApplied > 100)
+  ) {
+    return { awarded: false, reason: 'invalid_commission_settings' };
+  }
+  const jobPriceNaira = resolveJobPriceNaira(request);
+  if (commissionType === 'PERCENTAGE' && jobPriceNaira <= 0) {
+    return { awarded: false, reason: 'missing_job_price' };
+  }
+
+  const amountNaira = commissionType === 'PERCENTAGE'
+    ? (jobPriceNaira * rateOrAmountApplied) / 100
+    : rateOrAmountApplied;
+  const amountKobo = Math.round(amountNaira * 100);
   if (amountKobo <= 0) {
     return { awarded: false, reason: 'zero_amount' };
   }
@@ -75,6 +105,11 @@ const awardCommissionIfEligible = async ({
     type: 'COMMISSION',
     amount: amountKobo / 100,
     amountKobo,
+    requestId: request._id,
+    requestSource: request.serviceType ? 'cac' : 'service',
+    commissionTypeUsed: commissionType,
+    rateOrAmountApplied,
+    calculatedAmountKobo: amountKobo,
     status: 'success',
     description: `Commission payout for completed request ${request._id}`,
     reference: `commission-${request._id}`,
@@ -93,6 +128,8 @@ const awardCommissionIfEligible = async ({
     awarded: true,
     amountKobo,
     amount: Number((amountKobo / 100).toFixed(2)),
+    commissionTypeUsed: commissionType,
+    rateOrAmountApplied,
     user: updatedUser,
   };
 };

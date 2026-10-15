@@ -154,6 +154,7 @@ export default function Register() {
               </div>
               <h2 className="text-4xl font-black text-slate-900">Apply for agent access</h2>
               <p className="mt-3 text-sm leading-7 text-slate-600">Applications are reviewed before you can sign in and use portal services.</p>
+              <p className="mt-2 text-sm leading-7 text-emerald-700">Earn extra profit on every completed request! Commissions are automatically credited to your wallet once processing is finished.</p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

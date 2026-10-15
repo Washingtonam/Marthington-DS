@@ -42,6 +42,8 @@ const pageTitles = [
   ["/admin/services-engine", "Services & pricing"],
   ["/admin/notifications", "Notification center"],
   ["/admin/articles", "Guides & updates"],
+  ["/admin/agents", "Agents & jobs"],
+  ["/admin/communications", "Communications"],
   ["/admin/user", "User details"],
 ];
 
@@ -183,7 +185,13 @@ export default function Layout({ children }) {
               <div className="flex items-center gap-2">
                 <h1 className="truncate text-base font-semibold tracking-tight text-slate-900 dark:text-white sm:text-lg">{pageTitle}</h1>
                 {isAdminWorkspace && (
-                  <span className="hidden rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-violet-800 dark:bg-violet-950 dark:text-violet-200 sm:inline-flex">
+                  <span
+                    className="hidden rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex"
+                    style={{
+                      backgroundColor: "rgba(var(--accent-rgb), 0.12)",
+                      color: "var(--accent-text)",
+                    }}
+                  >
                     {user?.role === "super_admin" ? "Super Admin" : "Admin"}
                   </span>
                 )}

@@ -122,6 +122,10 @@ export default function Wallet() {
             <h1 className="text-3xl font-bold mb-2">Your Wallet</h1>
             <p className="text-gray-500 mb-8">Manage your account balance</p>
 
+            <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm leading-6 text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-200">
+              Earn extra profit on every completed request! Commissions are automatically credited to your wallet once processing is finished.
+            </div>
+
             <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl p-8 text-white mb-8">
               <p className="text-sm opacity-80 mb-2">Current Balance</p>
               <h2 className="text-4xl font-bold">{formatNaira(user?.walletBalance || 0)}</h2>

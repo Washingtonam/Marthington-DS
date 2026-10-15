@@ -7,6 +7,9 @@ const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
 const Pricing = require("../models/Pricing.model");
 const BulkJob = require("../models/BulkJob.model");
+const SystemSettings = require("../models/SystemSettings.model");
+const Agent = require("../models/Agent.model");
+const AgentJob = require("../models/AgentJob.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
 const { normalizeServiceType } = require("../config/serviceTypes");
 const { awardCommissionIfEligible } = require("../services/commission.service");
@@ -38,9 +41,279 @@ const isSuperAdmin = (req, res, next) => {
   next();
 };
 
+const normalizeWhatsapp = (value) => {
+  const input = String(value || "").trim();
+  if (!/^\+?[\d\s().-]+$/.test(input)) return null;
+  const digits = input.replace(/\D/g, "");
+  if (digits.length < 7 || digits.length > 15) return null;
+  return `${input.startsWith("+") ? "+" : ""}${digits}`;
+};
+
+const sanitizeJobFormData = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const entries = Object.entries(value);
+  if (entries.length > 40) return null;
+  const clean = {};
+  for (const [key, fieldValue] of entries) {
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,49}$/.test(key)) return null;
+    if (fieldValue === null || fieldValue === undefined || fieldValue === "") continue;
+    if (typeof fieldValue !== "string" && typeof fieldValue !== "number" && typeof fieldValue !== "boolean") return null;
+    const normalizedValue = String(fieldValue).trim();
+    if (normalizedValue.length > 500) return null;
+    clean[key] = normalizedValue;
+  }
+  return clean;
+};
+
+router.get("/agents", isSuperAdmin, async (req, res) => {
+  try {
+    const [manualAgents, registeredUsers, jobTotals] = await Promise.all([
+      Agent.find().sort({ active: -1, name: 1 }).lean(),
+      User.find({ role: "user", approvalStatus: "approved", status: { $ne: "suspended" } })
+        .select("firstName lastName email phone role createdAt")
+        .sort({ firstName: 1, lastName: 1 })
+        .lean(),
+      AgentJob.aggregate([
+        { $group: { _id: { $ifNull: ["$agentId", "$registeredUserId"] }, jobs: { $sum: 1 }, totalAmount: { $sum: "$amount" } } },
+      ]),
+    ]);
+    const totals = new Map(jobTotals.map((item) => [String(item._id), item]));
+    return res.json({
+      success: true,
+      manualAgents: manualAgents.map((agent) => ({
+        ...agent,
+        source: "manual",
+        ...(totals.get(String(agent._id)) || { jobs: 0, totalAmount: 0 }),
+      })),
+      registeredUsers: registeredUsers.map((user) => ({
+        _id: user._id,
+        name: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email,
+        email: user.email,
+        whatsapp: user.phone || "",
+        role: user.role,
+        createdAt: user.createdAt,
+        source: "registered",
+        ...(totals.get(String(user._id)) || { jobs: 0, totalAmount: 0 }),
+      })),
+    });
+  } catch (error) {
+    console.error("ADMIN AGENTS LIST ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to load agents." });
+  }
+});
+
+router.post("/agents", isSuperAdmin, async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const whatsapp = normalizeWhatsapp(req.body?.whatsapp);
+    if (!name || name.length > 120) {
+      return res.status(400).json({ success: false, message: "Enter an agent name (up to 120 characters)." });
+    }
+    if (!whatsapp) {
+      return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
+    }
+    const agent = await Agent.create({ name, whatsapp, createdBy: req.user.id });
+    return res.status(201).json({ success: true, agent: { ...agent.toObject(), source: "manual", jobs: 0, totalAmount: 0 } });
+  } catch (error) {
+    console.error("ADMIN AGENT CREATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to create agent." });
+  }
+});
+
+router.put("/agents/:agentId", isSuperAdmin, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.agentId)) {
+      return res.status(400).json({ success: false, message: "Invalid agent ID." });
+    }
+    const updates = {};
+    if (req.body?.name !== undefined) {
+      const name = String(req.body.name).trim();
+      if (!name || name.length > 120) return res.status(400).json({ success: false, message: "Enter an agent name (up to 120 characters)." });
+      updates.name = name;
+    }
+    if (req.body?.whatsapp !== undefined) {
+      const whatsapp = normalizeWhatsapp(req.body.whatsapp);
+      if (!whatsapp) return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
+      updates.whatsapp = whatsapp;
+    }
+    if (req.body?.active !== undefined) {
+      if (typeof req.body.active !== "boolean") return res.status(400).json({ success: false, message: "Invalid agent status." });
+      updates.active = req.body.active;
+    }
+    const agent = await Agent.findByIdAndUpdate(req.params.agentId, updates, { new: true, runValidators: true }).lean();
+    if (!agent) return res.status(404).json({ success: false, message: "Agent not found." });
+    return res.json({ success: true, agent: { ...agent, source: "manual" } });
+  } catch (error) {
+    console.error("ADMIN AGENT UPDATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to update agent." });
+  }
+});
+
+router.get("/agents/jobs", isSuperAdmin, async (req, res) => {
+  try {
+    const query = {};
+    if (req.query.agentId) {
+      if (!mongoose.Types.ObjectId.isValid(String(req.query.agentId))) {
+        return res.status(400).json({ success: false, message: "Invalid agent ID." });
+      }
+      query.agentId = req.query.agentId;
+    }
+    const jobs = await AgentJob.find(query).sort({ createdAt: -1 }).limit(200).lean();
+    return res.json({ success: true, jobs });
+  } catch (error) {
+    console.error("ADMIN AGENT JOB LIST ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to load agent jobs." });
+  }
+});
+
+router.post("/agents/jobs", isSuperAdmin, async (req, res) => {
+  try {
+    const { agentId, registeredUserId, customerType } = req.body || {};
+    const serviceType = String(req.body?.serviceType || "").trim();
+    const amount = Number(req.body?.amount || 0);
+    const formData = sanitizeJobFormData(req.body?.formData || {});
+    if (!["manual", "registered"].includes(customerType)) return res.status(400).json({ success: false, message: "Select a valid customer source." });
+    const customerId = customerType === "manual" ? agentId : registeredUserId;
+    if (!mongoose.Types.ObjectId.isValid(String(customerId || ""))) return res.status(400).json({ success: false, message: "Select a valid customer." });
+    if (!serviceType || serviceType.length > 100) {
+      return res.status(400).json({ success: false, message: "Enter a job or service name." });
+    }
+    if (!Number.isFinite(amount) || amount < 0 || amount > 100000000) {
+      return res.status(400).json({ success: false, message: "Enter a valid job amount." });
+    }
+    if (!formData) {
+      return res.status(400).json({ success: false, message: "Job form data is invalid." });
+    }
+    let customer;
+    if (customerType === "manual") {
+      customer = await Agent.findById(customerId).lean();
+      if (!customer || !customer.active) return res.status(404).json({ success: false, message: "Active manual agent not found." });
+    } else {
+      customer = await User.findOne({
+        _id: customerId,
+        status: { $ne: "suspended" },
+        approvalStatus: "approved",
+      }).select("firstName lastName email phone").lean();
+      if (!customer) return res.status(404).json({ success: false, message: "Approved registered account not found." });
+      customer = {
+        ...customer,
+        name: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email,
+        whatsapp: customer.phone || "",
+      };
+    }
+    const job = await AgentJob.create({
+      agentId: customerType === "manual" ? customer._id : null,
+      registeredUserId: customerType === "registered" ? customer._id : null,
+      customerType,
+      agentName: customer.name,
+      agentWhatsapp: customer.whatsapp,
+      serviceType,
+      formData,
+      amount,
+      createdBy: req.user.id,
+    });
+    return res.status(201).json({ success: true, job });
+  } catch (error) {
+    console.error("ADMIN AGENT JOB CREATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to log agent job." });
+  }
+});
+
+router.patch("/agents/jobs/:jobId/status", isSuperAdmin, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.jobId)) {
+      return res.status(400).json({ success: false, message: "Invalid job ID." });
+    }
+    const status = String(req.body?.status || "");
+    if (!["pending", "in-progress", "completed", "cancelled"].includes(status)) {
+      return res.status(400).json({ success: false, message: "Select a valid job status." });
+    }
+    const note = String(req.body?.note || "").trim();
+    if (note.length > 2000) return res.status(400).json({ success: false, message: "Status note must be 2,000 characters or fewer." });
+    const update = {
+      $set: { status },
+      $push: { statusHistory: { status, note, createdAt: new Date() } },
+    };
+    if (note) {
+      update.$push.adminComments = {
+        author: String(req.user.id),
+        authorRole: "super_admin",
+        comment: note,
+        createdAt: new Date(),
+      };
+    }
+    const job = await AgentJob.findByIdAndUpdate(req.params.jobId, update, { new: true, runValidators: true }).lean();
+    if (!job) return res.status(404).json({ success: false, message: "Agent job not found." });
+    return res.json({ success: true, job });
+  } catch (error) {
+    console.error("ADMIN AGENT JOB STATUS ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to update agent job." });
+  }
+});
+
 // =========================================================================
 // 🚀 ADMINISTRATIVE OPERATION ENDPOINTS
 // =========================================================================
+
+router.get("/settings/commission", isAdmin, async (req, res) => {
+  try {
+    const settings = await SystemSettings.findOneAndUpdate(
+      { key: "global" },
+      { $setOnInsert: { key: "global" } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    return res.json({
+      success: true,
+      settings: {
+        commissionType: settings.commissionType,
+        commissionValue: settings.commissionValue,
+      },
+    });
+  } catch (error) {
+    console.error("ADMIN COMMISSION SETTINGS READ ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to load commission settings." });
+  }
+});
+
+router.put("/settings/commission", isSuperAdmin, async (req, res) => {
+  const commissionType = req.body?.commissionType;
+  const commissionValue = Number(req.body?.commissionValue);
+  if (!["FLAT", "PERCENTAGE"].includes(commissionType)) {
+    return res.status(400).json({ success: false, message: "Commission type must be FLAT or PERCENTAGE." });
+  }
+  if (!Number.isFinite(commissionValue) || commissionValue <= 0) {
+    return res.status(400).json({ success: false, message: "Commission value must be greater than zero." });
+  }
+  if (commissionType === "PERCENTAGE" && commissionValue > 100) {
+    return res.status(400).json({ success: false, message: "Percentage commission cannot exceed 100%." });
+  }
+
+  try {
+    const settings = await SystemSettings.findOneAndUpdate(
+      { key: "global" },
+      {
+        $set: {
+          commissionType,
+          commissionValue,
+          updatedBy: req.user.id,
+        },
+        $setOnInsert: { key: "global" },
+      },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+    );
+    return res.json({
+      success: true,
+      message: "Commission settings updated successfully.",
+      settings: {
+        commissionType: settings.commissionType,
+        commissionValue: settings.commissionValue,
+      },
+    });
+  } catch (error) {
+    console.error("ADMIN COMMISSION SETTINGS UPDATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to update commission settings." });
+  }
+});
 
 router.get("/categories", isSuperAdmin, async (req, res) => {
   try {
@@ -168,15 +441,18 @@ router.get("/requests", isAdmin, async (req, res) => {
 
     const serviceQuery = {};
     const cacQuery = {};
+    const agentJobQuery = req.user?.role === "super_admin" ? {} : { _id: null };
 
     if (normalizedStatus) {
       serviceQuery.status = normalizedStatus;
       cacQuery.status = normalizedStatus;
+      agentJobQuery.status = normalizedStatus === "completed" ? "completed" : normalizedStatus;
     }
 
     if (normalizedCategory === "cac") {
       serviceQuery.serviceCategory = { $in: ["CAC", "cac"] };
       cacQuery.serviceCategory = { $in: ["CAC", "cac"] };
+      agentJobQuery._id = null;
     } else if (normalizedCategory === "nimc") {
       serviceQuery.serviceCategory = { $in: ["NIN", "NIMC", "nin", "nimc"] };
       cacQuery._id = null;
@@ -188,6 +464,7 @@ router.get("/requests", isAdmin, async (req, res) => {
         { type: { $regex: escapedCategory, $options: "i" } }
       ]);
       cacQuery._id = null;
+      agentJobQuery.serviceType = { $regex: escapedCategory, $options: "i" };
     }
 
     if (normalizedServiceType) {
@@ -197,6 +474,7 @@ router.get("/requests", isAdmin, async (req, res) => {
         const ors = parts.map(p => ({ service: { $regex: escapeRegex(p), $options: 'i' } }));
         setOrGroup(serviceQuery, ors);
         setOrGroup(cacQuery, parts.map(p => ({ serviceType: { $regex: escapeRegex(p), $options: 'i' } })));
+        agentJobQuery.serviceType = { $in: parts.map((part) => new RegExp(escapeRegex(part), "i")) };
       } else {
         const escapedType = escapeRegex(normalizedServiceType);
         setOrGroup(serviceQuery, [
@@ -204,6 +482,7 @@ router.get("/requests", isAdmin, async (req, res) => {
           { type: { $regex: escapedType, $options: "i" } }
         ]);
         cacQuery.serviceType = { $regex: escapedType, $options: "i" };
+        agentJobQuery.serviceType = { $regex: escapedType, $options: "i" };
       }
     }
 
@@ -211,6 +490,7 @@ router.get("/requests", isAdmin, async (req, res) => {
       const escapedNin = escapeRegex(ninTerm);
       serviceQuery.nin = { $regex: escapedNin, $options: "i" };
       cacQuery.nin = { $regex: escapedNin, $options: "i" };
+      agentJobQuery["formData.nin"] = { $regex: escapedNin, $options: "i" };
     }
 
     // Date range filter
@@ -226,6 +506,7 @@ router.get("/requests", isAdmin, async (req, res) => {
       if (Object.keys(dateRange).length > 0) {
         serviceQuery.createdAt = dateRange;
         cacQuery.createdAt = dateRange;
+        agentJobQuery.createdAt = dateRange;
       }
     }
 
@@ -242,6 +523,7 @@ router.get("/requests", isAdmin, async (req, res) => {
         serviceQuery.$and.push({ $or: [{ amount: amtRange }, { amountCharged: amtRange }] });
         cacQuery.$and = cacQuery.$and || [];
         cacQuery.$and.push({ $or: [{ amount: amtRange }, { amountCharged: amtRange }] });
+        agentJobQuery.amount = amtRange;
       }
     }
 
@@ -259,12 +541,34 @@ router.get("/requests", isAdmin, async (req, res) => {
         { companyEmail: { $regex: escapedSearch, $options: "i" } },
         { serviceType: { $regex: escapedSearch, $options: "i" } }
       ];
+      const agentJobSearchConditions = [
+        { agentName: { $regex: escapedSearch, $options: "i" } },
+        { serviceType: { $regex: escapedSearch, $options: "i" } },
+        { "formData.nin": { $regex: escapedSearch, $options: "i" } },
+        { "formData.firstName": { $regex: escapedSearch, $options: "i" } },
+        { "formData.surname": { $regex: escapedSearch, $options: "i" } },
+        { "formData.email": { $regex: escapedSearch, $options: "i" } },
+      ];
+      const matchingUsers = await User.find({
+        $or: [
+          { email: { $regex: escapedSearch, $options: "i" } },
+          { firstName: { $regex: escapedSearch, $options: "i" } },
+          { lastName: { $regex: escapedSearch, $options: "i" } },
+        ],
+      }).select("_id").lean();
+      const matchingUserIds = matchingUsers.map((user) => user._id);
+      if (matchingUserIds.length) {
+        searchConditions.push({ userId: { $in: matchingUserIds } });
+        cacSearchConditions.push({ userId: { $in: matchingUserIds } });
+      }
       if (mongoose.Types.ObjectId.isValid(searchTerm)) {
         searchConditions.push({ _id: new mongoose.Types.ObjectId(searchTerm) });
         cacSearchConditions.push({ _id: new mongoose.Types.ObjectId(searchTerm) });
+        agentJobSearchConditions.push({ _id: new mongoose.Types.ObjectId(searchTerm) });
       }
       setOrGroup(serviceQuery, searchConditions);
       setOrGroup(cacQuery, cacSearchConditions);
+      setOrGroup(agentJobQuery, agentJobSearchConditions);
     }
 
     if (roleFilter && roleFilter !== "all") {
@@ -276,6 +580,7 @@ router.get("/requests", isAdmin, async (req, res) => {
       } else {
         serviceQuery.userId = null;
         cacQuery.userId = null;
+        agentJobQuery._id = null;
       }
     }
 
@@ -297,6 +602,7 @@ router.get("/requests", isAdmin, async (req, res) => {
     // Use aggregation with $unionWith to avoid loading all documents into memory.
     const serviceColl = ServiceRequest.collection.name;
     const cacColl = CACRequest.collection.name;
+    const agentJobsColl = AgentJob.collection.name;
     const sortField = String(sortBy || 'createdAt');
     const sortOrder = (String(order || 'desc').toLowerCase() === 'asc') ? 1 : -1;
 
@@ -310,6 +616,7 @@ router.get("/requests", isAdmin, async (req, res) => {
       { $addFields: { pipelineSource: 'service' } },
       { $project: { __v: 0 } },
       { $unionWith: { coll: cacColl, pipeline: [ { $match: cacMatch }, { $addFields: { pipelineSource: 'cac' } }, { $project: { __v: 0 } } ] } },
+      { $unionWith: { coll: agentJobsColl, pipeline: [ { $match: agentJobQuery }, { $addFields: { pipelineSource: 'agent-job', serviceCategory: 'Agent', userId: null, amountCharged: '$amount' } }, { $project: { __v: 0, createdBy: 0 } } ] } },
       { $sort: { [sortField]: sortOrder } },
       { $facet: {
         data: [ { $skip: startIndex }, { $limit: limit } ],
@@ -327,8 +634,12 @@ router.get("/requests", isAdmin, async (req, res) => {
     } else {
       // fallback to approximate counts if exact total not computed (large dataset)
       try {
-        const [est1, est2] = await Promise.all([ServiceRequest.estimatedDocumentCount(), CACRequest.estimatedDocumentCount()]);
-        totalRecords = est1 + est2; // approximate
+        const [est1, est2, est3] = await Promise.all([
+          ServiceRequest.estimatedDocumentCount(),
+          CACRequest.estimatedDocumentCount(),
+          AgentJob.estimatedDocumentCount(),
+        ]);
+        totalRecords = est1 + est2 + est3; // approximate
       } catch (estErr) {
         totalRecords = pageData.length; // best-effort
       }
@@ -491,11 +802,13 @@ router.post("/requests/:id/status", isAdmin, async (req, res) => {
     if (!record) {
       return res.status(404).json({ success: false, message: "Request ID not found in any registered collection." });
     }
+    const previousStatus = String(record.status || "").toLowerCase();
 
     const statusMap = {
       approve: "approved",
       reject: "rejected",
-      flag: "flagged"
+      flag: "flagged",
+      complete: "completed"
     };
     const newStatus = statusMap[normalizedAction];
 
@@ -525,6 +838,14 @@ router.post("/requests/:id/status", isAdmin, async (req, res) => {
     record.markModified("status");
     record.markModified("statusHistory");
     await record.save();
+
+    if (newStatus === "completed" && previousStatus !== "completed") {
+      try {
+        await awardCommissionIfEligible({ request: record });
+      } catch (commissionError) {
+        console.warn("Commission payout skipped for completed request:", commissionError.message);
+      }
+    }
 
     try {
       await AuditLog.create({
@@ -572,6 +893,7 @@ router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
     if (!record) {
       return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
     }
+    const previousStatus = String(record.status || "").toLowerCase();
     // SECURITY: Prevent non-super admins from transitioning requests that are currently 'pending'
     if (record.status === 'pending' && req.user?.role !== 'super_admin') {
       return res.status(403).json({ success: false, message: 'Forbidden: Only Super Admin may change status on pending requests.' });
@@ -604,7 +926,7 @@ router.put("/update-status/:targetModule/:id", isAdmin, async (req, res) => {
 
     await record.save();
 
-    if (normalizedStatus === "completed") {
+    if (normalizedStatus === "completed" && previousStatus !== "completed") {
       try {
         await awardCommissionIfEligible({ request: record });
       } catch (commissionError) {
@@ -658,6 +980,7 @@ router.put("/status/:id", isAdmin, async (req, res) => {
     if (!record) {
       return res.status(404).json({ success: false, message: "Requested application profile reference context not found." });
     }
+    const previousStatus = String(record.status || "").toLowerCase();
     const normalizedModule = cacRecord ? 'cac' : 'service';
     const normalizedStatus = String(status).toLowerCase();
 
@@ -678,6 +1001,14 @@ router.put("/status/:id", isAdmin, async (req, res) => {
     record.markModified("status");
     record.markModified("statusHistory");
     await record.save();
+
+    if (normalizedStatus === "completed" && previousStatus !== "completed") {
+      try {
+        await awardCommissionIfEligible({ request: record });
+      } catch (commissionError) {
+        console.warn("Commission payout skipped for completed request:", commissionError.message);
+      }
+    }
 
     try {
       await AuditLog.create({

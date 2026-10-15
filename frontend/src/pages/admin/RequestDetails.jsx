@@ -15,15 +15,13 @@ export default function RequestDetails({
   modalComment,
   setModalComment,
   handleStatusUpdate,
-  fetchRequests,
-  page,
   setSelected,
 }) {
   const navigate = useNavigate();
-  if (!selected) return null;
-
   const [expandedKeys, setExpandedKeys] = useState({});
   const { success, error: toastError } = useToast();
+
+  if (!selected) return null;
 
   const toggleExpand = (key) => {
     setExpandedKeys((s) => ({ ...s, [key]: !s[key] }));
@@ -52,7 +50,7 @@ export default function RequestDetails({
           try {
             const textParts = [];
             textParts.push(`Request ID: ${selected._id || selected.id}`);
-            textParts.push(`Requester: ${selected.userId?.email || 'N/A'} (${selected.userId?.role || 'user'})`);
+            textParts.push(`Requester: ${selected.agentName || selected.userId?.email || 'N/A'} (${selected.pipelineSource === "agent-job" ? "agent job" : (selected.userId?.role || 'user')})`);
             textParts.push(`Status: ${selected.status}`);
             textParts.push(`Submitted: ${new Date(selected.createdAt).toLocaleString()}`);
             textParts.push(`Reference: ${selected.nin ? maskNIN(selected.nin) : (selected.businessName1 || selected.serviceType || 'N/A')}`);
@@ -73,7 +71,9 @@ export default function RequestDetails({
         <div>
           <p className="text-xs text-slate-500">Requester</p>
           <p className="font-semibold">
-            {selected.userId?._id ? (
+            {selected.pipelineSource === "agent-job" ? (
+              <span>{selected.agentName || "Agent"}</span>
+            ) : selected.userId?._id ? (
               <button type="button" onClick={() => navigate(`/admin/user/${selected.userId._id}/details`)} className="text-left text-blue-600 hover:underline dark:text-blue-400">
                 {selected.userId.email}
               </button>
@@ -91,7 +91,7 @@ export default function RequestDetails({
           <p className="text-xs text-slate-500 mt-2">Amount</p>
           <p className="font-semibold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(selected.amount || selected.amountCharged || 0)}</p>
           <p className="text-xs text-slate-500 mt-2">Pipeline</p>
-          <p className="font-semibold">{selected.pipelineSource}</p>
+          <p className="font-semibold">{selected.pipelineSource === "agent-job" ? "Agent job" : selected.pipelineSource}</p>
         </div>
       </div>
 
@@ -181,19 +181,30 @@ export default function RequestDetails({
             <div>
               <label className="text-sm font-semibold text-slate-700">New Status</label>
               <select value={modalStatus} onChange={(e) => setModalStatus(e.target.value)} className="w-full p-3 rounded-xl border border-blue-300 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="pending">📋 Pending</option>
-                <option value="in-progress">⏳ In Progress</option>
-                <option value="processing">🔄 Processing</option>
-                <option value="approved">✅ Approved</option>
-                <option value="completed">🎉 Completed</option>
-                <option value="rejected">❌ Rejected</option>
+                {selected.pipelineSource === "agent-job" ? (
+                  <>
+                    <option value="pending">Pending</option>
+                    <option value="in-progress">In progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="pending">Pending</option>
+                    <option value="in-progress">In progress</option>
+                    <option value="processing">Processing</option>
+                    <option value="approved">Approved</option>
+                    <option value="completed">Completed</option>
+                    <option value="rejected">Rejected</option>
+                  </>
+                )}
               </select>
             </div>
 
             <div>
               <label className="text-sm font-semibold text-slate-700">
                 Comment/Resolution Note
-                {modalStatus === 'rejected' && <span className="text-red-600 ml-1">*Required for rejection</span>}
+                {(modalStatus === 'rejected' || modalStatus === "cancelled") && <span className="text-red-600 ml-1">*Required for rejection/cancellation</span>}
               </label>
               <textarea
                 value={modalComment}
@@ -203,15 +214,15 @@ export default function RequestDetails({
                   e.stopPropagation();
                   if (e.nativeEvent && e.nativeEvent.stopImmediatePropagation) e.nativeEvent.stopImmediatePropagation();
                 }}
-                placeholder={modalStatus === 'rejected' ? "Explain why this request was rejected..." : "Add a resolution note or comment..."}
+                placeholder={modalStatus === 'rejected' || modalStatus === "cancelled" ? "Explain why this request was rejected or cancelled..." : "Add a resolution note or comment..."}
                 className="w-full p-3 rounded-xl border border-blue-300 mt-2 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
 
             <div className="flex gap-2 pt-2">
               <button onClick={async () => {
-                if (modalStatus === 'rejected' && (!modalComment || modalComment.trim().length < 5)) {
-                  if (toastError) toastError('Please provide a detailed rejection reason (at least 5 characters).');
+                if ((modalStatus === 'rejected' || modalStatus === "cancelled") && (!modalComment || modalComment.trim().length < 5)) {
+                  if (toastError) toastError('Please provide a detailed reason (at least 5 characters).');
                   return;
                 }
                 const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : {};
@@ -220,10 +231,8 @@ export default function RequestDetails({
                   return;
                 }
                 try {
-                  await handleStatusUpdate(selected._id || selected.id, modalStatus, modalComment);
-                  // refresh the list and close the drawer
-                  await fetchRequests(page);
-                  setSelected(null);
+                  const updated = await handleStatusUpdate(selected._id || selected.id, modalStatus, modalComment);
+                  if (updated) setSelected(null);
                 } catch (err) {
                   console.error(err);
                   if (toastError) toastError('Failed to update status.');

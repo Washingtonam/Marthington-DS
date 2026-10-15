@@ -1,20 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import api from "../../lib/axios";
 import {
-  Search, ArrowUpDown, Eye, CheckCircle2, XCircle, Clock3,
-  ChevronLeft, ChevronRight, Fingerprint, Building2, AlertCircle,
-  MessageSquare, Shield, Calendar
+  Search, ChevronLeft, ChevronRight
 } from "lucide-react";
 import SlideOver from "../../components/ui/SlideOver";
 import RequestDetails from "./RequestDetails";
 import { useToast } from "../../context/ToastContext";
-
-// 🔒 Data Masking Utility for Sensitive Fields
-const maskNIN = (nin) => {
-  if (!nin || nin === "N/A") return nin;
-  return `${String(nin).slice(0, 4)}*****${String(nin).slice(-2)}`;
-};
 
 // 🎨 Status Badge Color Mapping
 const statusColors = {
@@ -27,30 +19,11 @@ const statusColors = {
   "failed": "bg-orange-100 text-orange-800 border border-orange-300 dark:bg-orange-900/30 dark:text-orange-200 dark:border-orange-600"
 };
 
-// 📊 Status Icons
-const getStatusIcon = (status) => {
-  switch(status?.toLowerCase()) {
-    case "approved":
-    case "completed":
-      return <CheckCircle2 className="w-4 h-4" />;
-    case "rejected":
-    case "failed":
-      return <XCircle className="w-4 h-4" />;
-    case "in-progress":
-    case "processing":
-      return <Clock3 className="w-4 h-4" />;
-    default:
-      return <AlertCircle className="w-4 h-4" />;
-  }
-};
-
 export default function AdminRequests() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const { success, error: toastError, info } = useToast();
   const [activeTab, setActiveTab] = useState("all");
   const [serviceCategories, setServiceCategories] = useState([]);
-  const [activeSubService, setActiveSubService] = useState("All");
   const [selectedServices, setSelectedServices] = useState([]);
   const [activeStatus, setActiveStatus] = useState("all");
   const [requests, setRequests] = useState([]);
@@ -162,20 +135,31 @@ export default function AdminRequests() {
   }, [requests, searchParams, selected]);
 
   const handleStatusUpdate = async (id, status, note = '') => {
-    if (!id) return;
-    if (!window.confirm(`Confirm ${status} for this record?`)) return;
+    if (!id) return false;
+    if (!window.confirm(`Confirm ${status} for this record?`)) return false;
 
     try {
-      if (status === 'approved') {
+      if (selected?.pipelineSource === "agent-job") {
+        const agentJobStatus = status === "approved" || status === "completed"
+          ? "completed"
+          : status === "rejected"
+            ? "cancelled"
+            : status === "processing"
+              ? "in-progress"
+              : status;
+        await api.patch(`/api/admin/agents/jobs/${id}/status`, { status: agentJobStatus, note });
+      } else if (status === 'approved') {
         await api.put(`/api/admin/approve-request/${id}`, { note });
       } else {
         await api.put(`/api/admin/status/${id}`, { status, note });
       }
       if (success) success('Request status updated');
       await fetchRequests(page);
+      return true;
     } catch (err) {
       console.error("Status update failed:", err);
       if (toastError) toastError(err.response?.data?.message || "Failed to update request status.");
+      return false;
     }
   };
 
@@ -218,7 +202,7 @@ export default function AdminRequests() {
   };
 
   const selectAllVisible = () => {
-    const ids = displayedRequests.map((r) => r._id);
+    const ids = displayedRequests.filter((r) => r.pipelineSource !== "agent-job").map((r) => r._id);
     setSelectedIds(new Set(ids));
   };
 
@@ -280,24 +264,7 @@ export default function AdminRequests() {
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    setActiveSubService("All");
     setSelectedServices([]);
-    setPage(1);
-  };
-
-  const handleSubServiceChange = (subService) => {
-    setActiveSubService(subService);
-    setPage(1);
-  };
-
-  const handleServiceMultiChange = (e) => {
-    const options = Array.from(e.target.options || []);
-    const vals = options.filter(o => o.selected).map(o => o.value);
-    if (vals.includes('All')) {
-      setSelectedServices([]);
-    } else {
-      setSelectedServices(vals);
-    }
     setPage(1);
   };
 
@@ -309,28 +276,23 @@ export default function AdminRequests() {
   const displayedRequests = requests;
 
   const formatDateShort = (iso) => iso ? new Date(iso).toLocaleDateString() : '-';
-  const formatAmount = (v) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(v || 0);
 
   const getRequestTitle = (request) => {
     if (request.pipelineSource === "cac") {
       return request.serviceType ? request.serviceType.replace(/_/g, " ") : "CAC";
     }
-    return request.serviceName || request.service || request.type || "General";
+    return request.serviceName || request.service || request.type || request.serviceType || "General";
   };
 
-  const getRequestDetails = (request) => {
-    const hiddenKeys = ["_id", "__v", "userId", "createdAt", "updatedAt", "statusHistory", "adminComments", "formData", "pipelineSource"];
-    if (request.pipelineSource === "cac") {
-      return Object.entries(request)
-        .filter(([key]) => !hiddenKeys.includes(key))
-        .map(([key, value]) => ({ key, value }));
-    }
-    if (request.formData && Object.keys(request.formData).length > 0) {
-      return Object.entries(request.formData).map(([key, value]) => ({ key, value }));
-    }
-    return Object.entries(request)
-      .filter(([key]) => !hiddenKeys.includes(key))
-      .map(([key, value]) => ({ key, value }));
+  const getRequestName = (request) => {
+    const formData = request.formData || {};
+    const formName = [
+      formData.firstName || formData.givenName,
+      formData.middleName,
+      formData.lastName || formData.surname,
+    ].filter(Boolean).join(" ");
+    const accountName = [request.userId?.firstName, request.userId?.lastName].filter(Boolean).join(" ");
+    return request.agentName || formName || accountName || request.userId?.email || "Customer";
   };
 
   return (
@@ -359,7 +321,7 @@ export default function AdminRequests() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }}
-                placeholder="Search by email, NIN, service or ID"
+                placeholder="Search name, NIN, email, job or ID"
                 className="w-64 md:w-80 outline-none bg-transparent text-slate-900 dark:text-slate-100"
               />
             </div>
@@ -382,7 +344,7 @@ export default function AdminRequests() {
             </select>
 
             <button onClick={applyFilters} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-200 dark:text-slate-950">Apply</button>
-            <button onClick={() => { setActiveStatus('all'); setActiveSubService('All'); setSelectedServices([]); setRequesterRole('all'); setSearchTerm(''); setPage(1); fetchRequests(1); }} className="rounded-2xl bg-transparent px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Clear</button>
+            <button onClick={() => { setActiveStatus('all'); setSelectedServices([]); setRequesterRole('all'); setSearchTerm(''); setPage(1); fetchRequests(1); }} className="rounded-2xl bg-transparent px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Clear</button>
           </div>
         </div>
       </div>
@@ -434,40 +396,26 @@ export default function AdminRequests() {
             <table className="min-w-full text-sm text-slate-900 dark:text-slate-100">
               <thead className="text-xs text-slate-500 uppercase bg-slate-100 dark:bg-slate-800 dark:text-slate-300">
                 <tr>
-                  <th className="p-3"><input type="checkbox" onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }} checked={selectedIds.size > 0 && selectedIds.size === displayedRequests.length} /></th>
-                  <th className="p-3 cursor-pointer" onClick={() => { setSortBy('createdAt'); setOrder(order === 'asc' ? 'desc' : 'asc'); fetchRequests(1); }}>Created</th>
-                  <th className="p-3">Requester</th>
-                  <th className="p-3">Role</th>
-                  <th className="p-3">Pipeline</th>
-                  <th className="p-3 cursor-pointer" onClick={() => { setSortBy('serviceType'); setOrder(order === 'asc' ? 'desc' : 'asc'); fetchRequests(1); }}>Service</th>
-                  <th className="p-3 cursor-pointer" onClick={() => { setSortBy('amount'); setOrder(order === 'asc' ? 'desc' : 'asc'); fetchRequests(1); }}>Amount</th>
+                  <th className="p-3"><input aria-label="Select eligible requests" type="checkbox" onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }} checked={displayedRequests.some((r) => r.pipelineSource !== "agent-job") && displayedRequests.filter((r) => r.pipelineSource !== "agent-job").every((r) => selectedIds.has(r._id))} /></th>
+                  <th scope="col" className="p-3 text-left">
+                    <button type="button" onClick={() => { setSortBy("createdAt"); setOrder(order === "asc" ? "desc" : "asc"); fetchRequests(1); }} className="font-semibold hover:text-slate-900 dark:hover:text-white">
+                      Created <span aria-hidden="true">{sortBy === "createdAt" ? (order === "asc" ? "↑" : "↓") : ""}</span>
+                    </button>
+                  </th>
+                  <th scope="col" className="p-3">Customer and job</th>
                   <th className="p-3">Status</th>
-                  <th className="p-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {displayedRequests.map((r) => (
-                  <tr key={r._id} className="border-b border-slate-200 dark:border-slate-700">
-                    <td className="p-3"><input type="checkbox" checked={selectedIds.has(r._id)} onChange={() => toggleSelect(r._id)} /></td>
+                  <tr key={r._id} tabIndex={0} aria-label={`Open request for ${getRequestName(r)}: ${getRequestTitle(r)}`} onClick={() => setSelected(r)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(r); } }} className="cursor-pointer border-b border-slate-200 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:border-slate-700 dark:hover:bg-slate-800/70">
+                    <td className="p-3" onClick={(event) => event.stopPropagation()}><input aria-label={`Select request ${r._id}`} type="checkbox" disabled={r.pipelineSource === "agent-job"} checked={selectedIds.has(r._id)} onKeyDown={(event) => event.stopPropagation()} onChange={() => toggleSelect(r._id)} /></td>
                     <td className="p-3">{formatDateShort(r.createdAt)}</td>
                     <td className="p-3">
-                      {r.userId?._id ? (
-                        <button type="button" onClick={() => navigate(`/admin/user/${r.userId._id}/details`)} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
-                          {r.userId.email}
-                        </button>
-                      ) : '-'}
+                      <span className="block font-semibold">{getRequestName(r)}</span>
+                      <span className="mt-1 block text-xs capitalize text-slate-500 dark:text-slate-400">{getRequestTitle(r)}</span>
                     </td>
-                    <td className="p-3">{r.userId?.role || '-'}</td>
-                    <td className="p-3">{r.pipelineSource === 'cac' ? 'CAC' : (r.serviceCategory || 'Service')}</td>
-                    <td className="p-3">{getRequestTitle(r)}</td>
-                    <td className="p-3">{formatAmount(r.amount || r.amountCharged)}</td>
                     <td className="p-3"><span className={`px-2 py-1 rounded ${statusColors[r.status] || 'bg-slate-100'}`}>{r.status}</span></td>
-                    <td className="p-3">
-                      <div className="flex gap-2">
-                        <button onClick={() => { setSelected(r); }} className="px-2 py-1 rounded bg-slate-900 text-white">Inspect</button>
-                        <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(r)); if (success) success('Request JSON copied'); }} className="px-2 py-1 rounded bg-slate-100">Copy</button>
-                      </div>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -479,24 +427,17 @@ export default function AdminRequests() {
               <div key={r._id} className={`bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition ${r.status === 'pending' ? 'ring-1 ring-yellow-300 dark:ring-yellow-600' : ''} h-full flex flex-col`}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    {r.userId?._id ? (
-                      <button type="button" onClick={() => navigate(`/admin/user/${r.userId._id}/details`)} className="block max-w-full truncate text-left font-bold text-sm text-blue-600 hover:underline dark:text-blue-400">
-                        {r.userId.email}
-                      </button>
-                    ) : <h3 className="font-bold text-sm truncate">{r.userId?.email || '-'}</h3>}
+                    <button type="button" onClick={() => setSelected(r)} className="block max-w-full truncate text-left font-bold text-sm text-blue-600 hover:underline dark:text-blue-400">
+                      {getRequestName(r)}
+                    </button>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">ID: {r._id.slice(-6)}</p>
                   </div>
                   <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${statusColors[r.status] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{r.status?.replace('-', ' ') || 'pending'}</span>
                 </div>
                 <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${serviceColors[r.service || r.serviceType] || "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>{getRequestTitle(r)}</span>
-                <div className="mt-3 space-y-2 text-xs text-slate-600 dark:text-slate-400">
-                  <div className="flex justify-between"><span className="text-slate-500">Requested by:</span><span className="font-semibold">{r.userId?.role || 'user'}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Category:</span><span className="font-semibold">{r.pipelineSource === "cac" ? "CAC" : (r.serviceCategory || "Service")}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Amount:</span><span className="font-semibold">{formatAmount(r.amount || 0)}</span></div>
-                </div>
                 <div className="mt-auto flex gap-2 items-end">
-                  <div className="flex items-center mr-2"><input type="checkbox" checked={selectedIds.has(r._id)} onChange={() => toggleSelect(r._id)} className="w-4 h-4" /></div>
-                  <button onClick={() => setSelected(r)} className="bg-slate-900 text-white px-3 py-2 rounded-xl text-xs flex-1">Inspect</button>
+                  <input aria-label={`Select request ${r._id}`} type="checkbox" disabled={r.pipelineSource === "agent-job"} checked={selectedIds.has(r._id)} onChange={() => toggleSelect(r._id)} className="w-4 h-4" />
+                  <span className="text-xs text-slate-500">{formatDateShort(r.createdAt)}</span>
                 </div>
               </div>
             ))}
@@ -524,8 +465,6 @@ export default function AdminRequests() {
             modalComment={modalComment}
             setModalComment={setModalComment}
             handleStatusUpdate={handleStatusUpdate}
-            fetchRequests={fetchRequests}
-            page={page}
             setSelected={setSelected}
           />
         </SlideOver>
@@ -545,7 +484,7 @@ export default function AdminRequests() {
             ) : (
               <div className="space-y-3">
                 {jobs.map(job => (
-                  <div key={job._id} tabIndex={0} role="button" aria-label={`Bulk job ${job.action} ${job._id}`} onKeyDown={async (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); try { const r = await api.get(`/api/admin/requests/bulk-job/${job._id}`); const full = JSON.stringify(r.data?.data, null, 2); setJobDetails(full); } catch (err) { if (toastError) toastError('Failed to load job details'); } } }} className="p-3 border rounded">
+                  <div key={job._id} tabIndex={0} role="button" aria-label={`Bulk job ${job.action} ${job._id}`} onKeyDown={async (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); try { const r = await api.get(`/api/admin/requests/bulk-job/${job._id}`); const full = JSON.stringify(r.data?.data, null, 2); setJobDetails(full); } catch { if (toastError) toastError('Failed to load job details'); } } }} className="p-3 border rounded">
                     <div className="flex justify-between items-center">
                       <div>
                         <div className="font-semibold">{job.action} — {job._id}</div>
@@ -565,9 +504,9 @@ export default function AdminRequests() {
                       </div>
                     )}
                     <div className="mt-2 flex gap-2">
-                      <button type="button" onClick={async () => { try { const r = await api.get(`/api/admin/requests/bulk-job/${job._id}`); const full = JSON.stringify(r.data?.data, null, 2); setJobDetails(full); } catch (err) { if (toastError) toastError('Failed to load job details'); } }} aria-label={`View details for job ${job._id}`} className="px-2 py-1 rounded bg-slate-100 text-xs">View Details</button>
-                      <button type="button" onClick={async () => { try { const r = await api.get(`/api/admin/requests/bulk-job/${job._id}`); const data = r.data?.data || {}; const errors = Array.isArray(data.errors) ? data.errors : []; const csv = errors.map(e => `"${String(e).replace(/"/g,'""')}"`).join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `job_${job._id}_errors.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); if (success) success('Errors downloaded'); } catch (err) { if (toastError) toastError('Failed to download errors'); } }} aria-label={`Download errors for job ${job._id}`} className="px-2 py-1 rounded bg-slate-100 text-xs">Download Errors</button>
-                      <button type="button" onClick={async () => { try { const r = await api.get(`/api/admin/requests/bulk-job/${job._id}`); const full = JSON.stringify(r.data?.data, null, 2); await navigator.clipboard.writeText(full); if (success) success('Job data copied'); } catch (err) { if (toastError) toastError('Failed to copy job'); } }} aria-label={`Copy JSON for job ${job._id}`} className="px-2 py-1 rounded bg-slate-100 text-xs">Copy JSON</button>
+                      <button type="button" onClick={async () => { try { const r = await api.get(`/api/admin/requests/bulk-job/${job._id}`); const full = JSON.stringify(r.data?.data, null, 2); setJobDetails(full); } catch { if (toastError) toastError('Failed to load job details'); } }} aria-label={`View details for job ${job._id}`} className="px-2 py-1 rounded bg-slate-100 text-xs">View Details</button>
+                      <button type="button" onClick={async () => { try { const r = await api.get(`/api/admin/requests/bulk-job/${job._id}`); const data = r.data?.data || {}; const errors = Array.isArray(data.errors) ? data.errors : []; const csv = errors.map(e => `"${String(e).replace(/"/g,'""')}"`).join('\n'); const blob = new Blob([csv], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `job_${job._id}_errors.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); if (success) success('Errors downloaded'); } catch { if (toastError) toastError('Failed to download errors'); } }} aria-label={`Download errors for job ${job._id}`} className="px-2 py-1 rounded bg-slate-100 text-xs">Download Errors</button>
+                      <button type="button" onClick={async () => { try { const r = await api.get(`/api/admin/requests/bulk-job/${job._id}`); const full = JSON.stringify(r.data?.data, null, 2); await navigator.clipboard.writeText(full); if (success) success('Job data copied'); } catch { if (toastError) toastError('Failed to copy job'); } }} aria-label={`Copy JSON for job ${job._id}`} className="px-2 py-1 rounded bg-slate-100 text-xs">Copy JSON</button>
                     </div>
                   </div>
                 ))}

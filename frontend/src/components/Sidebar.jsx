@@ -14,6 +14,7 @@ import {
   Wallet,
   Bell,
   X,
+  MessageCircle,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../lib/axios";
@@ -86,6 +87,8 @@ const adminGroups = [
       { to: "/admin/services-engine", label: "Services & pricing", icon: SlidersHorizontal, superAdminOnly: true },
       { to: "/admin/notifications", label: "Notification center", icon: Bell, superAdminOnly: true },
       { to: "/admin/articles", label: "Guides & updates", icon: BookOpenText, superAdminOnly: true },
+      { to: "/admin/agents", label: "Agents & jobs", icon: Users, superAdminOnly: true },
+      { to: "/admin/communications", label: "Communications", icon: MessageCircle, superAdminOnly: true },
     ],
   },
 ];
@@ -95,6 +98,8 @@ function activeGroupForPath(pathname, isAdminWorkspace) {
     pathname.startsWith("/admin/pricing")
     || pathname.startsWith("/admin/services-engine")
     || pathname.startsWith("/admin/user/")
+    || pathname.startsWith("/admin/agents")
+    || pathname.startsWith("/admin/communications")
   )) {
     return "management";
   }

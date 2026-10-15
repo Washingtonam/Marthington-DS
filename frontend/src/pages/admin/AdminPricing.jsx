@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../../lib/axios";
 import { parseImportedFormText } from "../../lib/formTextParser";
+import AgentCommissionSettings from "../../components/admin/AgentCommissionSettings";
 import {
   Loader2,
   Plus,
@@ -406,6 +407,8 @@ export default function AdminPricing() {
           </button>
         </div>
       </div>
+
+      <AgentCommissionSettings />
 
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-slate-800 dark:text-white">Service categories</h2>

@@ -94,6 +94,22 @@ describe("dashboard shell navigation", () => {
     expect(document.querySelector("#sidebar-group-services").hidden).toBe(false);
     expect(document.querySelector('#app-sidebar a[href="/verify-nin"]').getAttribute("aria-current")).toBe("page");
   });
+
+  test("shows agent and communication navigation only in the super-admin workspace", () => {
+    window.innerWidth = 1280;
+    mocks.user = { id: "admin-1", role: "super_admin" };
+    renderLayout("/admin/agents");
+
+    expect(screen.getByRole("link", { name: "Agents & jobs" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("link", { name: "Communications" }));
+    expect(screen.getByLabelText("Current route").textContent).toBe("/admin/communications");
+
+    cleanup();
+    mocks.user = { id: "user-1", role: "user" };
+    renderLayout();
+    expect(screen.queryByRole("link", { name: "Agents & jobs" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Communications" })).toBeNull();
+  });
 });
 
 describe("workspace switching", () => {
@@ -112,19 +128,19 @@ describe("workspace switching", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Workspace" }), { target: { value: "admin" } });
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Super Admin workspace" }));
 
     expect(screen.getByLabelText("Current route").textContent).toBe("/admin");
   });
 
   test("does not expose the admin workspace to ordinary users", () => {
     mocks.user = { id: "user-1", role: "user" };
-    const { container } = render(
+    render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <WorkspaceSwitcher isAdminWorkspace={false} />
       </MemoryRouter>,
     );
 
-    expect(container.querySelector("select")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Workspace" })).toBeNull();
   });
 });

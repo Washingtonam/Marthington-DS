@@ -3,7 +3,13 @@ import { Link } from "react-router-dom";
 
 export default function Footer({ className = "" }) {
   return (
-    <footer className={`bg-gray-900 dark:bg-black text-white py-12 px-6 border-t border-gray-800 ${className}`}>
+    <footer
+      className={`border-t bg-gray-900 py-12 px-6 text-white dark:bg-slate-950 ${className}`}
+      style={{
+        background: "linear-gradient(115deg, color-mix(in srgb, var(--accent) 24%, #0f172a), #0f172a 54%, color-mix(in srgb, var(--accent) 10%, #020617))",
+        borderTopColor: "rgba(var(--accent-rgb), 0.4)",
+      }}
+    >
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
         {/* Company Info */}
         <div>

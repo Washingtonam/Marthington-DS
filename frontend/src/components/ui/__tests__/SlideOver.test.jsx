@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 import SlideOver from '../SlideOver';
 
 describe('SlideOver', () => {
-  test('renders and closes on Escape and backdrop click, focuses close button', async () => {
+  test('renders a centered dialog and closes on Escape and backdrop click', async () => {
     const onClose = vi.fn();
     const { container } = render(
       <SlideOver isOpen={true} onClose={onClose} title="Test Slide">
@@ -16,20 +16,16 @@ describe('SlideOver', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeTruthy();
 
-    // initial focus should land on the Close button inside the panel
-    const closeButton = screen.getByText('Close');
-    expect(document.activeElement === closeButton || closeButton).toBeTruthy();
+    const closeButton = screen.getByRole('button', { name: 'Close dialog' });
+    expect(document.activeElement).toBe(closeButton);
+    expect(dialog.className).toContain('max-w-3xl');
 
     // simulate Escape key
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
 
     // simulate backdrop click
-    const root = container.firstChild; // root wrapper
-    const overlay = root?.querySelector('div');
-    if (overlay) {
-      fireEvent.click(overlay);
-      expect(onClose).toHaveBeenCalled();
-    }
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog backdrop' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });

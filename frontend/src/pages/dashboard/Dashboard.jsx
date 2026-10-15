@@ -104,6 +104,10 @@ export default function Dashboard() {
         subtitle="Manage verifications, requests and transactions from one secure dashboard."
       />
 
+      <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm leading-6 text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-200">
+        Earn extra profit on every completed request! Commissions are automatically credited to your wallet once processing is finished.
+      </div>
+
       <>
           <motion.div
         initial={{ opacity: 0, y: 20 }}
