@@ -21,11 +21,13 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 // ==============================
 router.post("/register", async (req, res) => {
   try {
-    let { firstName, lastName, nin, email, password, confirmPassword, phone } = req.body;
+    let { firstName, lastName, nin, email, password, confirmPassword, phone, address, state, lga } = req.body;
 
-    if (!email || !password || !phone) {
+    const hasResidentialLocation = [address, state, lga]
+      .every((value) => typeof value === "string" && value.trim());
+    if (!email || !password || !phone || !hasResidentialLocation) {
       return res.status(400).json({
-        error: "Email, password, and phone number are required",
+        error: "Email, password, phone number, address, state, and local government are required",
       });
     }
 
@@ -40,6 +42,9 @@ router.post("/register", async (req, res) => {
     lastName = (lastName || "").trim();
     nin = (nin || "").trim();
     phone = (phone || "").trim();
+    address = (address || "").trim();
+    state = (state || "").trim();
+    lga = (lga || "").trim();
 
     const phoneRegex = /^\+?[0-9\s().-]{8,15}$/;
     if (!phoneRegex.test(phone)) {
@@ -81,6 +86,9 @@ router.post("/register", async (req, res) => {
       nin: nin || "",
       email,
       phone,
+      address,
+      state,
+      lga,
       password: hashedPassword,
       role: assignedRole,
       approvalStatus: assignedRole === "super_admin" ? "approved" : "pending",

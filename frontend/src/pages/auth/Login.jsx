@@ -1,15 +1,12 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff, ShieldCheck, LockKeyhole, Mail, ArrowRight, Sparkles, CheckCircle2 } from "lucide-react";
-import { motion } from "framer-motion";
-
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { login } from "../../services/api";
 import { useUser } from "../../context/UserContext";
 
 export default function Login() {
   const navigate = useNavigate();
   const { setUser } = useUser();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,35 +14,33 @@ export default function Login() {
   const [loginMessage, setLoginMessage] = useState("");
   const [approvalBlocked, setApprovalBlocked] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      return alert("Enter email and password");
-    }
-
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setLoginMessage("");
+    setApprovalBlocked(false);
     setLoading(true);
 
     try {
       const data = await login({ email, password });
 
-      if (data?.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        localStorage.setItem("email", data.user.email);
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("lastActivity", String(Date.now()));
-        setUser(data.user);
-
-        const destination = data.user?.role === "admin" || data.user?.role === "super_admin" ? "/admin" : "/dashboard";
-        navigate(destination);
-      } else {
-        throw new Error("Invalid response payload from server.");
+      if (!data?.user || !data?.token) {
+        throw new Error("We couldn’t sign you in. Please try again.");
       }
+
+      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("email", data.user.email);
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("lastActivity", String(Date.now()));
+      setUser(data.user);
+
+      navigate(data.user.role === "admin" || data.user.role === "super_admin" ? "/admin" : "/dashboard");
     } catch (error) {
-      console.error("🔥 LOGIN SUBMISSION EXCEPTION:", error);
+      console.error("LOGIN SUBMISSION ERROR:", error);
       setLoginMessage(
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        error.message ||
-        "Authentication processing failed."
+        error.response?.data?.message
+        || error.response?.data?.error
+        || error.message
+        || "Sign in failed. Please try again."
       );
       setApprovalBlocked(["ACCOUNT_PENDING_APPROVAL", "ACCOUNT_NOT_APPROVED"].includes(error.response?.data?.code));
     } finally {
@@ -53,110 +48,117 @@ export default function Login() {
     }
   };
 
+  const inputClassName = "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10";
+
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.20),_transparent_32%),linear-gradient(135deg,_#f8fbff_0%,_#eef4ff_45%,_#fdfcff_100%)] px-4 py-10 text-slate-900">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-[-8%] top-[-6%] h-[420px] w-[420px] rounded-full bg-blue-400/20 blur-[140px]" />
-        <div className="absolute bottom-[-8%] right-[-6%] h-[420px] w-[420px] rounded-full bg-indigo-300/20 blur-[140px]" />
-        <motion.div animate={{ y: [0, -12, 0], x: [0, 10, 0], rotate: [0, 6, 0] }} transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }} className="absolute left-[8%] top-[16%] h-20 w-20 rounded-full border border-blue-200/70 bg-white/70 shadow-[0_10px_40px_rgba(59,130,246,0.12)] backdrop-blur" />
-        <motion.div animate={{ y: [0, 18, 0], x: [0, -10, 0] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }} className="absolute right-[10%] top-[24%] h-14 w-14 rounded-2xl border border-indigo-200/70 bg-gradient-to-br from-white to-indigo-50 shadow-[0_10px_35px_rgba(79,70,229,0.15)]" />
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_34%),linear-gradient(135deg,_#f8fbff_0%,_#eef4ff_48%,_#fdfcff_100%)] px-3 py-6 text-slate-900 sm:px-6 sm:py-10">
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -left-32 -top-40 h-96 w-96 rounded-full bg-blue-400/20 blur-[120px]" />
+        <div className="absolute -bottom-40 -right-32 h-96 w-96 rounded-full bg-indigo-400/20 blur-[120px]" />
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="relative z-10 grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white/80 shadow-[0_30px_120px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-blue-700 via-indigo-700 to-slate-900 p-12 text-white lg:flex">
-          <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative z-10">
-            <div className="mb-8 flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 backdrop-blur">
-                <ShieldCheck size={28} />
-              </div>
-              <div>
-                <h1 className="text-3xl font-black tracking-tight">Marthington</h1>
-                <p className="text-sm text-white/70">Secure Identity Platform</p>
-              </div>
-            </div>
-
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-blue-100 backdrop-blur">
-              <Sparkles size={16} /> Premium access for modern teams
-            </div>
-
-            <h2 className="max-w-md text-5xl font-black leading-tight">Welcome back to your secure workspace.</h2>
-            <p className="mt-6 max-w-lg text-base leading-8 text-white/70">Access your verifications, requests, and wallet from a beautifully designed portal built for speed and confidence.</p>
-          </div>
-
-          <div className="relative z-10 space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-white/10 p-5 backdrop-blur">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">
-                  <CheckCircle2 size={22} />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Fast, trusted verification</h3>
-                  <p className="text-sm text-white/70">Secure processing with real-time visibility.</p>
-                </div>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/10 p-5 backdrop-blur">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/20">
-                  <LockKeyhole size={22} />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Protected access</h3>
-                  <p className="text-sm text-white/70">Encrypted sessions and role-based control.</p>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div className="relative z-10 w-full max-w-5xl">
+        <div className="mb-5 flex items-center justify-between px-1 sm:px-2">
+          <Link to="/" className="inline-flex items-center gap-2.5" aria-label="Marthington home">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/20">
+              <ShieldCheck size={21} />
+            </span>
+            <span>
+              <span className="block text-base font-bold tracking-tight">Marthington</span>
+              <span className="block text-xs text-slate-500">Identity Platform</span>
+            </span>
+          </Link>
+          <p className="text-sm text-slate-600">
+            New here? <Link to="/register" className="font-semibold text-blue-700 hover:text-blue-800">Apply for access</Link>
+          </p>
         </div>
 
-        <div className="flex items-center bg-white/70 p-8 md:p-12">
-          <div className="mx-auto w-full max-w-md">
-            <div className="mb-8 text-center lg:text-left">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-600 lg:hidden">
-                <Sparkles size={14} /> Premium access
+        <section
+          className="overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/90 shadow-[0_28px_100px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+        >
+          <div className="grid min-h-[560px] lg:grid-cols-[1fr_1fr]">
+            <aside className="relative hidden overflow-hidden bg-gradient-to-br from-blue-700 via-indigo-700 to-slate-900 p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
+              <div aria-hidden="true" className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-blue-300/20 blur-3xl" />
+              <div className="relative">
+                <span className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-2 text-xs font-semibold text-blue-100">
+                  <ShieldCheck size={15} /> SECURE WORKSPACE
+                </span>
+                <h1 className="max-w-md text-4xl font-black leading-tight xl:text-5xl">Welcome back to your workspace.</h1>
+                <p className="mt-5 max-w-md text-sm leading-7 text-blue-100/80">
+                  Sign in to manage service requests, account activity, and your wallet.
+                </p>
               </div>
-              <h2 className="text-4xl font-black text-slate-900">Welcome back 👋</h2>
-              <p className="mt-3 text-sm leading-7 text-slate-600">Log in to continue your flow with a polished, secure experience.</p>
-            </div>
+              <p className="relative text-xs text-white/60">Secure access for Marthington agents and teams.</p>
+            </aside>
 
-            <div className="space-y-5">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Email Address</label>
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:ring-2 focus-within:ring-blue-500">
-                  <Mail size={18} className="text-slate-400" />
-                  <input type="email" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-transparent text-sm outline-none" />
-                </div>
-              </div>
+            <div className="flex items-center p-5 sm:p-10 lg:p-12">
+              <div className="mx-auto w-full max-w-md">
+                <header className="mb-8">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-blue-700 lg:hidden">Secure sign in</p>
+                  <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">Welcome back</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">Sign in with your registered email and password.</p>
+                </header>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Password</label>
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:ring-2 focus-within:ring-blue-500">
-                  <LockKeyhole size={18} className="text-slate-400" />
-                  <input type={showPassword ? "text" : "password"} placeholder="Enter password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-transparent text-sm outline-none" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 transition hover:text-slate-700">
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                <form onSubmit={handleLogin} className="space-y-5">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">Email address</span>
+                    <span className="relative block">
+                      <Mail aria-hidden="true" size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        className={`${inputClassName} pl-10`}
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        required
+                      />
+                    </span>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">Password</span>
+                    <span className="relative block">
+                      <LockKeyhole aria-hidden="true" size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        className={`${inputClassName} pr-11 pl-10`}
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        required
+                      />
+                      <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </span>
+                  </label>
+
+                  <div className="flex justify-end">
+                    <Link to="/forgot-password" className="text-sm font-semibold text-blue-700 hover:text-blue-800">Forgot password?</Link>
+                  </div>
+
+                  {loginMessage && (
+                    <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                      {loginMessage}
+                      {approvalBlocked && <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" className="mt-1 block font-bold underline">Contact WhatsApp Support</a>}
+                    </div>
+                  )}
+
+                  <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">
+                    {loading ? "Signing in..." : <>Sign in <ArrowRight size={17} /></>}
                   </button>
-                </div>
+                </form>
+
+                <p className="mt-7 text-center text-sm text-slate-500">
+                  Need an account? <Link to="/register" className="font-semibold text-blue-700 hover:underline">Apply for agent access</Link>
+                </p>
               </div>
-
-              <div className="text-right">
-                <Link to="/forgot-password" className="text-sm font-medium text-blue-600 transition hover:underline">Forgot Password?</Link>
-              </div>
-
-              {loginMessage && <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">{loginMessage}{approvalBlocked && <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" className="mt-2 block font-bold underline">WhatsApp Support</a>}</div>}
-
-              <button onClick={handleLogin} disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-4 text-sm font-semibold text-white shadow-[0_12px_40px_rgba(37,99,235,0.25)] transition hover:opacity-90">
-                {loading ? "Processing..." : (<><span>Login</span><ArrowRight size={18} /></>)}
-              </button>
-            </div>
-
-            <div className="mt-8 text-center">
-              <p className="text-sm text-slate-500">Want to become an agent? <span onClick={() => navigate("/register")} className="cursor-pointer font-semibold text-blue-600 transition hover:underline">Apply for access</span></p>
             </div>
           </div>
-        </div>
-      </motion.div>
-    </div>
+        </section>
+      </div>
+    </main>
   );
 }

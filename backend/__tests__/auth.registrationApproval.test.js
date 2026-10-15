@@ -17,6 +17,9 @@ const registration = (email = "agent@example.com") => ({
   nin: "12345678901",
   email,
   phone: "08031234567",
+  address: "12 Example Street",
+  state: "Lagos",
+  lga: "Ikeja",
   password: "AgentPassword1!",
   confirmPassword: "AgentPassword1!",
 });
@@ -49,6 +52,35 @@ describe("agent account approval during registration and login", () => {
 
     expect(response.status).toBe(201);
     expect(User.create).toHaveBeenCalledWith(expect.objectContaining({ approvalStatus: "approved", role: "super_admin" }));
+  });
+
+  it("requires a residential address, state, and local government", async () => {
+    const response = await request(app)
+      .post("/api/auth/register")
+      .send({ ...registration(), state: "", lga: "" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/address, state, and local government are required/i);
+    expect(User.create).not.toHaveBeenCalled();
+  });
+
+  it("stores the submitted residential location on the new account", async () => {
+    User.findOne.mockResolvedValue(null);
+    User.create.mockImplementation(async (data) => ({
+      ...data,
+      _id: "new-agent",
+      walletBalance: 0,
+      walletBalanceKobo: 0,
+      units: 0,
+    }));
+
+    await request(app).post("/api/auth/register").send(registration());
+
+    expect(User.create).toHaveBeenCalledWith(expect.objectContaining({
+      address: "12 Example Street",
+      state: "Lagos",
+      lga: "Ikeja",
+    }));
   });
 
   it("denies login while an agent application is pending", async () => {
