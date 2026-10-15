@@ -134,6 +134,33 @@ describe("communications routes", () => {
   it("marks a conversation read when support opens the thread", async () => {
     const conversation = {
       _id: "0123456789abcdef01234567",
+      lastUserMessageId: "agent-message-1",
+      lastUserMessageAt: new Date("2026-10-15T09:59:00.000Z"),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    SupportConversation.findById.mockResolvedValue(conversation);
+    SupportMessage.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([]),
+        }),
+      }),
+    });
+
+    const response = await request(app)
+      .get("/api/admin/communications/conversations/0123456789abcdef01234567/messages?markRead=true")
+      .set("Authorization", authHeader("support-admin"));
+
+    expect(response.status).toBe(200);
+    expect(conversation.adminReadAt).toBeInstanceOf(Date);
+    expect(conversation.adminReadMessageId).toBe("agent-message-1");
+    expect(conversation.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mark a conversation read during passive inbox polling", async () => {
+    const conversation = {
+      _id: "0123456789abcdef01234567",
+      lastUserMessageId: "agent-message-1",
       lastUserMessageAt: new Date("2026-10-15T09:59:00.000Z"),
       save: jest.fn().mockResolvedValue(undefined),
     };
@@ -151,8 +178,8 @@ describe("communications routes", () => {
       .set("Authorization", authHeader("support-admin"));
 
     expect(response.status).toBe(200);
-    expect(conversation.adminReadAt).toBeInstanceOf(Date);
-    expect(conversation.save).toHaveBeenCalledTimes(1);
+    expect(conversation.save).not.toHaveBeenCalled();
+    expect(conversation.adminReadMessageId).toBeUndefined();
   });
 
   it("returns unread conversations for the Communications inbox badge", async () => {

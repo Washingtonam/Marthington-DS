@@ -47,7 +47,7 @@ export default function Communications() {
   const userId = user?.id || user?._id;
   const requestedTab = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState(() => (
-    isSuperAdmin && ["templates", "dispatch", "notifications"].includes(requestedTab)
+    isSuperAdmin && ["templates", "dispatch", "notifications", "inbox"].includes(requestedTab)
       ? requestedTab
       : isSuperAdmin ? "templates" : "inbox"
   ));
@@ -77,7 +77,7 @@ export default function Communications() {
   }, []);
 
   const loadThread = useCallback(async (conversation) => {
-    const response = await api.get(`/api/admin/communications/conversations/${conversation._id}/messages`);
+    const response = await api.get(`/api/admin/communications/conversations/${conversation._id}/messages?markRead=true`);
     window.dispatchEvent(new Event("support-conversation-read"));
     setSelectedConversation(response.data.conversation);
     setMessages(response.data.messages || []);
@@ -305,6 +305,20 @@ export default function Communications() {
         </button>
       </div>
 
+      {activeTab === "inbox" && unreadConversationCount > 0 && (
+        <div role="status" aria-live="polite" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+          <p>
+            <strong>{unreadConversationCount} unanswered agent {unreadConversationCount === 1 ? "message" : "messages"}.</strong>
+            {" "}
+            {conversations
+              .filter((conversation) => conversation.unreadCount > 0)
+              .map((conversation) => conversation.user?.name || "An agent")
+              .join(", ")}
+          </p>
+          <span className="font-semibold">Open each conversation to mark it read.</span>
+        </div>
+      )}
+
       {loading ? (
         <div role="status" className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700">Loading communications…</div>
       ) : activeTab === "templates" && isSuperAdmin ? (
@@ -492,15 +506,17 @@ export default function Communications() {
               <div><h3 className="font-bold">Agent conversations</h3><p className="mt-1 text-xs text-slate-500">Text-only messages from the platform chat.</p></div>
               <button type="button" onClick={refreshInbox} aria-label="Refresh inbox" className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"><RefreshCw size={16} /></button>
             </div>
-            <div className="space-y-2">
-              {conversations.map((conversation) => (
-                <button type="button" key={conversation._id} onClick={() => loadThread(conversation).catch((loadError) => { console.error("Support thread load failed:", loadError); toastError("Could not load this conversation."); })} className={`w-full rounded-xl border p-3 text-left ${selectedConversation?._id === conversation._id ? "border-[var(--accent)] bg-[rgba(var(--accent-rgb),0.06)]" : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`}>
-                  <span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold">{conversation.user?.name || "Former agent"}</span><span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-500">{conversation.unreadCount > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">New</span>}{formatDate(conversation.lastMessageAt)}</span></span>
-                  <span className="mt-1 block truncate text-xs text-slate-500">{conversation.lastMessage}</span>
-                </button>
-              ))}
-              {!conversations.length && <p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500 dark:bg-slate-950">No agent messages yet. Messages sent through the platform chatbot will appear here.</p>}
-            </div>
+              <div className="space-y-2">
+                {[...conversations]
+                  .sort((left, right) => Number(right.unreadCount > 0) - Number(left.unreadCount > 0))
+                  .map((conversation) => (
+                    <button type="button" key={conversation._id} onClick={() => loadThread(conversation).catch((loadError) => { console.error("Support thread load failed:", loadError); toastError("Could not load this conversation."); })} className={`w-full rounded-xl border p-3 text-left ${conversation.unreadCount > 0 ? "border-amber-300 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20" : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"} ${selectedConversation?._id === conversation._id ? "ring-2 ring-[var(--accent)]" : ""}`}>
+                      <span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold">{conversation.user?.name || "Former agent"}</span><span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-500">{conversation.unreadCount > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">UNREAD</span>}{formatDate(conversation.lastMessageAt)}</span></span>
+                      <span className="mt-1 block truncate text-xs text-slate-500">{conversation.lastMessage}</span>
+                    </button>
+                  ))}
+                {!conversations.length && <p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500 dark:bg-slate-950">No agent messages yet. Messages sent through the platform chatbot will appear here.</p>}
+              </div>
           </section>
           <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div><h3 className="font-bold">{selectedConversation?.user?.name || "Select a conversation"}</h3><p className="mt-1 text-sm text-slate-500">{selectedConversation?.user?.email || "Choose an agent on the left to read and reply."}</p></div>

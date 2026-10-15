@@ -141,12 +141,14 @@ describe("Communications", () => {
     render(<MemoryRouter><Communications /></MemoryRouter>);
 
     const inboxTab = await screen.findByRole("tab", { name: "Support inbox 1" });
-    expect(screen.getByText("New")).toBeTruthy();
+    expect(screen.getByText("UNREAD")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("1 unanswered agent message");
+    expect(screen.getByRole("status").textContent).toContain("Ayo Agent");
     fireEvent.click(screen.getByRole("button", { name: /Ayo Agent/ }));
 
     expect(await screen.findByRole("tab", { name: "Support inbox 0" })).toBeTruthy();
     await waitFor(() => expect(api.get).toHaveBeenCalledWith(
-      "/api/admin/communications/conversations/conversation-1/messages",
+      "/api/admin/communications/conversations/conversation-1/messages?markRead=true",
     ));
     expect(inboxTab).toBeTruthy();
   });
@@ -171,5 +173,23 @@ describe("Communications", () => {
     expect(await screen.findByRole("heading", { name: "Keep users informed" })).toBeTruthy();
     await waitFor(() => expect(api.get).toHaveBeenCalledWith("/api/admin/notifications"));
     expect(screen.getByRole("tab", { name: "Notification center" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  test("opens directly to the support inbox from an inbox deep link", async () => {
+    api.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/conversations")
+        ? { conversations: [{ _id: "conversation-1", unreadCount: 1, user: { name: "Ayo Agent" }, lastMessage: "Please help" }] }
+        : path.endsWith("/templates")
+          ? { templates: [template] }
+          : { manualAgents: [], registeredUsers: [agent] },
+    }));
+    render(
+      <MemoryRouter initialEntries={["/admin/communications?tab=inbox"]}>
+        <Communications />
+      </MemoryRouter>,
+    );
+
+    expect((await screen.findByRole("tab", { name: "Support inbox 1" })).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("status").textContent).toContain("Ayo Agent");
   });
 });

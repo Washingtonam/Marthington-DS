@@ -359,7 +359,7 @@ adminRouter.get("/conversations/:conversationId/messages", isAdmin, async (req, 
   try {
     const conversation = await SupportConversation.findById(req.params.conversationId);
     if (!conversation) return res.status(404).json({ success: false, message: "Conversation not found." });
-    if (hasUnreadMessage(
+    if (req.query.markRead === "true" && hasUnreadMessage(
       conversation.lastUserMessageId,
       conversation.adminReadMessageId,
       conversation.lastUserMessageAt,

@@ -188,6 +188,29 @@ describe('service catalog API', () => {
     }));
   });
 
+  it('preserves commission settings when normalizing Mongoose catalog subdocuments', async () => {
+    const pricing = new Pricing({
+      serviceCatalog: [{
+        serviceCode: 'mongoose-service',
+        category: 'NIMC',
+        name: 'Mongoose Service',
+        price: 5000,
+        commissionType: 'PERCENTAGE',
+        commissionValue: 12.5,
+      }],
+    });
+    jest.spyOn(Pricing, 'getPricing').mockResolvedValue(pricing);
+
+    const catalog = await Pricing.getServiceCatalog();
+
+    expect(catalog.find((service) => service.serviceCode === 'mongoose-service')).toEqual(
+      expect.objectContaining({
+        commissionType: 'PERCENTAGE',
+        commissionValue: 12.5,
+      })
+    );
+  });
+
   it('rejects negative catalog prices when creating or updating services', async () => {
     User.findById.mockResolvedValue({
       id: 'admin-user-1',

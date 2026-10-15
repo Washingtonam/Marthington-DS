@@ -119,9 +119,11 @@ const LEGACY_GENERIC_SERVICE_CODES = new Set([
 ]);
 
 const normalizeCatalogService = (service = {}, fallback = {}) => {
-  const serviceCode = String(service.serviceCode || fallback.serviceCode || '').trim();
-  const configuredFields = Array.isArray(service.metadata?.formFields) ? service.metadata.formFields : [];
-  const fallbackFields = fallback.metadata?.formFields || [];
+  const serviceData = typeof service?.toObject === 'function' ? service.toObject() : service;
+  const fallbackData = typeof fallback?.toObject === 'function' ? fallback.toObject() : fallback;
+  const serviceCode = String(serviceData.serviceCode || fallbackData.serviceCode || '').trim();
+  const configuredFields = Array.isArray(serviceData.metadata?.formFields) ? serviceData.metadata.formFields : [];
+  const fallbackFields = fallbackData.metadata?.formFields || [];
   const legacyDobFieldKeys = new Set(['nin', 'fullName', 'currentDob', 'newDob', 'reason']);
   const hasLegacyDobForm = serviceCode === 'modification-dob'
     && configuredFields.length > 0
@@ -136,20 +138,20 @@ const normalizeCatalogService = (service = {}, fallback = {}) => {
   }
 
   return {
-    ...fallback,
-    ...service,
+    ...fallbackData,
+    ...serviceData,
     serviceCode,
-    category: normalizeCategory({ label: service.category || fallback.category || 'NIMC' }).label,
-    name: String(service.name || fallback.name || '').trim() || 'Unnamed Service',
-    type: String(service.type || fallback.type || '').trim(),
-    status: ['active', 'paused', 'disabled'].includes(service.status || fallback.status) ? (service.status || fallback.status) : 'active',
-    price: Number(service.price ?? fallback.price ?? 0) || 0,
-    cost: service.cost == null && fallback.cost == null
+    category: normalizeCategory({ label: serviceData.category || fallbackData.category || 'NIMC' }).label,
+    name: String(serviceData.name || fallbackData.name || '').trim() || 'Unnamed Service',
+    type: String(serviceData.type || fallbackData.type || '').trim(),
+    status: ['active', 'paused', 'disabled'].includes(serviceData.status || fallbackData.status) ? (serviceData.status || fallbackData.status) : 'active',
+    price: Number(serviceData.price ?? fallbackData.price ?? 0) || 0,
+    cost: serviceData.cost == null && fallbackData.cost == null
       ? null
-      : Math.max(Number(service.cost ?? fallback.cost), 0),
+      : Math.max(Number(serviceData.cost ?? fallbackData.cost), 0),
     metadata: {
-      ...(fallback.metadata || {}),
-      ...(service.metadata || {}),
+      ...(fallbackData.metadata || {}),
+      ...(serviceData.metadata || {}),
       formFields,
     },
   };

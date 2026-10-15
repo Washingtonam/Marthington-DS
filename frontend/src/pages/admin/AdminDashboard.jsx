@@ -332,7 +332,7 @@ export default function AdminDashboard() {
         </div>
         <button
           type="button"
-          onClick={() => navigate("/admin/communications")}
+          onClick={() => navigate("/admin/communications?tab=inbox")}
           className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)]"
         >
           <MessageCircle size={16} aria-hidden="true" /> Open communications
