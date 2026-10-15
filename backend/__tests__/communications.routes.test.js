@@ -123,11 +123,13 @@ describe("communications routes", () => {
       senderRole: "admin",
       text: "We can help",
     }));
+    expect(conversation.adminReadAt).toBeInstanceOf(Date);
   });
 
   it("marks a conversation read when support opens the thread", async () => {
     const conversation = {
       _id: "0123456789abcdef01234567",
+      lastUserMessageAt: new Date("2026-10-15T09:59:00.000Z"),
       save: jest.fn().mockResolvedValue(undefined),
     };
     SupportConversation.findById.mockResolvedValue(conversation);
@@ -148,12 +150,51 @@ describe("communications routes", () => {
     expect(conversation.save).toHaveBeenCalledTimes(1);
   });
 
+  it("returns unread conversations for the Communications inbox badge", async () => {
+    SupportConversation.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([{
+            _id: "0123456789abcdef01234567",
+            userId: "agent-user",
+            lastUserMessageAt: new Date("2026-10-15T10:00:00.000Z"),
+            lastUserMessageId: "message-1",
+            adminReadAt: null,
+            lastMessage: "I need help",
+          }]),
+        }),
+      }),
+    });
+    User.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([{
+          _id: "agent-user",
+          firstName: "Ayo",
+          lastName: "Agent",
+          email: "ayo@example.com",
+        }]),
+      }),
+    });
+
+    const response = await request(app)
+      .get("/api/admin/communications/conversations")
+      .set("Authorization", authHeader("support-admin"));
+
+    expect(response.status).toBe(200);
+    expect(response.body.conversations[0]).toEqual(expect.objectContaining({
+      unreadCount: 1,
+      lastUserMessageId: "message-1",
+      user: expect.objectContaining({ name: "Ayo Agent" }),
+    }));
+  });
+
   it("marks support replies as unread for the user until their inbox is opened", async () => {
     const readAt = new Date("2026-10-15T10:00:00.000Z");
     const replyAt = new Date("2026-10-15T10:01:00.000Z");
     const conversation = {
       _id: "0123456789abcdef01234567",
       lastAdminMessageAt: replyAt,
+      lastAdminMessageId: "reply-message",
       userReadAt: readAt,
     };
     SupportConversation.findOne.mockReturnValue({
@@ -168,9 +209,11 @@ describe("communications routes", () => {
 
     expect(unread.status).toBe(200);
     expect(unread.body.unreadCount).toBe(1);
+    expect(unread.body.latestMessageId).toBe("reply-message");
 
     const savedConversation = {
       _id: conversation._id,
+      lastAdminMessageAt: replyAt,
       save: jest.fn().mockResolvedValue(undefined),
     };
     SupportConversation.findOne.mockResolvedValue(savedConversation);

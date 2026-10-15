@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   user: { id: "user-1", firstName: "Morgan", role: "super_admin" },
   businessLogoUrl: "",
   error: vi.fn(),
+  info: vi.fn(),
   get: vi.fn(() => new Promise(() => {})),
 }));
 
@@ -37,7 +38,7 @@ vi.mock("../../context/BrandingContext", () => ({
 }));
 
 vi.mock("../../context/ToastContext", () => ({
-  useToast: () => ({ error: mocks.error }),
+  useToast: () => ({ error: mocks.error, info: mocks.info }),
 }));
 
 vi.mock("../../lib/axios", () => ({
@@ -68,6 +69,7 @@ afterEach(() => {
   window.innerWidth = 1024;
   mocks.user = { id: "user-1", firstName: "Morgan", role: "super_admin" };
   mocks.businessLogoUrl = "";
+  mocks.info.mockReset();
   mocks.get.mockReset();
   mocks.get.mockImplementation(() => new Promise(() => {}));
 });
@@ -170,12 +172,43 @@ describe("dashboard shell navigation", () => {
   test("shows unread support notifications on the user navigation item", async () => {
     mocks.user = { id: "user-1", role: "user" };
     mocks.get.mockImplementation((path) => Promise.resolve({
-      data: path.endsWith("/unread-count") ? { unreadCount: 1 } : {},
+      data: path.endsWith("/unread-count")
+        ? { unreadCount: 1, latestMessageAt: "2026-10-15T10:00:00.000Z", latestMessageId: "reply-1" }
+        : {},
     }));
     renderLayout();
 
     const chatLink = await screen.findByRole("link", { name: /Chat with support/ });
     expect(chatLink.querySelector('[aria-label="1 unread"]')).toBeTruthy();
+    expect(mocks.info).toHaveBeenCalledWith(
+      "Support has replied to your message. Open Chat with support to read it.",
+      7000,
+    );
+  });
+
+  test("alerts admins when an agent sends a support message", async () => {
+    mocks.user = { id: "admin-1", role: "admin" };
+    mocks.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/conversations")
+        ? {
+          conversations: [{
+            _id: "conversation-1",
+            unreadCount: 1,
+            lastUserMessageId: "message-1",
+            lastUserMessageAt: "2026-10-15T10:00:00.000Z",
+            lastMessage: "I need help",
+            user: { name: "Ayo Agent" },
+          }],
+        }
+        : {},
+    }));
+    renderLayout("/admin/communications");
+
+    expect(await screen.findByRole("link", { name: /Communications/ })).toBeTruthy();
+    expect(mocks.info).toHaveBeenCalledWith(
+      "New support message from Ayo Agent. Open Communications to read it.",
+      7000,
+    );
   });
 
   test("shows agent and communication navigation only in the super-admin workspace", () => {

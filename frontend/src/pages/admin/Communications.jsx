@@ -67,6 +67,9 @@ export default function Communications() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [emailResult, setEmailResult] = useState("");
+  const [desktopPermission, setDesktopPermission] = useState(() => (
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission
+  ));
 
   const loadConversations = useCallback(async () => {
     const response = await api.get("/api/admin/communications/conversations");
@@ -231,13 +234,35 @@ export default function Communications() {
 
   useEffect(() => {
     if (activeTab !== "inbox") return undefined;
-    const interval = window.setInterval(() => {
-      loadConversations().catch((refreshError) => {
+    const selectedConversationId = selectedConversation?._id;
+    const refreshInboxData = async () => {
+      try {
+        await loadConversations();
+        if (selectedConversationId) {
+          const response = await api.get(`/api/admin/communications/conversations/${selectedConversationId}/messages`);
+          setSelectedConversation(response.data.conversation);
+          setMessages(response.data.messages || []);
+        }
+      } catch (refreshError) {
         console.error("Support inbox polling failed:", refreshError);
-      });
-    }, 15000);
+      }
+    };
+    const interval = window.setInterval(refreshInboxData, 5000);
     return () => window.clearInterval(interval);
-  }, [activeTab, loadConversations]);
+  }, [activeTab, loadConversations, selectedConversation?._id]);
+
+  const enableDesktopNotifications = async () => {
+    if (!("Notification" in window)) {
+      setDesktopPermission("unsupported");
+      return;
+    }
+    try {
+      setDesktopPermission(await Notification.requestPermission());
+    } catch (permissionError) {
+      console.error("Desktop notification permission failed:", permissionError);
+      toastError("Could not enable desktop notifications in this browser.");
+    }
+  };
 
   const changeTab = (tab) => {
     setActiveTab(tab);
@@ -252,6 +277,13 @@ export default function Communications() {
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
           Send reviewed email and WhatsApp templates to agents, and reply to their text support messages.
         </p>
+        {desktopPermission === "default" && (
+          <button type="button" onClick={enableDesktopNotifications} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+            <Bell size={16} aria-hidden="true" /> Enable desktop message alerts
+          </button>
+        )}
+        {desktopPermission === "denied" && <p className="mt-3 text-xs text-slate-500">Desktop alerts are blocked by your browser. Enable them in the site permissions to receive alerts while this tab is in the background.</p>}
+        {desktopPermission === "unsupported" && <p className="mt-3 text-xs text-slate-500">This browser does not support desktop message alerts. In-app alerts remain enabled.</p>}
       </header>
 
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3 dark:border-slate-800" role="tablist" aria-label="Communication tools">

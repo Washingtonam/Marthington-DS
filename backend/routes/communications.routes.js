@@ -77,8 +77,12 @@ const saveMessage = async (conversation, user, text) => {
   conversation.lastMessageAt = message.createdAt;
   if (user.role === "user") {
     conversation.lastUserMessageAt = message.createdAt;
+    conversation.lastUserMessageId = message._id;
+    conversation.userReadAt = message.createdAt;
   } else {
     conversation.lastAdminMessageAt = message.createdAt;
+    conversation.lastAdminMessageId = message._id;
+    conversation.adminReadAt = message.createdAt;
   }
   await conversation.save();
   return message;
@@ -91,8 +95,11 @@ customerRouter.get("/conversation", async (req, res) => {
   try {
     const conversation = await SupportConversation.findOne({ userId: req.user.id });
     if (!conversation) return res.json({ success: true, conversation: null, messages: [] });
-    conversation.userReadAt = new Date();
-    await conversation.save();
+    if (conversation.lastAdminMessageAt
+      && (!conversation.userReadAt || conversation.lastAdminMessageAt > conversation.userReadAt)) {
+      conversation.userReadAt = new Date();
+      await conversation.save();
+    }
     const messages = await SupportMessage.find({ conversationId: conversation._id })
       .sort({ createdAt: -1 })
       .limit(100)
@@ -109,11 +116,14 @@ customerRouter.get("/conversation/unread-count", async (req, res) => {
     const conversation = await SupportConversation.findOne({ userId: req.user.id })
       .select("lastAdminMessageAt userReadAt")
       .lean();
-    const unreadCount = conversation?.lastAdminMessageAt
-      && (!conversation.userReadAt || conversation.lastAdminMessageAt > conversation.userReadAt)
-      ? 1
-      : 0;
-    return res.json({ success: true, unreadCount });
+    const unread = conversation?.lastAdminMessageAt
+      && (!conversation.userReadAt || conversation.lastAdminMessageAt > conversation.userReadAt);
+    return res.json({
+      success: true,
+      unreadCount: unread ? 1 : 0,
+      latestMessageAt: unread ? conversation.lastAdminMessageAt : null,
+      latestMessageId: unread ? conversation.lastAdminMessageId : null,
+    });
   } catch (error) {
     console.error("SUPPORT UNREAD COUNT LOAD ERROR:", error);
     return res.status(500).json({ success: false, message: "Could not load support notification count." });
@@ -325,8 +335,11 @@ adminRouter.get("/conversations/:conversationId/messages", isAdmin, async (req, 
   try {
     const conversation = await SupportConversation.findById(req.params.conversationId);
     if (!conversation) return res.status(404).json({ success: false, message: "Conversation not found." });
-    conversation.adminReadAt = new Date();
-    await conversation.save();
+    if (conversation.lastUserMessageAt
+      && (!conversation.adminReadAt || conversation.lastUserMessageAt > conversation.adminReadAt)) {
+      conversation.adminReadAt = new Date();
+      await conversation.save();
+    }
     const messages = await SupportMessage.find({ conversationId: conversation._id })
       .sort({ createdAt: -1 })
       .limit(100)

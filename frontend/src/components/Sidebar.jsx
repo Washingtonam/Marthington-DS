@@ -1,4 +1,4 @@
-import React, { createElement, useEffect, useMemo, useState } from "react";
+import React, { createElement, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   BadgeDollarSign,
@@ -21,6 +21,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import api from "../lib/axios";
 import { useUser } from "../context/UserContext";
 import { useBranding } from "../context/BrandingContext";
+import { useToast } from "../context/ToastContext";
 import SidebarNavItem from "./Sidebar/SidebarNavItem";
 import SidebarNavSection from "./Sidebar/SidebarNavSection";
 
@@ -99,6 +100,7 @@ const adminGroups = [
 export default function Sidebar({ open, isMobile, collapsed = false, onClose, onToggleCollapse }) {
   const { user, clearUser } = useUser();
   const { businessName, businessTagline, businessLogoUrl } = useBranding();
+  const { info: toastInfo } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
   const isAdminWorkspace = location.pathname.startsWith("/admin");
@@ -108,6 +110,7 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose, on
   const [verifyNinEnabled, setVerifyNinEnabled] = useState(true);
   const [pendingPayments, setPendingPayments] = useState(0);
   const [unreadSupportCount, setUnreadSupportCount] = useState(0);
+  const previousSupportMessages = useRef(null);
   const [openGroups, setOpenGroups] = useState(() => new Set(
     [...userGroups, ...adminGroups].map((group) => group.id),
   ));
@@ -163,33 +166,68 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose, on
 
   useEffect(() => {
     if (isAdminWorkspace && !["admin", "super_admin"].includes(userRole)) return undefined;
-    if (!isAdminWorkspace && location.pathname === "/support-chat") return undefined;
     let cancelled = false;
     const fetchUnreadSupport = async () => {
       try {
+        let incoming = [];
+        let unreadCount = 0;
         if (isAdminWorkspace) {
           const response = await api.get("/api/admin/communications/conversations");
           const conversations = response.data?.conversations || [];
-          if (!cancelled) {
-            setUnreadSupportCount(conversations.reduce((total, conversation) => total + Number(conversation.unreadCount || 0), 0));
-          }
+          unreadCount = conversations.reduce((total, conversation) => total + Number(conversation.unreadCount || 0), 0);
+          incoming = conversations
+            .filter((conversation) => Number(conversation.unreadCount) > 0 && conversation.lastUserMessageAt)
+            .map((conversation) => ({
+              id: `admin:${conversation._id}`,
+              at: String(conversation.lastUserMessageId || new Date(conversation.lastUserMessageAt).getTime()),
+              title: conversation.user?.name || "An agent",
+            }));
         } else {
           const response = await api.get("/api/communications/conversation/unread-count");
-          if (!cancelled) setUnreadSupportCount(Number(response.data?.unreadCount || 0));
+          unreadCount = Number(response.data?.unreadCount || 0);
+          if (unreadCount && response.data?.latestMessageAt) {
+            incoming = [{
+              id: "user:support",
+              at: String(response.data.latestMessageId || new Date(response.data.latestMessageAt).getTime()),
+              title: "Support",
+              preview: "Support has replied to your message.",
+            }];
+          }
         }
+        if (cancelled) return;
+        setUnreadSupportCount(unreadCount);
+        const previous = previousSupportMessages.current;
+        const next = new Map(incoming.map((message) => [message.id, message.at]));
+        const newMessages = incoming.filter((message) => previous?.get(message.id) !== message.at);
+        previousSupportMessages.current = next;
+        newMessages.forEach((message) => {
+          const description = isAdminWorkspace
+            ? `New support message from ${message.title}. Open Communications to read it.`
+            : "Support has replied to your message. Open Chat with support to read it.";
+          toastInfo(description, 7000);
+          if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+            const notification = new Notification("New support message", {
+              body: isAdminWorkspace ? `A new message from ${message.title}.` : "Support has replied to your message.",
+            });
+            notification.onclick = () => {
+              window.focus();
+              window.location.href = isAdminWorkspace ? "/admin/communications?tab=inbox" : "/support-chat";
+            };
+          }
+        });
       } catch (error) {
         console.error("Sidebar support notification count fetch failed:", error?.message || error);
       }
     };
     void fetchUnreadSupport();
-    const interval = window.setInterval(fetchUnreadSupport, 15000);
+    const interval = window.setInterval(fetchUnreadSupport, 5000);
     window.addEventListener("support-conversation-read", fetchUnreadSupport);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       window.removeEventListener("support-conversation-read", fetchUnreadSupport);
     };
-  }, [isAdminWorkspace, location.pathname, userRole]);
+  }, [isAdminWorkspace, location.pathname, toastInfo, userRole]);
 
   const groups = useMemo(() => {
     if (isAdminWorkspace) {

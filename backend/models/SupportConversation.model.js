@@ -6,7 +6,9 @@ const supportConversationSchema = new mongoose.Schema({
   lastMessage: { type: String, default: "" },
   lastMessageAt: { type: Date, default: Date.now },
   lastUserMessageAt: { type: Date, default: null },
+  lastUserMessageId: { type: mongoose.Schema.Types.ObjectId, default: null },
   lastAdminMessageAt: { type: Date, default: null },
+  lastAdminMessageId: { type: mongoose.Schema.Types.ObjectId, default: null },
   adminReadAt: { type: Date, default: null },
   userReadAt: { type: Date, default: null },
 }, { timestamps: true });
