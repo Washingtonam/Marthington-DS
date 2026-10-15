@@ -110,6 +110,7 @@ describe('service catalog API', () => {
         name: 'JAMB Application',
         status: 'active',
         price: 4200,
+        cost: 1750,
         commissionType: 'PERCENTAGE',
         commissionValue: 12,
         metadata: { description: 'JAMB form intake', formFields: [] }
@@ -128,6 +129,7 @@ describe('service catalog API', () => {
     expect(catalogResponse.status).toBe(200);
     expect(catalogResponse.body.services.some((service) => service.serviceCode === 'jamb-application')).toBe(true);
     expect(catalogResponse.body.services.find((service) => service.serviceCode === 'jamb-application').price).toBe(4200);
+    expect(catalogResponse.body.services.find((service) => service.serviceCode === 'jamb-application').cost).toBe(1750);
     expect(catalogResponse.body.services.find((service) => service.serviceCode === 'jamb-application').commissionValue).toBe(12);
   });
 
@@ -223,9 +225,25 @@ describe('service catalog API', () => {
       .put('/api/admin/services/existing-service')
       .auth(token, { type: 'bearer' })
       .send({ price: -1 });
+    const negativeCostCreateResponse = await request(app)
+      .post('/api/admin/services')
+      .auth(token, { type: 'bearer' })
+      .send({
+        serviceCode: 'negative-cost',
+        category: 'NIMC',
+        name: 'Invalid Cost',
+        price: 100,
+        cost: -1,
+      });
+    const negativeCostUpdateResponse = await request(app)
+      .put('/api/admin/services/existing-service')
+      .auth(token, { type: 'bearer' })
+      .send({ cost: -1 });
 
     expect(createResponse.status).toBe(400);
     expect(updateResponse.status).toBe(400);
+    expect(negativeCostCreateResponse.status).toBe(400);
+    expect(negativeCostUpdateResponse.status).toBe(400);
     expect(pricing.save).not.toHaveBeenCalled();
   });
 

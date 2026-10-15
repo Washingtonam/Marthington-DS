@@ -2680,6 +2680,7 @@ router.post("/services", isSuperAdmin, async (req, res) => {
       name,
       status = 'active',
       price = 0,
+      cost = null,
       commissionType,
       commissionValue,
       metadata = {},
@@ -2690,6 +2691,8 @@ router.post("/services", isSuperAdmin, async (req, res) => {
     }
     const priceError = validateServicePrice(price);
     if (priceError) return res.status(400).json({ success: false, message: priceError });
+    const costError = validateServiceCost(cost);
+    if (costError) return res.status(400).json({ success: false, message: costError });
     const commissionError = validateServiceCommission(commissionType, commissionValue);
     if (commissionError) return res.status(400).json({ success: false, message: commissionError });
 
@@ -2716,6 +2719,7 @@ router.post("/services", isSuperAdmin, async (req, res) => {
       name,
       status: ['active', 'paused', 'disabled'].includes(status) ? status : 'active',
       price: Number(price) || 0,
+      cost: cost == null || String(cost).trim() === '' ? null : Number(cost),
       ...(commissionType !== undefined ? { commissionType, commissionValue: Number(commissionValue) } : {}),
       metadata,
     };
@@ -2743,6 +2747,8 @@ router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
     const { commissionType, commissionValue } = req.body || {};
     const priceError = req.body?.price !== undefined ? validateServicePrice(req.body.price) : '';
     if (priceError) return res.status(400).json({ success: false, message: priceError });
+    const costError = req.body?.cost !== undefined ? validateServiceCost(req.body.cost) : '';
+    if (costError) return res.status(400).json({ success: false, message: costError });
     const commissionError = validateServiceCommission(commissionType, commissionValue);
     if (commissionError) return res.status(400).json({ success: false, message: commissionError });
     let pricing = null;
@@ -2770,6 +2776,9 @@ router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
       target.status = ['active', 'paused', 'disabled'].includes(req.body.status) ? req.body.status : target.status;
     }
     if (req.body.price !== undefined) target.price = Number(req.body.price) || 0;
+    if (req.body.cost !== undefined) {
+      target.cost = req.body.cost == null || String(req.body.cost).trim() === '' ? null : Number(req.body.cost);
+    }
     if (commissionType !== undefined) {
       target.commissionType = commissionType;
       target.commissionValue = Number(commissionValue);
@@ -2814,6 +2823,14 @@ function validateServicePrice(price) {
     || Number(price) < 0
   ) {
     return 'Service price must be a valid amount of zero or greater.';
+  }
+  return '';
+}
+
+function validateServiceCost(cost) {
+  if (cost === null || String(cost).trim() === '') return '';
+  if (!Number.isFinite(Number(cost)) || Number(cost) < 0) {
+    return 'Service cost must be a valid amount of zero or greater.';
   }
   return '';
 }

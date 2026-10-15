@@ -38,6 +38,7 @@ const defaultServiceModel = {
   name: "",
   status: "active",
   price: 0,
+  cost: "",
   commissionType: "FLAT",
   commissionValue: 0,
   metadata: {
@@ -265,6 +266,7 @@ export default function AdminPricing() {
       name: service.name || "",
       status: service.status || "active",
       price: service.price || 0,
+      cost: service.cost ?? "",
       commissionType: service.commissionType || "FLAT",
       commissionValue: service.commissionValue ?? 0,
       metadata: {
@@ -424,6 +426,12 @@ export default function AdminPricing() {
         alert("Service price must be a valid amount of zero or greater.");
         return;
       }
+      const costText = String(serviceForm.cost ?? "").trim();
+      const cost = costText === "" ? null : Number(costText);
+      if (cost !== null && (!Number.isFinite(cost) || cost < 0)) {
+        alert("Service cost must be a valid amount of zero or greater.");
+        return;
+      }
 
       const payload = {
         serviceCode: isCreating
@@ -433,6 +441,7 @@ export default function AdminPricing() {
         name: String(serviceForm.name).trim(),
         status: serviceForm.status,
         price,
+        cost,
         commissionType: serviceForm.commissionType,
         commissionValue: Number(serviceForm.commissionValue),
         metadata: {
@@ -751,6 +760,21 @@ export default function AdminPricing() {
                 <BadgeDollarSign size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="number" value={serviceForm.price} onChange={(e) => updateField("price", e.target.value)} className="w-full border border-gray-200 rounded-xl p-3 pl-11" />
               </div>
+            </Field>
+            <Field label="Cost of service (₦)" className="md:col-span-2">
+              <div className="relative">
+                <BadgeDollarSign size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={serviceForm.cost}
+                  onChange={(e) => updateField("cost", e.target.value)}
+                  placeholder="Leave blank if not known yet"
+                  className="w-full border border-gray-200 rounded-xl p-3 pl-11"
+                />
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Saved with each new request so later price changes do not rewrite past costs.</p>
             </Field>
             <Field label="Commission Type">
               <select

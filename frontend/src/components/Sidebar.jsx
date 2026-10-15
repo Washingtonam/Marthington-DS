@@ -76,8 +76,8 @@ const adminGroups = [
     icon: Activity,
     links: [
       { to: "/admin/payments", label: "Payment requests", icon: CreditCard },
+      { to: "/admin/financial-reports", label: "Financial reports", icon: BadgeDollarSign, superAdminOnly: true },
       { to: "/admin/requests", label: "Service requests", icon: BriefcaseBusiness },
-      { to: "/commissions", label: "Commissions", icon: BadgeDollarSign },
       { to: "/admin/verification-requests", label: "Verification requests", icon: ShieldCheck },
     ],
   },

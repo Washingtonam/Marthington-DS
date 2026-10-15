@@ -103,6 +103,9 @@ router.post("/submit", verifyToken, async (req, res) => {
       serviceType,
       serviceCategory: "CAC",
       amountCharged: cost,
+      costAtTimeOfRequest: catalogService?.cost != null && Number.isFinite(Number(catalogService.cost))
+        ? Number(catalogService.cost)
+        : null,
       businessName1,
       businessName2,
       companyEmail,

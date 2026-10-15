@@ -42,6 +42,7 @@ import Admin from "./pages/admin/Admin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminPayments from "./pages/admin/AdminPayments";
+import FinancialReports from "./pages/admin/FinancialReports";
 import AdminPricing from "./pages/admin/AdminPricing";
 import AdminRequests from "./pages/admin/AdminRequests";
 import AdminArticles from "./pages/admin/AdminArticles";
@@ -176,6 +177,7 @@ function AppRoutes() {
       <Route path="/admin" element={<AdminRoute><Layout><AdminDashboard /></Layout></AdminRoute>} />
       <Route path="/admin/users" element={<SuperAdminRoute><Layout><AdminUsers /></Layout></SuperAdminRoute>} />
       <Route path="/admin/payments" element={<AdminRoute><Layout><AdminPayments /></Layout></AdminRoute>} />
+      <Route path="/admin/financial-reports" element={<SuperAdminRoute><Layout><FinancialReports /></Layout></SuperAdminRoute>} />
       <Route path="/admin/requests" element={<AdminRoute><Layout><AdminRequests /></Layout></AdminRoute>} />
       <Route path="/admin/verification-requests" element={<AdminRoute><Layout><VerificationRequests /></Layout></AdminRoute>} />
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />

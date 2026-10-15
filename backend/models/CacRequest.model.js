@@ -22,6 +22,7 @@ const CacRequestSchema = new mongoose.Schema({
     enum: ["sole_proprietorship", "partnership", "limited_1m", "custom_ngo"] 
   },
   amountCharged: { type: Number, required: true },
+  costAtTimeOfRequest: { type: Number, default: null, min: 0 },
   serviceCategory: { type: String, enum: ["CAC", "NIMC"], default: "CAC" },
   
   // Business Core Information Block

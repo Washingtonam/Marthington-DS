@@ -9,6 +9,8 @@ const supportConversationSchema = new mongoose.Schema({
   lastUserMessageId: { type: mongoose.Schema.Types.ObjectId, default: null },
   lastAdminMessageAt: { type: Date, default: null },
   lastAdminMessageId: { type: mongoose.Schema.Types.ObjectId, default: null },
+  adminReadMessageId: { type: mongoose.Schema.Types.ObjectId, default: null },
+  userReadMessageId: { type: mongoose.Schema.Types.ObjectId, default: null },
   adminReadAt: { type: Date, default: null },
   userReadAt: { type: Date, default: null },
 }, { timestamps: true });

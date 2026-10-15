@@ -40,6 +40,11 @@ const ServiceRequestSchema = new mongoose.Schema({
     required: true,
     default: 0
   },
+  costAtTimeOfRequest: {
+    type: Number,
+    default: null,
+    min: 0
+  },
   unitsUsed: {
     type: Number,
     default: 0

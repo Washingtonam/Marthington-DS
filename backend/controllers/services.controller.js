@@ -473,6 +473,9 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
           amount,
           amountKobo,
           priceAtTimeOfRequest: amount,
+          costAtTimeOfRequest: catalogService.cost != null && Number.isFinite(Number(catalogService.cost))
+            ? Number(catalogService.cost)
+            : null,
           unitsUsed: 0,
           proof: proof ? String(proof) : 'wallet',
           passport: passport ? String(passport) : 'wallet',

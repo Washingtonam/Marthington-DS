@@ -154,7 +154,7 @@ describe("AdminPricing", () => {
     await waitFor(() => {
       expect(api.put).toHaveBeenCalledWith(
         "/api/admin/services/validation-noRecord",
-        expect.objectContaining({ commissionType: "FLAT", commissionValue: 0 }),
+        expect.objectContaining({ cost: null, commissionType: "FLAT", commissionValue: 0 }),
         expect.any(Object)
       );
     });
@@ -183,6 +183,25 @@ describe("AdminPricing", () => {
     });
     expect(await screen.findByText("₦2,000 commission")).toBeTruthy();
   });
+
+  test("saves the configured service cost to the catalog", async () => {
+    renderAdminPricing();
+
+    const serviceCard = (await screen.findAllByRole("button"))
+      .find((button) => button.textContent.includes("No Recordvalidation-noRecord"));
+    fireEvent.click(serviceCard);
+    expect(await screen.findByRole("dialog", { name: "Edit Service" })).toBeTruthy();
+
+    const costInput = screen.getByText("Cost of service (₦)").closest("label").querySelector("input");
+    fireEvent.change(costInput, { target: { value: "750" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Service" }));
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith(
+      "/api/admin/services/validation-noRecord",
+      expect.objectContaining({ cost: 750 }),
+      expect.any(Object),
+    ));
+  }, 15000);
 
   test("does not report a commission save as confirmed when the catalog still has the old rate", async () => {
     api.put.mockResolvedValueOnce({ data: { success: true } });

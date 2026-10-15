@@ -144,6 +144,9 @@ const normalizeCatalogService = (service = {}, fallback = {}) => {
     type: String(service.type || fallback.type || '').trim(),
     status: ['active', 'paused', 'disabled'].includes(service.status || fallback.status) ? (service.status || fallback.status) : 'active',
     price: Number(service.price ?? fallback.price ?? 0) || 0,
+    cost: service.cost == null && fallback.cost == null
+      ? null
+      : Math.max(Number(service.cost ?? fallback.cost), 0),
     metadata: {
       ...(fallback.metadata || {}),
       ...(service.metadata || {}),
@@ -185,6 +188,7 @@ const pricingSchema = new mongoose.Schema({
       type: { type: String, default: '' },
       status: { type: String, enum: ['active', 'paused', 'disabled'], default: 'active' },
       price: { type: Number, default: 0 },
+      cost: { type: Number, default: null, min: 0 },
       commissionType: { type: String, enum: ['FLAT', 'PERCENTAGE'], default: undefined },
       commissionValue: { type: Number, min: 0, default: undefined },
       metadata: { type: mongoose.Schema.Types.Mixed, default: {} },

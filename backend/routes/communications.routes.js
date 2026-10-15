@@ -53,6 +53,16 @@ const normalizeMessage = (value, maxLength = 2000) => (
   typeof value === "string" ? value.trim().slice(0, maxLength) : ""
 );
 
+const hasUnreadMessage = (lastMessageId, readMessageId, lastMessageAt, readAt) => {
+  if (lastMessageId && readMessageId) {
+    return String(lastMessageId) !== String(readMessageId);
+  }
+  if (lastMessageId && lastMessageAt && readAt && lastMessageAt.getTime() === readAt.getTime()) {
+    return true;
+  }
+  return Boolean(lastMessageAt && (!readAt || lastMessageAt > readAt));
+};
+
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (character) => ({
   "&": "&amp;",
   "<": "&lt;",
@@ -82,6 +92,7 @@ const saveMessage = async (conversation, user, text) => {
   } else {
     conversation.lastAdminMessageAt = message.createdAt;
     conversation.lastAdminMessageId = message._id;
+    conversation.adminReadMessageId = conversation.lastUserMessageId || null;
     conversation.adminReadAt = message.createdAt;
   }
   await conversation.save();
@@ -95,8 +106,13 @@ customerRouter.get("/conversation", async (req, res) => {
   try {
     const conversation = await SupportConversation.findOne({ userId: req.user.id });
     if (!conversation) return res.json({ success: true, conversation: null, messages: [] });
-    if (conversation.lastAdminMessageAt
-      && (!conversation.userReadAt || conversation.lastAdminMessageAt > conversation.userReadAt)) {
+    if (hasUnreadMessage(
+      conversation.lastAdminMessageId,
+      conversation.userReadMessageId,
+      conversation.lastAdminMessageAt,
+      conversation.userReadAt,
+    )) {
+      conversation.userReadMessageId = conversation.lastAdminMessageId || null;
       conversation.userReadAt = new Date();
       await conversation.save();
     }
@@ -114,10 +130,14 @@ customerRouter.get("/conversation", async (req, res) => {
 customerRouter.get("/conversation/unread-count", async (req, res) => {
   try {
     const conversation = await SupportConversation.findOne({ userId: req.user.id })
-      .select("lastAdminMessageAt userReadAt")
+      .select("lastAdminMessageAt lastAdminMessageId userReadAt userReadMessageId")
       .lean();
-    const unread = conversation?.lastAdminMessageAt
-      && (!conversation.userReadAt || conversation.lastAdminMessageAt > conversation.userReadAt);
+    const unread = conversation && hasUnreadMessage(
+      conversation.lastAdminMessageId,
+      conversation.userReadMessageId,
+      conversation.lastAdminMessageAt,
+      conversation.userReadAt,
+    );
     return res.json({
       success: true,
       unreadCount: unread ? 1 : 0,
@@ -308,8 +328,12 @@ adminRouter.get("/conversations", isAdmin, async (req, res) => {
         const user = usersById.get(String(conversation.userId));
         return {
           ...conversation,
-          unreadCount: conversation.lastUserMessageAt
-            && (!conversation.adminReadAt || conversation.lastUserMessageAt > conversation.adminReadAt)
+          unreadCount: hasUnreadMessage(
+            conversation.lastUserMessageId,
+            conversation.adminReadMessageId,
+            conversation.lastUserMessageAt,
+            conversation.adminReadAt,
+          )
             ? 1
             : 0,
           user: user ? {
@@ -335,8 +359,13 @@ adminRouter.get("/conversations/:conversationId/messages", isAdmin, async (req, 
   try {
     const conversation = await SupportConversation.findById(req.params.conversationId);
     if (!conversation) return res.status(404).json({ success: false, message: "Conversation not found." });
-    if (conversation.lastUserMessageAt
-      && (!conversation.adminReadAt || conversation.lastUserMessageAt > conversation.adminReadAt)) {
+    if (hasUnreadMessage(
+      conversation.lastUserMessageId,
+      conversation.adminReadMessageId,
+      conversation.lastUserMessageAt,
+      conversation.adminReadAt,
+    )) {
+      conversation.adminReadMessageId = conversation.lastUserMessageId || null;
       conversation.adminReadAt = new Date();
       await conversation.save();
     }

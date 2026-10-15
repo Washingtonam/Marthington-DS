@@ -107,7 +107,11 @@ describe("communications routes", () => {
   });
 
   it("allows an authenticated admin to reply to a support conversation", async () => {
-    const conversation = { _id: "0123456789abcdef01234567", save: jest.fn().mockResolvedValue(undefined) };
+    const conversation = {
+      _id: "0123456789abcdef01234567",
+      lastUserMessageId: "agent-message-1",
+      save: jest.fn().mockResolvedValue(undefined),
+    };
     SupportConversation.findById.mockResolvedValue(conversation);
     SupportMessage.create.mockResolvedValue({ _id: "message-2", text: "We can help", createdAt: new Date() });
 
@@ -124,6 +128,7 @@ describe("communications routes", () => {
       text: "We can help",
     }));
     expect(conversation.adminReadAt).toBeInstanceOf(Date);
+    expect(conversation.adminReadMessageId).toBe("agent-message-1");
   });
 
   it("marks a conversation read when support opens the thread", async () => {
@@ -151,15 +156,17 @@ describe("communications routes", () => {
   });
 
   it("returns unread conversations for the Communications inbox badge", async () => {
+    const sameTimestamp = new Date("2026-10-15T10:00:00.000Z");
     SupportConversation.find.mockReturnValue({
       sort: jest.fn().mockReturnValue({
         limit: jest.fn().mockReturnValue({
           lean: jest.fn().mockResolvedValue([{
             _id: "0123456789abcdef01234567",
             userId: "agent-user",
-            lastUserMessageAt: new Date("2026-10-15T10:00:00.000Z"),
-            lastUserMessageId: "message-1",
-            adminReadAt: null,
+            lastUserMessageAt: sameTimestamp,
+            lastUserMessageId: "message-2",
+            adminReadMessageId: "message-1",
+            adminReadAt: sameTimestamp,
             lastMessage: "I need help",
           }]),
         }),
@@ -183,7 +190,7 @@ describe("communications routes", () => {
     expect(response.status).toBe(200);
     expect(response.body.conversations[0]).toEqual(expect.objectContaining({
       unreadCount: 1,
-      lastUserMessageId: "message-1",
+      lastUserMessageId: "message-2",
       user: expect.objectContaining({ name: "Ayo Agent" }),
     }));
   });
@@ -195,7 +202,8 @@ describe("communications routes", () => {
       _id: "0123456789abcdef01234567",
       lastAdminMessageAt: replyAt,
       lastAdminMessageId: "reply-message",
-      userReadAt: readAt,
+      userReadAt: replyAt,
+      userReadMessageId: "previous-reply",
     };
     SupportConversation.findOne.mockReturnValue({
       select: jest.fn().mockReturnValue({
@@ -214,6 +222,7 @@ describe("communications routes", () => {
     const savedConversation = {
       _id: conversation._id,
       lastAdminMessageAt: replyAt,
+      lastAdminMessageId: "reply-message",
       save: jest.fn().mockResolvedValue(undefined),
     };
     SupportConversation.findOne.mockResolvedValue(savedConversation);
@@ -231,6 +240,7 @@ describe("communications routes", () => {
 
     expect(opened.status).toBe(200);
     expect(savedConversation.userReadAt).toBeInstanceOf(Date);
+    expect(savedConversation.userReadMessageId).toBe("reply-message");
     expect(savedConversation.save).toHaveBeenCalledTimes(1);
   });
 
