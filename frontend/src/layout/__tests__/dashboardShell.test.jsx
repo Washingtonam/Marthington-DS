@@ -66,17 +66,25 @@ afterEach(() => {
   cleanup();
   window.innerWidth = 1024;
   mocks.user = { id: "user-1", firstName: "Morgan", role: "super_admin" };
-  mocks.get.mockClear();
+  mocks.get.mockReset();
+  mocks.get.mockImplementation(() => new Promise(() => {}));
 });
 
 describe("dashboard shell navigation", () => {
-  test("collapses desktop navigation while keeping icon links accessible", () => {
+  test("fully hides desktop navigation when collapsed and reopens it with the menu button", () => {
     window.innerWidth = 1280;
     renderLayout();
+    fireEvent(window, new Event("resize"));
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
 
-    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open navigation menu" })).toBeTruthy();
+    expect(document.querySelector("#app-sidebar").getAttribute("aria-hidden")).toBe("true");
+    expect(screen.queryByRole("link", { name: "Dashboard" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
+
+    expect(document.querySelector("#app-sidebar").getAttribute("aria-hidden")).toBe("false");
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeTruthy();
   });
 
@@ -105,19 +113,60 @@ describe("dashboard shell navigation", () => {
     expect(document.querySelector('#app-sidebar a[href="/verify-nin"]').getAttribute("aria-current")).toBe("page");
   });
 
+  test("keeps more than two navigation groups expanded independently", () => {
+    window.innerWidth = 1280;
+    renderLayout();
+
+    ["Activity", "Account", "Services"].forEach((group) => {
+      fireEvent.click(screen.getByRole("button", { name: `Expand ${group} navigation group` }));
+    });
+
+    ["activity", "account", "services"].forEach((group) => {
+      expect(document.querySelector(`#sidebar-group-${group}`).hidden).toBe(false);
+    });
+  });
+
+  test("shows active catalog categories and respects Verify NIN visibility", async () => {
+    mocks.user = { id: "user-1", role: "user" };
+    mocks.get.mockImplementation((path) => {
+      if (path === "/api/services/categories") {
+        return Promise.resolve({ data: { categories: [
+          { slug: "nimc", label: "NIMC", isActive: true },
+          { slug: "cac", label: "CAC", isActive: true },
+          { slug: "jamb", label: "JAMB", isActive: true },
+        ] } });
+      }
+      if (path === "/api/pricing") {
+        return Promise.resolve({ data: { platformServices: { verifyNin: { enabled: false } } } });
+      }
+      return Promise.resolve({ data: {} });
+    });
+    renderLayout();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand Services navigation group" }));
+
+    expect(await screen.findByRole("link", { name: "NIMC services" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "CAC services" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "JAMB services" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Verify BVN" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Verify NIN" })).toBeNull();
+  });
+
   test("shows agent and communication navigation only in the super-admin workspace", () => {
     window.innerWidth = 1280;
     mocks.user = { id: "admin-1", role: "super_admin" };
     renderLayout("/admin/agents");
 
-    expect(screen.getByRole("link", { name: "Agents & jobs" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Agents" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Log jobs" })).toBeTruthy();
     fireEvent.click(screen.getByRole("link", { name: "Communications" }));
     expect(screen.getByLabelText("Current route").textContent).toBe("/admin/communications");
 
     cleanup();
     mocks.user = { id: "user-1", role: "user" };
     renderLayout();
-    expect(screen.queryByRole("link", { name: "Agents & jobs" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Agents" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Log jobs" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Communications" })).toBeNull();
   });
 });

@@ -78,8 +78,17 @@ export function BrandingProvider({ children }) {
     if (!favicon) return undefined;
 
     let currentImage;
+    let faviconUpdate = 0;
     const source = branding.businessLogoUrl || "/favicon.png";
     const applyFavicon = () => {
+      faviconUpdate += 1;
+      const updateId = faviconUpdate;
+      if (currentImage) {
+        currentImage.onload = null;
+        currentImage.onerror = null;
+        currentImage = null;
+      }
+
       if (!document.hidden) {
         favicon.href = source;
         return;
@@ -88,27 +97,34 @@ export function BrandingProvider({ children }) {
       currentImage = new Image();
       if (/^https?:\/\//i.test(source)) currentImage.crossOrigin = "anonymous";
       currentImage.onload = () => {
+        if (updateId !== faviconUpdate || !document.hidden) return;
         const canvas = document.createElement("canvas");
         canvas.width = 64;
         canvas.height = 64;
         const context = canvas.getContext("2d");
         if (!context) return;
 
-        const scale = Math.min(canvas.width / currentImage.width, canvas.height / currentImage.height);
-        const width = currentImage.width * scale;
-        const height = currentImage.height * scale;
-        context.drawImage(currentImage, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
-        const image = context.getImageData(0, 0, canvas.width, canvas.height);
-        for (let index = 0; index < image.data.length; index += 4) {
-          const gray = Math.round(image.data[index] * 0.299 + image.data[index + 1] * 0.587 + image.data[index + 2] * 0.114);
-          image.data[index] = gray;
-          image.data[index + 1] = gray;
-          image.data[index + 2] = gray;
+        try {
+          const scale = Math.min(canvas.width / currentImage.width, canvas.height / currentImage.height);
+          const width = currentImage.width * scale;
+          const height = currentImage.height * scale;
+          context.drawImage(currentImage, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+          const image = context.getImageData(0, 0, canvas.width, canvas.height);
+          for (let index = 0; index < image.data.length; index += 4) {
+            const gray = Math.round(image.data[index] * 0.299 + image.data[index + 1] * 0.587 + image.data[index + 2] * 0.114);
+            image.data[index] = gray;
+            image.data[index + 1] = gray;
+            image.data[index + 2] = gray;
+          }
+          context.putImageData(image, 0, 0);
+          if (updateId === faviconUpdate && document.hidden) favicon.href = canvas.toDataURL("image/png");
+        } catch (error) {
+          console.warn("Could not make the inactive-tab logo grayscale:", error);
+          if (updateId === faviconUpdate && document.hidden) favicon.href = source;
         }
-        context.putImageData(image, 0, 0);
-        favicon.href = canvas.toDataURL("image/png");
       };
       currentImage.onerror = (error) => {
+        if (updateId !== faviconUpdate || !document.hidden) return;
         console.warn("Could not make the inactive-tab logo grayscale:", error);
         favicon.href = source;
       };
@@ -119,7 +135,11 @@ export function BrandingProvider({ children }) {
     document.addEventListener("visibilitychange", applyFavicon);
     return () => {
       document.removeEventListener("visibilitychange", applyFavicon);
-      if (currentImage) currentImage.onload = null;
+      faviconUpdate += 1;
+      if (currentImage) {
+        currentImage.onload = null;
+        currentImage.onerror = null;
+      }
     };
   }, [branding.businessName, branding.businessLogoUrl]);
 

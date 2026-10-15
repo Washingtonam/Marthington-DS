@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAgentJobFormFields, parseAgentJobForm } from "../agentJobForm";
+import { getAgentJobFormFields, parseAgentJobForm, parseCatalogServiceForm } from "../agentJobForm";
 
 describe("agent job form parser", () => {
   it("maps recognized name-modification fields and checked yes/no choices", () => {
@@ -40,5 +40,30 @@ describe("agent job form parser", () => {
     );
 
     expect(parsed).not.toHaveProperty("previousSelfServiceModification");
+  });
+
+  it("maps pasted labels to the selected service fields and its configured options", () => {
+    const fields = [
+      { key: "nin", label: "NIN number", type: "text" },
+      { key: "self-service", label: "Have you ever done modification before via NIMC Self-Service Portal?", type: "select", options: "Yes,No" },
+      { key: "dateOfBirth", label: "Date of Birth", type: "date" },
+      { key: "isVerified", label: "Verified", type: "checkbox" },
+    ];
+
+    expect(parseCatalogServiceForm([
+      "NIN number: 12345678901",
+      "Have you ever done modification before via NIMC Self-Service Portal? Yes [x] No [ ]",
+      "Date of Birth: 15/03/2000",
+      "Verified: No",
+    ].join("\n"), fields)).toEqual({
+      nin: "12345678901",
+      "self-service": "Yes",
+      dateOfBirth: "2000-03-15",
+      isVerified: false,
+    });
+
+    expect(parseCatalogServiceForm("Previous modification?: No", [
+      { key: "previous-modification", label: "Previous modification?", type: "select", options: ["Yes", "No"] },
+    ])).toEqual({ "previous-modification": "No" });
   });
 });

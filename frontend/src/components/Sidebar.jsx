@@ -35,10 +35,7 @@ const userGroups = [
     title: "Services",
     icon: BriefcaseBusiness,
     links: [
-      { to: "/verify-nin", label: "Verify NIN", icon: ShieldCheck },
       { to: "/verify-bvn", label: "Verify BVN", icon: ShieldCheck },
-      { to: "/nin-services", label: "NIN Services", icon: BriefcaseBusiness },
-      { to: "/cac-services", label: "CAC Services", icon: BriefcaseBusiness },
     ],
   },
   {
@@ -89,7 +86,8 @@ const adminGroups = [
       { to: "/admin/notifications", label: "Notification center", icon: Bell, superAdminOnly: true },
       { to: "/admin/articles", label: "Guides & updates", icon: BookOpenText, superAdminOnly: true },
       { to: "/admin/settings", label: "Business settings", icon: Settings, superAdminOnly: true },
-      { to: "/admin/agents", label: "Agents & jobs", icon: Users, superAdminOnly: true },
+      { to: "/admin/agents", label: "Agents", icon: Users, superAdminOnly: true },
+      { to: "/admin/agents/jobs", label: "Log jobs", icon: BriefcaseBusiness, superAdminOnly: true },
       { to: "/admin/communications", label: "Communications", icon: MessageCircle, superAdminOnly: true },
     ],
   },
@@ -124,8 +122,9 @@ export default function Sidebar({ open, isMobile, onClose }) {
   const isSuperAdmin = user?.role === "super_admin";
   const userRole = user?.role;
   const [serviceCategories, setServiceCategories] = useState([]);
+  const [verifyNinEnabled, setVerifyNinEnabled] = useState(true);
   const [pendingPayments, setPendingPayments] = useState(0);
-  const [openGroup, setOpenGroup] = useState("");
+  const [openGroups, setOpenGroups] = useState(() => new Set());
   const activeGroup = activeGroupForPath(location.pathname, isAdminWorkspace);
 
   useEffect(() => {
@@ -136,6 +135,13 @@ export default function Sidebar({ open, isMobile, onClose }) {
       }
     }).catch((error) => {
       console.error("Sidebar categories fetch failed:", error?.message || error);
+    });
+    api.get("/api/pricing").then((response) => {
+      if (!cancelled) {
+        setVerifyNinEnabled(response.data?.platformServices?.verifyNin?.enabled !== false);
+      }
+    }).catch((error) => {
+      console.error("Sidebar platform services fetch failed:", error?.message || error);
     });
     return () => { cancelled = true; };
   }, []);
@@ -174,17 +180,23 @@ export default function Sidebar({ open, isMobile, onClose }) {
       })).filter((group) => group.links.length > 0);
     }
 
-    const categories = serviceCategories
-      .filter((category) => category?.slug && category.slug !== "nin" && category.slug !== "cac")
-      .map((category) => ({
-        to: `/services/${category.slug}`,
-        label: `${category.label} services`,
-        icon: BriefcaseBusiness,
-      }));
+    const categories = serviceCategories.filter((category) => category?.slug).map((category) => {
+      const slug = String(category.slug).toLowerCase();
+      if (slug === "nin" || slug === "nimc") {
+        return { to: "/nin-services", label: `${category.label} services`, icon: BriefcaseBusiness };
+      }
+      if (slug === "cac") {
+        return { to: "/cac-services", label: `${category.label} services`, icon: BriefcaseBusiness };
+      }
+      return { to: `/services/${slug}`, label: `${category.label} services`, icon: BriefcaseBusiness };
+    });
+    const platformLinks = verifyNinEnabled
+      ? [{ to: "/verify-nin", label: "Verify NIN", icon: ShieldCheck }]
+      : [];
     return userGroups.map((group) => group.id === "services"
-      ? { ...group, links: [...group.links, ...categories] }
+      ? { ...group, links: [...platformLinks, ...group.links, ...categories] }
       : group);
-  }, [isAdminWorkspace, isSuperAdmin, pendingPayments, serviceCategories]);
+  }, [isAdminWorkspace, isSuperAdmin, pendingPayments, serviceCategories, verifyNinEnabled]);
 
   const handleLogout = () => {
     clearUser();
@@ -196,13 +208,13 @@ export default function Sidebar({ open, isMobile, onClose }) {
       id="app-sidebar"
       role={isMobile && open ? "dialog" : undefined}
       aria-modal={isMobile && open ? true : undefined}
-      aria-hidden={isMobile && !open}
-      inert={isMobile && !open ? true : undefined}
+      aria-hidden={!open}
+      inert={!open ? true : undefined}
       aria-label={isAdminWorkspace ? `${isSuperAdmin ? "Super Admin" : "Admin"} navigation` : "User navigation"}
       className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white shadow-xl transition-[width,transform] duration-200 dark:border-slate-800 dark:bg-slate-950 ${
         isMobile
           ? `w-[min(18rem,calc(100vw-2rem))] ${open ? "translate-x-0" : "-translate-x-full"}`
-          : `${open ? "w-72" : "w-[5.25rem]"} translate-x-0`
+          : `w-72 ${open ? "translate-x-0" : "-translate-x-full"}`
       }`}
     >
       <div className="flex h-20 shrink-0 items-center gap-3 border-b border-slate-200 px-5 dark:border-slate-800">
@@ -233,7 +245,7 @@ export default function Sidebar({ open, isMobile, onClose }) {
       <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-5" aria-label="Dashboard">
         {groups.map((group) => {
           const GroupIcon = group.icon;
-          const expanded = activeGroup === group.id || openGroup === group.id;
+          const expanded = activeGroup === group.id || openGroups.has(group.id);
           return (
             <SidebarNavSection
               key={group.id}
@@ -243,7 +255,12 @@ export default function Sidebar({ open, isMobile, onClose }) {
               open={open || isMobile}
               expanded={expanded}
               canToggle={activeGroup !== group.id}
-              onToggle={() => setOpenGroup(openGroup === group.id ? "" : group.id)}
+              onToggle={() => setOpenGroups((current) => {
+                const next = new Set(current);
+                if (next.has(group.id)) next.delete(group.id);
+                else next.add(group.id);
+                return next;
+              })}
             >
               {group.links.map(({ to, label, icon: Icon, badge }) => (
                 <SidebarNavItem

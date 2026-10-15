@@ -176,11 +176,13 @@ function AppRoutes() {
       <Route path="/admin/verification-requests" element={<AdminRoute><Layout><VerificationRequests /></Layout></AdminRoute>} />
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/services-engine" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/services-engine/:category" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/notifications" element={<SuperAdminRoute><Layout><AdminNotifications /></Layout></SuperAdminRoute>} />
       <Route path="/admin/articles" element={<SuperAdminRoute><Layout><AdminArticles /></Layout></SuperAdminRoute>} />
       <Route path="/admin/settings" element={<SuperAdminRoute><Layout><BrandingSettings /></Layout></SuperAdminRoute>} />
-      <Route path="/admin/agents" element={<SuperAdminRoute><Layout><AgentManagement /></Layout></SuperAdminRoute>} />
-      <Route path="/admin/communications" element={<SuperAdminRoute><Layout><AgentManagement /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/agents" element={<SuperAdminRoute><Layout><AgentManagement view="agents" /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/agents/jobs" element={<SuperAdminRoute><Layout><AgentManagement view="jobs" /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/communications" element={<SuperAdminRoute><Layout><AgentManagement view="messages" /></Layout></SuperAdminRoute>} />
       <Route path="/admin/user/:userId/details" element={<AdminRoute><Layout><UserDetailView /></Layout></AdminRoute>} />
 
       {/* Catch all */}

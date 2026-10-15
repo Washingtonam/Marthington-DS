@@ -19,6 +19,7 @@ const userSchema = new mongoose.Schema({
     role: { type: String, enum: ["user", "admin", "super_admin"], default: "user" },
     status: { type: String, enum: ["active", "suspended"], default: "active" },
     approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" },
+    lastLogin: { type: Date, default: null },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     reviewedAt: { type: Date, default: null }
 }, { timestamps: true });

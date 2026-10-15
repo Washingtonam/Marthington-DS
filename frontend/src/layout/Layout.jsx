@@ -5,7 +5,6 @@ import {
   LogOut,
   Menu,
   PanelLeftClose,
-  PanelLeftOpen,
   Moon,
   Sun,
   UserRound,
@@ -43,7 +42,8 @@ const pageTitles = [
   ["/admin/services-engine", "Services & pricing"],
   ["/admin/notifications", "Notification center"],
   ["/admin/articles", "Guides & updates"],
-  ["/admin/agents", "Agents & jobs"],
+  ["/admin/agents/jobs", "Log jobs"],
+  ["/admin/agents", "Agents"],
   ["/admin/communications", "Communications"],
   ["/admin/settings", "Business settings"],
   ["/admin/user", "User details"],
@@ -164,7 +164,7 @@ export default function Layout({ children }) {
       />
 
       <main className={`flex min-h-screen min-w-0 flex-col transition-[padding] duration-200 ${
-        collapsed ? "lg:pl-[5.25rem]" : "lg:pl-72"
+        collapsed ? "" : "lg:pl-72"
       }`}>
         <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
           <div className="flex min-h-[4.5rem] items-center gap-3 px-4 sm:px-6">
@@ -174,14 +174,16 @@ export default function Layout({ children }) {
               onClick={() => isMobile
                 ? mobileOpen ? closeMobileDrawer() : setMobileDrawerPath(location.pathname)
                 : setCollapsed((value) => !value)}
-              aria-label={isMobile ? (mobileOpen ? "Close navigation menu" : "Open navigation menu") : (collapsed ? "Expand sidebar" : "Collapse sidebar")}
+              aria-label={isMobile
+                ? (mobileOpen ? "Close navigation menu" : "Open navigation menu")
+                : (collapsed ? "Open navigation menu" : "Collapse sidebar")}
               aria-expanded={isMobile ? mobileOpen : !collapsed}
               aria-controls="app-sidebar"
               className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-slate-300 dark:hover:bg-slate-900"
             >
               {isMobile
                 ? mobileOpen ? <X size={20} /> : <Menu size={20} />
-                : collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+                : collapsed ? <Menu size={20} /> : <PanelLeftClose size={20} />}
             </button>
 
             <div className="min-w-0 flex-1">

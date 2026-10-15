@@ -5,11 +5,9 @@ import {
   BriefcaseBusiness,
   CircleUserRound,
   Clock3,
-  MessageCircle,
   Plus,
   Search,
   Send,
-  Users,
 } from "lucide-react";
 import { useUser } from "../../context/UserContext";
 import { useToast } from "../../context/ToastContext";
@@ -17,15 +15,8 @@ import api from "../../lib/axios";
 import SlideOver from "../../components/ui/SlideOver";
 import {
   agentJobFieldLabels,
-  getAgentJobFormFields,
-  parseAgentJobForm,
+  parseCatalogServiceForm,
 } from "../../lib/agentJobForm";
-
-const serviceOptions = [
-  { value: "name-modification", label: "Name modification" },
-  { value: "date-of-birth-modification", label: "Date of birth modification" },
-  { value: "other", label: "Other service" },
-];
 
 const statusLabels = {
   pending: "Pending",
@@ -39,6 +30,15 @@ const formatAmount = (amount) => new Intl.NumberFormat("en-NG", {
   currency: "NGN",
   maximumFractionDigits: 2,
 }).format(Number(amount) || 0);
+const getJobAmount = (job, catalog) => {
+  const amount = Number(job.amount);
+  if (Number.isFinite(amount) && amount > 0) return amount;
+  const servicePrice = Number(catalog.find((service) => service.serviceCode === job.serviceCode)?.price);
+  return Number.isFinite(servicePrice) ? servicePrice : (Number.isFinite(amount) ? amount : 0);
+};
+const getJobServiceName = (job, catalog) => catalog.find((service) => service.serviceCode === job.serviceCode)?.name
+  || job.serviceType
+  || "Service";
 
 const formatDate = (date) => date ? new Date(date).toLocaleDateString() : "—";
 
@@ -59,30 +59,41 @@ function readDraft(userId) {
   return { subject: "", message: "" };
 }
 
-export default function AgentManagement() {
+export default function AgentManagement({ view }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useUser();
   const { success, error: toastError } = useToast();
   const userId = user?.id || user?._id || user?.email || "account";
   const requestedTab = new URLSearchParams(location.search).get("tab");
-  const tab = location.pathname === "/admin/communications"
+  const initialCustomerType = new URLSearchParams(location.search).get("customerType");
+  const initialCustomerId = new URLSearchParams(location.search).get("customerId");
+  const hasRequestedCustomer = ["manual", "registered"].includes(initialCustomerType) && Boolean(initialCustomerId);
+  const tab = view || (location.pathname === "/admin/communications"
     ? "messages"
-    : requestedTab === "jobs" ? "jobs" : "agents";
+    : location.pathname.endsWith("/jobs") || requestedTab === "jobs" ? "jobs" : "agents");
   const [manualAgents, setManualAgents] = useState([]);
   const [registeredUsers, setRegisteredUsers] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState("");
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(0);
   const [query, setQuery] = useState("");
+  const [audience, setAudience] = useState("all");
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [showAgentForm, setShowAgentForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
-  const [showJobForm, setShowJobForm] = useState(false);
+  const [showJobForm, setShowJobForm] = useState(hasRequestedCustomer);
   const [busy, setBusy] = useState(false);
   const [agentForm, setAgentForm] = useState({ name: "", whatsapp: "" });
-  const [customerType, setCustomerType] = useState("manual");
-  const [customerId, setCustomerId] = useState("");
-  const [serviceType, setServiceType] = useState("name-modification");
+  const [customerType, setCustomerType] = useState(() => (
+    ["manual", "registered"].includes(initialCustomerType) ? initialCustomerType : "manual"
+  ));
+  const [customerId, setCustomerId] = useState(() => hasRequestedCustomer ? initialCustomerId : "");
+  const [serviceCategory, setServiceCategory] = useState("");
+  const [serviceCode, setServiceCode] = useState("");
   const [amount, setAmount] = useState("");
   const [pastedForm, setPastedForm] = useState("");
   const [jobFormData, setJobFormData] = useState({});
@@ -99,6 +110,7 @@ export default function AgentManagement() {
       setManualAgents(agentsResponse.data?.manualAgents || []);
       setRegisteredUsers(agentsResponse.data?.registeredUsers || []);
       setJobs(jobsResponse.data?.jobs || []);
+      setNow(Date.now());
     } catch (loadError) {
       console.error("Agent management load failed:", loadError);
       toastError(loadError.response?.data?.message || "Could not load agent management data.");
@@ -111,6 +123,29 @@ export default function AgentManagement() {
     void Promise.resolve().then(loadData);
   }, [loadData]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/api/services/catalog")
+      .then((response) => {
+        if (!cancelled) setCatalog(Array.isArray(response.data?.services) ? response.data.services : []);
+      })
+      .catch((loadError) => {
+        console.error("Service catalog load failed:", loadError);
+        if (!cancelled) setCatalogError(loadError.response?.data?.message || "Could not load services from the service catalog.");
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const categories = [...new Set(catalog.filter((service) => service.status === "active")
+    .map((service) => service.category === "NIN" ? "NIMC" : service.category))];
+  const selectedService = catalog.find((service) => service.serviceCode === serviceCode && service.status === "active");
+  const selectedServiceFields = Array.isArray(selectedService?.metadata?.formFields)
+    ? selectedService.metadata.formFields.filter((field) => field?.key && !["title", "subtitle"].includes(field.type))
+    : [];
+
   const allContacts = useMemo(() => [
     ...manualAgents.map((agent) => ({ ...agent, contactType: "manual", source: "Manual agent" })),
     ...registeredUsers.map((account) => ({ ...account, contactType: "registered", source: "BMS registered" })),
@@ -120,6 +155,25 @@ export default function AgentManagement() {
     const searchable = `${contact.name} ${contact.whatsapp || ""} ${contact.email || ""}`.toLowerCase();
     return searchable.includes(query.toLowerCase());
   });
+  const communicationContacts = visibleContacts.filter((contact) => {
+    if (audience === "manual") return contact.contactType === "manual";
+    if (contact.contactType !== "registered") return audience === "all";
+    if (audience === "active") return contact.status === "active" && contact.approvalStatus === "approved";
+    if (audience === "wallet") return Number(contact.walletBalanceKobo || 0) > 0 || Number(contact.walletBalance || 0) > 0;
+    if (audience === "inactive") {
+      const inactivityLimit = now - 30 * 24 * 60 * 60 * 1000;
+      const lastLogin = Date.parse(contact.lastLogin);
+      return contact.status !== "active"
+        || contact.approvalStatus !== "approved"
+        || !contact.lastLogin
+        || !Number.isFinite(lastLogin)
+        || lastLogin < inactivityLimit;
+    }
+    return true;
+  });
+  const eligibleRegisteredUsers = registeredUsers.filter((account) => (
+    account.status === "active" && account.approvalStatus === "approved"
+  ));
 
   const selectedAgentJobs = selectedAgent
     ? jobs.filter((job) => job.customerType === selectedAgent.contactType
@@ -170,13 +224,27 @@ export default function AgentManagement() {
       toastError("Choose an agent or registered account for this job.");
       return;
     }
+    if (!selectedService) {
+      toastError("Choose an active service from the service catalog.");
+      return;
+    }
+    const missingField = selectedServiceFields.find((field) => field.required
+      && field.type !== "upload"
+      && !String(jobFormData[field.key] ?? "").trim());
+    if (missingField) {
+      toastError(`${missingField.label || missingField.key} is required.`);
+      return;
+    }
     setBusy(true);
     try {
       await api.post("/api/admin/agents/jobs", {
         customerType,
         ...(customerType === "manual" ? { agentId: customerId } : { registeredUserId: customerId }),
-        serviceType,
-        amount: amount === "" ? 0 : Number(amount),
+        serviceCode,
+        serviceType: selectedService?.name,
+        amount: amount === "" || Number(amount) === 0
+          ? Number(selectedService.price) || 0
+          : Number(amount),
         formData: jobFormData,
       });
       setShowJobForm(false);
@@ -184,6 +252,8 @@ export default function AgentManagement() {
       setAmount("");
       setPastedForm("");
       setJobFormData({});
+      setServiceCategory("");
+      setServiceCode("");
       await loadData();
       success("Job logged and added to service requests.");
     } catch (saveError) {
@@ -195,7 +265,7 @@ export default function AgentManagement() {
   };
 
   const handleParseForm = () => {
-    const parsed = parseAgentJobForm(pastedForm);
+    const parsed = parseCatalogServiceForm(pastedForm, selectedServiceFields);
     setJobFormData((current) => ({ ...current, ...parsed }));
     if (!Object.keys(parsed).length) toastError("No recognized form fields found. Check the pasted labels and try again.");
     else success(`${Object.keys(parsed).length} form fields detected. Review them before saving.`);
@@ -234,9 +304,22 @@ export default function AgentManagement() {
     selectedRecipients.includes(`${contact.contactType}:${contact._id}`) && contact.whatsapp
   ));
 
-  const changeServiceType = (value) => {
-    setServiceType(value);
+  const openJobForm = (type = "manual", contactId = "") => {
+    setCustomerType(type);
+    setCustomerId(contactId);
+    setServiceCategory("");
+    setServiceCode("");
+    setAmount("");
+    setPastedForm("");
     setJobFormData({});
+    setShowJobForm(true);
+  };
+
+  const changeServiceCode = (value) => {
+    setServiceCode(value);
+    setJobFormData({});
+    const service = catalog.find((item) => item.serviceCode === value);
+    setAmount(service ? String(service.price || 0) : "");
   };
 
   return (
@@ -244,44 +327,32 @@ export default function AgentManagement() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-text)]">Super Admin workspace</p>
-          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">Agents &amp; communications</h2>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+            {tab === "messages" ? "Communications" : tab === "jobs" ? "Log jobs" : "Agents"}
+          </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Manage manually added agents separately from BMS accounts, log their work, and prepare WhatsApp messages.
+            {tab === "messages"
+              ? "Segment registered accounts and prepare reviewed WhatsApp messages."
+              : tab === "jobs"
+                ? "Select a catalog service, enter customer details, and log the work to service requests."
+                : "Distinguish manual agent contacts from registered BMS accounts and track their logged work."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => { setCustomerType("manual"); setCustomerId(""); setShowJobForm(true); }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)] shadow-sm transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          <Plus size={17} aria-hidden="true" /> Log a job
-        </button>
-      </header>
-
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3 dark:border-slate-800" role="tablist" aria-label="Agent management sections">
-        {[
-          { id: "agents", label: "Agents", icon: Users },
-          { id: "jobs", label: "Logged jobs", icon: BriefcaseBusiness },
-          { id: "messages", label: "Communications", icon: MessageCircle },
-        ].map(({ id, label, icon }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => navigate(id === "messages"
-              ? "/admin/communications"
-              : id === "jobs" ? "/admin/agents?tab=jobs" : "/admin/agents")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-2 ${
-              tab === id
-                ? "bg-[var(--accent)] text-[var(--accent-foreground)] shadow-sm"
-                : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-900"
-            }`}
-          >
-            {React.createElement(icon, { size: 16, "aria-hidden": true })}{label}
+        {tab === "agents" ? (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => navigate("/admin/agents/jobs")} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+              <BriefcaseBusiness size={16} aria-hidden="true" /> View logged jobs
+            </button>
+            <button type="button" onClick={() => { setEditingAgent(null); setAgentForm({ name: "", whatsapp: "" }); setShowAgentForm(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)]">
+              <Plus size={17} aria-hidden="true" /> Add manual agent
+            </button>
+          </div>
+        ) : tab === "jobs" ? (
+          <button type="button" onClick={() => openJobForm()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)]">
+            <Plus size={17} aria-hidden="true" /> Log a job
           </button>
-        ))}
-      </div>
+        ) : null}
+      </header>
 
       {tab !== "messages" && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -296,16 +367,6 @@ export default function AgentManagement() {
               aria-label={tab === "agents" ? "Search agents" : "Search logged jobs"}
             />
           </label>
-          {tab === "agents" && (
-            <button type="button" onClick={() => { setEditingAgent(null); setAgentForm({ name: "", whatsapp: "" }); setShowAgentForm(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
-              <Plus size={16} aria-hidden="true" /> Add manual agent
-            </button>
-          )}
-          {tab === "jobs" && (
-            <button type="button" onClick={() => { setCustomerType("manual"); setCustomerId(""); setShowJobForm(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)] focus-visible:outline-2">
-              <Plus size={16} aria-hidden="true" /> Log a job
-            </button>
-          )}
         </div>
       )}
 
@@ -352,10 +413,10 @@ export default function AgentManagement() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {jobs.filter((job) => `${job.agentName} ${job.serviceType} ${job.formData?.nin || ""}`.toLowerCase().includes(query.toLowerCase())).map((job) => (
-                    <tr key={job._id} className="cursor-pointer transition hover:bg-slate-50 focus-within:bg-slate-50 dark:hover:bg-slate-800/60 dark:focus-within:bg-slate-800/60" onClick={() => setSelectedJob(job)}>
-                      <td className="px-5 py-4"><button type="button" className="text-left font-semibold text-slate-900 focus-visible:outline-2 dark:text-white">{job.serviceType.replace(/-/g, " ")}</button><span className="mt-1 block text-xs text-slate-500">Request ID {String(job._id).slice(-7)}</span></td>
+                    <tr key={job._id} tabIndex={0} aria-label={`View ${job.serviceType} job for ${job.agentName}`} className="cursor-pointer transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] dark:hover:bg-slate-800/60" onClick={() => setSelectedJob(job)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedJob(job); } }}>
+                      <td className="px-5 py-4"><span className="font-semibold text-slate-900 dark:text-white">{getJobServiceName(job, catalog)}</span><span className="mt-1 block text-xs text-slate-500">Request ID {String(job._id).slice(-7)}</span></td>
                       <td className="px-5 py-4"><span className="font-medium">{job.agentName}</span><span className="mt-1 block text-xs text-slate-500">{job.customerType === "registered" ? "BMS registered" : "Manual agent"}</span></td>
-                      <td className="px-5 py-4 font-medium">{formatAmount(job.amount)}</td>
+                      <td className="px-5 py-4 font-medium">{formatAmount(getJobAmount(job, catalog))}</td>
                       <td className="px-5 py-4"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize dark:bg-slate-800">{statusLabels[job.status] || job.status}</span></td>
                       <td className="px-5 py-4 text-slate-500">{formatDate(job.createdAt)}</td>
                     </tr>
@@ -392,12 +453,21 @@ export default function AgentManagement() {
               <h3 className="font-bold text-slate-900 dark:text-white">Recipients</h3>
               <span className="text-xs text-slate-500">{selectedRecipients.length} selected</span>
             </div>
+            <label className="mt-4 block text-sm font-semibold">Audience segment
+              <select value={audience} onChange={(event) => setAudience(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal dark:border-slate-700 dark:bg-slate-950">
+                <option value="all">All contacts</option>
+                <option value="active">Active registered accounts</option>
+                <option value="wallet">Accounts with wallet funds</option>
+                <option value="inactive">No sign-in in 30+ days / inactive</option>
+                <option value="manual">Manual agents</option>
+              </select>
+            </label>
             <label className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
               <Search size={15} className="text-slate-400" aria-hidden="true" />
               <input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Find recipients" aria-label="Search communication recipients" />
             </label>
             <div className="mt-3 max-h-[26rem] divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800">
-              {visibleContacts.map((contact) => {
+              {communicationContacts.map((contact) => {
                 const key = `${contact.contactType}:${contact._id}`;
                 return (
                   <label key={key} className={`flex items-start gap-3 py-3 ${contact.whatsapp ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}>
@@ -409,7 +479,7 @@ export default function AgentManagement() {
                   </label>
                 );
               })}
-              {!visibleContacts.length && <p className="py-6 text-center text-sm text-slate-500">No contacts found.</p>}
+              {!communicationContacts.length && <p className="py-6 text-center text-sm text-slate-500">No contacts match this audience segment.</p>}
             </div>
             {selectedRecipients.length > 0 && (
               <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 dark:border-slate-800">
@@ -462,41 +532,70 @@ export default function AgentManagement() {
             <label className="block text-sm font-semibold">Agent / account
               <select required value={customerId} onChange={(event) => setCustomerId(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
                 <option value="">Select a contact</option>
-                {(customerType === "manual" ? manualAgents.filter((agent) => agent.active !== false) : registeredUsers).map((contact) => (
+                {(customerType === "manual" ? manualAgents.filter((agent) => agent.active !== false) : eligibleRegisteredUsers).map((contact) => (
                   <option key={contact._id} value={contact._id}>{contact.name}{contact.whatsapp ? ` — ${contact.whatsapp}` : ""}</option>
                 ))}
               </select>
             </label>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm font-semibold">Job / service
-              <select value={serviceType} onChange={(event) => changeServiceType(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
-                {serviceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            <label className="block text-sm font-semibold">Service category
+              <select value={serviceCategory} onChange={(event) => { setServiceCategory(event.target.value); setServiceCode(""); setJobFormData({}); setAmount(""); }} required className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
+                <option value="">Select a category</option>
+                {categories.map((category) => <option key={category} value={category}>{category}</option>)}
               </select>
             </label>
+            <label className="block text-sm font-semibold">Service
+              <select value={serviceCode} onChange={(event) => changeServiceCode(event.target.value)} required disabled={!serviceCategory || catalogLoading} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950">
+                <option value="">{catalogLoading ? "Loading catalog…" : "Select a service"}</option>
+                {catalog.filter((service) => service.status === "active"
+                  && (service.category === "NIN" ? "NIMC" : service.category) === serviceCategory)
+                  .map((service) => <option key={service.serviceCode} value={service.serviceCode}>{service.name}</option>)}
+              </select>
+            </label>
+          </div>
+          {catalogError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{catalogError}</p>}
+          {selectedService?.metadata?.description && <p className="rounded-lg bg-[rgba(var(--accent-rgb),0.08)] p-3 text-sm text-slate-700 dark:text-slate-300">{selectedService.metadata.description}</p>}
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-semibold">Amount (NGN)
-              <input type="number" min="0" max="100000000" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
+              <input type="number" min="0" max="100000000" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
+              {selectedService && <span className="mt-1 block text-xs font-normal text-slate-500">Catalog price: {formatAmount(selectedService.price)}. A blank or zero override uses the catalog price.</span>}
             </label>
           </div>
           <label className="block text-sm font-semibold">Paste the customer’s form
-            <textarea rows={7} value={pastedForm} onChange={(event) => setPastedForm(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 font-mono text-xs leading-5 dark:border-slate-700 dark:bg-slate-950" placeholder={"NIN: ...\nLast Name/Surname: ...\nFirst Name: ...\nDate of Birth: ..."} />
+            <textarea rows={7} value={pastedForm} onChange={(event) => setPastedForm(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 font-mono text-xs leading-5 dark:border-slate-700 dark:bg-slate-950" placeholder={"Paste the customer form here using the service field labels.\nExample: NIN: ..."} />
           </label>
-          <button type="button" onClick={handleParseForm} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Parse pasted form</button>
+          <button type="button" disabled={!selectedService} onClick={handleParseForm} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">Parse pasted form</button>
           <div className="grid gap-4 sm:grid-cols-2">
-            {getAgentJobFormFields(serviceType).map((field) => (
-              <label key={field} className="block text-sm font-semibold">{agentJobFieldLabels[field]}
-                {field === "previousSelfServiceModification" ? (
-                  <select value={jobFormData[field] || ""} onChange={(event) => setJobFormData((current) => ({ ...current, [field]: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
-                    <option value="">Not specified</option><option>Yes</option><option>No</option>
+            {selectedServiceFields.map((field) => (
+              <label key={field.key} className={`block text-sm font-semibold ${field.type === "textarea" ? "sm:col-span-2" : ""}`}>
+                {field.label || agentJobFieldLabels[field.key] || field.key}{field.required ? " *" : ""}
+                {field.type === "textarea" ? (
+                  <textarea required={Boolean(field.required)} rows={4} value={jobFormData[field.key] || ""} placeholder={field.placeholder || ""} onChange={(event) => setJobFormData((current) => ({ ...current, [field.key]: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
+                ) : field.type === "select" ? (
+                  <select required={Boolean(field.required)} value={jobFormData[field.key] || ""} onChange={(event) => setJobFormData((current) => ({ ...current, [field.key]: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
+                    <option value="">Select an option</option>
+                    {(Array.isArray(field.options) ? field.options : String(field.options || "").split(",").map((option) => option.trim()).filter(Boolean))
+                      .map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
+                ) : field.type === "checkbox" ? (
+                  <span className="mt-3 flex items-center gap-2 font-normal">
+                    <input type="checkbox" checked={Boolean(jobFormData[field.key])} onChange={(event) => setJobFormData((current) => ({ ...current, [field.key]: event.target.checked }))} />
+                    {field.placeholder || "Yes"}
+                  </span>
+                ) : field.type === "upload" ? (
+                  <span className="mt-2 block rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-xs font-normal text-slate-500 dark:border-slate-700">
+                    File fields are configured for customer submissions; attach files when processing the request.
+                  </span>
                 ) : (
-                  <input type={field === "dateOfBirth" ? "date" : field === "email" ? "email" : "text"} value={jobFormData[field] || ""} onChange={(event) => setJobFormData((current) => ({ ...current, [field]: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
+                  <input required={Boolean(field.required)} type={["text", "email", "number", "date"].includes(field.type) ? field.type : "text"} value={jobFormData[field.key] || ""} placeholder={field.placeholder || ""} onChange={(event) => setJobFormData((current) => ({ ...current, [field.key]: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
                 )}
               </label>
             ))}
           </div>
-          <p className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600 dark:bg-slate-950 dark:text-slate-400">Parsed values are suggestions only. Review every field before saving. This logs an internal job; it does not submit to NIMC or alter a customer account.</p>
-          <button type="submit" disabled={busy} className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--accent-foreground)] disabled:opacity-60">{busy ? "Saving…" : "Save job"}</button>
+          {selectedService && selectedServiceFields.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-700">No customer form fields are configured for this service in Services Engine. You can still log the job and add notes in the form text above.</p>}
+          <p className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600 dark:bg-slate-950 dark:text-slate-400">Parsed values are suggestions only. Review every field before saving. This logs an internal job to the admin service-request list; it does not submit to NIMC or alter a customer account.</p>
+          <button type="submit" disabled={busy || !selectedService} className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--accent-foreground)] disabled:opacity-60">{busy ? "Saving…" : "Save job"}</button>
         </form>
       </SlideOver>
 
@@ -522,30 +621,30 @@ export default function AgentManagement() {
             {selectedAgent.email && <p className="text-sm text-slate-600 dark:text-slate-300">{selectedAgent.email} · {selectedAgent.role}</p>}
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-bold">Jobs from this contact</h3>
-              <span className="text-sm font-semibold">{formatAmount(selectedAgentJobs.reduce((sum, job) => sum + (Number(job.amount) || 0), 0))} total</span>
+              <span className="text-sm font-semibold">{formatAmount(selectedAgentJobs.reduce((sum, job) => sum + getJobAmount(job, catalog), 0))} total</span>
             </div>
             {selectedAgentJobs.length ? (
               <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
                 {selectedAgentJobs.map((job) => (
                   <button key={job._id} type="button" onClick={() => { setSelectedAgent(null); setSelectedJob(job); }} className="flex w-full items-center justify-between gap-4 p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800">
-                    <span><span className="block font-semibold capitalize">{job.serviceType.replace(/-/g, " ")}</span><span className="mt-1 block text-xs text-slate-500">{formatDate(job.createdAt)} · {statusLabels[job.status] || job.status}</span></span>
-                    <span className="font-semibold">{formatAmount(job.amount)}</span>
+                    <span><span className="block font-semibold">{getJobServiceName(job, catalog)}</span><span className="mt-1 block text-xs text-slate-500">{formatDate(job.createdAt)} · {statusLabels[job.status] || job.status}</span></span>
+                    <span className="font-semibold">{formatAmount(getJobAmount(job, catalog))}</span>
                   </button>
                 ))}
               </div>
             ) : <EmptyState message="No jobs have been logged for this contact yet." />}
-            <button type="button" disabled={selectedAgent.contactType === "manual" && selectedAgent.active === false} onClick={() => { setCustomerType(selectedAgent.contactType); setCustomerId(selectedAgent._id); setSelectedAgent(null); setShowJobForm(true); }} className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--accent-foreground)] disabled:cursor-not-allowed disabled:opacity-50"><Plus size={16} className="mr-2 inline" />Log a job for this contact</button>
+            <button type="button" disabled={(selectedAgent.contactType === "manual" && selectedAgent.active === false) || (selectedAgent.contactType === "registered" && (selectedAgent.status !== "active" || selectedAgent.approvalStatus !== "approved"))} onClick={() => { setSelectedAgent(null); openJobForm(selectedAgent.contactType, selectedAgent._id); }} className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--accent-foreground)] disabled:cursor-not-allowed disabled:opacity-50"><Plus size={16} className="mr-2 inline" />Log a job for this contact</button>
           </div>
         )}
       </SlideOver>
 
-      <SlideOver isOpen={!!selectedJob} onClose={() => setSelectedJob(null)} title={selectedJob?.serviceType?.replace(/-/g, " ") || "Job details"}>
+      <SlideOver isOpen={!!selectedJob} onClose={() => setSelectedJob(null)} title={selectedJob ? getJobServiceName(selectedJob, catalog) : "Job details"}>
         {selectedJob && (
           <div className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <Summary label="Customer" value={selectedJob.agentName} />
               <Summary label="Source" value={selectedJob.customerType === "registered" ? "BMS registered account" : "Manual agent"} />
-              <Summary label="Amount" value={formatAmount(selectedJob.amount)} />
+              <Summary label="Amount" value={formatAmount(getJobAmount(selectedJob, catalog))} />
               <Summary label="Logged" value={new Date(selectedJob.createdAt).toLocaleString()} />
             </div>
             <label className="block text-sm font-semibold">Status

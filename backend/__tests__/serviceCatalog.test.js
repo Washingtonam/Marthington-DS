@@ -109,7 +109,7 @@ describe('service catalog API', () => {
     expect(catalogResponse.body.services.find((service) => service.serviceCode === 'jamb-application').commissionValue).toBe(12);
   });
 
-  it('saves BVN verification pricing through the admin pricing endpoint', async () => {
+  it('saves platform service visibility through the admin pricing endpoint', async () => {
     User.findById.mockResolvedValue({
       id: 'admin-user-1',
       _id: 'admin-user-1',
@@ -126,11 +126,16 @@ describe('service catalog API', () => {
     const response = await request(app)
       .put('/api/admin/pricing')
       .set('Authorization', `Bearer ${makeSuperAdminToken()}`)
-      .send({ bvn: { unitPrice: 425 } });
+      .send({
+        bvn: { unitPrice: 425 },
+        platformServices: { verifyNin: { enabled: false } },
+      });
 
     expect(response.status).toBe(200);
     expect(pricing.bvn.unitPrice).toBe(425);
+    expect(pricing.platformServices.verifyNin.enabled).toBe(false);
     expect(markModified).toHaveBeenCalledWith('bvn');
+    expect(markModified).toHaveBeenCalledWith('platformServices');
     expect(save).toHaveBeenCalledTimes(1);
   });
 });

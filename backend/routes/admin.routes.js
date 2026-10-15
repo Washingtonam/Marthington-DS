@@ -124,7 +124,7 @@ const sanitizeJobFormData = (value) => {
   if (entries.length > 40) return null;
   const clean = {};
   for (const [key, fieldValue] of entries) {
-    if (!/^[A-Za-z][A-Za-z0-9_]{0,49}$/.test(key)) return null;
+    if (!/^[A-Za-z][A-Za-z0-9_-]{0,49}$/.test(key)) return null;
     if (fieldValue === null || fieldValue === undefined || fieldValue === "") continue;
     if (typeof fieldValue !== "string" && typeof fieldValue !== "number" && typeof fieldValue !== "boolean") return null;
     const normalizedValue = String(fieldValue).trim();
@@ -138,8 +138,8 @@ router.get("/agents", isSuperAdmin, async (req, res) => {
   try {
     const [manualAgents, registeredUsers, jobTotals] = await Promise.all([
       Agent.find().sort({ active: -1, name: 1 }).lean(),
-      User.find({ role: "user", approvalStatus: "approved", status: { $ne: "suspended" } })
-        .select("firstName lastName email phone role createdAt")
+      User.find({ role: "user" })
+        .select("firstName lastName email phone role status approvalStatus walletBalance walletBalanceKobo lastLogin createdAt")
         .sort({ firstName: 1, lastName: 1 })
         .lean(),
       AgentJob.aggregate([
@@ -160,6 +160,11 @@ router.get("/agents", isSuperAdmin, async (req, res) => {
         email: user.email,
         whatsapp: user.phone || "",
         role: user.role,
+        status: user.status,
+        approvalStatus: user.approvalStatus,
+        walletBalance: user.walletBalance,
+        walletBalanceKobo: user.walletBalanceKobo,
+        lastLogin: user.lastLogin,
         createdAt: user.createdAt,
         source: "registered",
         ...(totals.get(String(user._id)) || { jobs: 0, totalAmount: 0 }),
@@ -237,7 +242,7 @@ router.get("/agents/jobs", isSuperAdmin, async (req, res) => {
 
 router.post("/agents/jobs", isSuperAdmin, async (req, res) => {
   try {
-    const { agentId, registeredUserId, customerType } = req.body || {};
+    const { agentId, registeredUserId, customerType, serviceCode } = req.body || {};
     const serviceType = String(req.body?.serviceType || "").trim();
     const amount = Number(req.body?.amount || 0);
     const formData = sanitizeJobFormData(req.body?.formData || {});
@@ -271,6 +276,15 @@ router.post("/agents/jobs", isSuperAdmin, async (req, res) => {
         whatsapp: customer.phone || "",
       };
     }
+    const catalog = await Pricing.getPricing();
+    const services = Array.isArray(catalog?.serviceCatalog) && catalog.serviceCatalog.length
+      ? catalog.serviceCatalog
+      : Pricing.getDefaultServiceCatalog();
+    const service = services.find((item) => item.serviceCode === serviceCode && item.status === "active");
+    if (!service) {
+      return res.status(400).json({ success: false, message: "Choose an active service from the service catalog." });
+    }
+    const jobAmount = amount > 0 ? amount : Number(service.price) || 0;
     const job = await AgentJob.create({
       agentId: customerType === "manual" ? customer._id : null,
       registeredUserId: customerType === "registered" ? customer._id : null,
@@ -278,9 +292,11 @@ router.post("/agents/jobs", isSuperAdmin, async (req, res) => {
       agentName: customer.name,
       agentEmail: customer.email || "",
       agentWhatsapp: customer.whatsapp,
-      serviceType,
+      serviceCode: service.serviceCode,
+      serviceCategory: service.category,
+      serviceType: service.name,
       formData,
-      amount,
+      amount: jobAmount,
       createdBy: req.user.id,
     });
     return res.status(201).json({ success: true, job });
@@ -497,10 +513,61 @@ router.get("/requests", isAdmin, async (req, res) => {
     const normalizedCategory = normalizeServiceType(category || "").toLowerCase();
     const normalizedServiceType = String(serviceType || "").trim().toLowerCase();
     const searchTerm = String(search || "").trim();
+    const searchTokens = searchTerm.split(/\s+/).filter(Boolean);
     const ninTerm = String(nin || "").trim();
     const roleFilter = String(userRole || "").trim().toLowerCase();
 
     const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const searchableRecordText = {
+      $concat: [
+        {
+          $reduce: {
+            input: { $objectToArray: "$$ROOT" },
+            initialValue: "",
+            in: {
+              $concat: [
+                "$$value",
+                " ",
+                "$$this.k",
+                " ",
+                { $convert: { input: "$$this.v", to: "string", onError: "", onNull: "" } },
+              ],
+            },
+          },
+        },
+        " ",
+        {
+          $reduce: {
+            input: {
+              $objectToArray: {
+                $cond: [{ $eq: [{ $type: "$formData" }, "object"] }, "$formData", {}],
+              },
+            },
+            initialValue: "",
+            in: {
+              $concat: [
+                "$$value",
+                " ",
+                "$$this.k",
+                " ",
+                { $convert: { input: "$$this.v", to: "string", onError: "", onNull: "" } },
+              ],
+            },
+          },
+        },
+      ],
+    };
+    const allSearchTokensMatch = {
+      $expr: {
+        $and: searchTokens.map((token) => ({
+          $regexMatch: {
+            input: searchableRecordText,
+            regex: escapeRegex(token),
+            options: "i",
+          },
+        })),
+      },
+    };
 
     const setOrGroup = (query, conditions) => {
       if (query.$or) {
@@ -620,13 +687,21 @@ router.get("/requests", isAdmin, async (req, res) => {
         { "formData.firstName": { $regex: escapedSearch, $options: "i" } },
         { "formData.surname": { $regex: escapedSearch, $options: "i" } },
         { "formData.email": { $regex: escapedSearch, $options: "i" } },
+        allSearchTokensMatch,
       ];
       const matchingUsers = await User.find({
-        $or: [
-          { email: { $regex: escapedSearch, $options: "i" } },
-          { firstName: { $regex: escapedSearch, $options: "i" } },
-          { lastName: { $regex: escapedSearch, $options: "i" } },
-        ],
+        $and: searchTokens.map((token) => {
+          const tokenRegex = new RegExp(escapeRegex(token), "i");
+          return {
+            $or: [
+              { email: tokenRegex },
+              { firstName: tokenRegex },
+              { lastName: tokenRegex },
+              { phone: tokenRegex },
+              { phoneNumber: tokenRegex },
+            ],
+          };
+        }),
       }).select("_id").lean();
       const matchingUserIds = matchingUsers.map((user) => user._id);
       if (matchingUserIds.length) {
@@ -638,6 +713,8 @@ router.get("/requests", isAdmin, async (req, res) => {
         cacSearchConditions.push({ _id: new mongoose.Types.ObjectId(searchTerm) });
         agentJobSearchConditions.push({ _id: new mongoose.Types.ObjectId(searchTerm) });
       }
+      searchConditions.push(allSearchTokensMatch);
+      cacSearchConditions.push(allSearchTokensMatch);
       setOrGroup(serviceQuery, searchConditions);
       setOrGroup(cacQuery, cacSearchConditions);
       setOrGroup(agentJobQuery, agentJobSearchConditions);
@@ -699,6 +776,12 @@ router.get("/requests", isAdmin, async (req, res) => {
     const aggResult = await ServiceRequest.aggregate(agg).allowDiskUse(true);
     const pageData = (aggResult[0] && aggResult[0].data) || [];
     const exactTotal = aggResult[0]?.meta?.[0]?.total ?? null;
+    const agentJobsOnPage = pageData.filter((item) => item.pipelineSource === "agent-job");
+    const pricing = agentJobsOnPage.length ? await Pricing.getPricing() : null;
+    const serviceCatalog = Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length
+      ? pricing.serviceCatalog
+      : (agentJobsOnPage.length ? Pricing.getDefaultServiceCatalog() : []);
+    const serviceByCode = new Map(serviceCatalog.map((service) => [service.serviceCode, service]));
 
     let totalRecords;
     if (exactTotal !== null) {
@@ -724,7 +807,22 @@ router.get("/requests", isAdmin, async (req, res) => {
       users = await User.find({ _id: { $in: userIds } }).select('email firstName lastName phoneNumber role').lean();
     }
     const userMap = users.reduce((acc, u) => { acc[String(u._id)] = u; return acc; }, {});
-    const populated = pageData.map((d) => ({ ...d, userId: d.userId ? (userMap[String(d.userId)] || { _id: d.userId }) : null }));
+    const populated = pageData.map((d) => {
+      const catalogService = d.pipelineSource === "agent-job" ? serviceByCode.get(d.serviceCode) : null;
+      const catalogPrice = Number(catalogService?.price);
+      const storedAmount = Number(d.amountCharged ?? d.amount);
+      return {
+        ...d,
+        ...(catalogService ? {
+          serviceName: catalogService.name,
+          serviceType: catalogService.name,
+        } : {}),
+        ...(d.pipelineSource === "agent-job" && (!Number.isFinite(storedAmount) || storedAmount <= 0) && Number.isFinite(catalogPrice)
+          ? { amountCharged: catalogPrice }
+          : {}),
+        userId: d.userId ? (userMap[String(d.userId)] || { _id: d.userId }) : null,
+      };
+    });
 
     const totalPages = Math.max(1, Math.ceil((totalRecords || populated.length) / limit));
 
@@ -2267,6 +2365,11 @@ router.post("/adjust-funds", isSuperAdmin, async (req, res) => {
 // =========================================================================
 router.put("/pricing", isSuperAdmin, async (req, res) => {
   try {
+    const verifyNinEnabled = req.body?.platformServices?.verifyNin?.enabled;
+    if (verifyNinEnabled !== undefined && typeof verifyNinEnabled !== "boolean") {
+      return res.status(400).json({ success: false, message: "Verify NIN availability must be true or false." });
+    }
+
     const priceValues = [
       req.body.unitPrice,
       req.body.agentPrice,
@@ -2297,6 +2400,8 @@ router.put("/pricing", isSuperAdmin, async (req, res) => {
     if (!pricing.ninServices.selfService) pricing.ninServices.selfService = {};
     if (!pricing.bvn) pricing.bvn = {};
     if (!pricing.cacServices) pricing.cacServices = {};
+    if (!pricing.platformServices) pricing.platformServices = { verifyNin: {} };
+    if (!pricing.platformServices.verifyNin) pricing.platformServices.verifyNin = {};
 
     Object.assign(pricing.nin, {
       unitPrice: req.body.unitPrice ?? pricing.nin.unitPrice,
@@ -2329,6 +2434,9 @@ router.put("/pricing", isSuperAdmin, async (req, res) => {
         limited1M: req.body.cacServices.limited1M ?? pricing.cacServices.limited1M,
       });
     }
+    if (verifyNinEnabled !== undefined) {
+      pricing.platformServices.verifyNin.enabled = verifyNinEnabled;
+    }
 
     pricing.markModified("nin");
     pricing.markModified("bvn");
@@ -2338,6 +2446,7 @@ router.put("/pricing", isSuperAdmin, async (req, res) => {
     pricing.markModified("ninServices.ipe");
     pricing.markModified("ninServices.modification");
     pricing.markModified("cacServices");
+    pricing.markModified("platformServices");
 
     await pricing.save();
     res.json({ message: "Pricing engine models updated successfully across all matrix tiers.", pricing });

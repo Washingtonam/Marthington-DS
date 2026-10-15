@@ -26,7 +26,7 @@ export function parseAgentJobForm(text) {
   const lines = normalizedText.split("\n");
 
   lines.forEach((line, index) => {
-    const match = line.match(/^\s*([^:]+?)(?:\s*:\s*|\?\s*)(.*?)\s*$/);
+    const match = line.match(/^\s*([^:]+?)(?:\?\s*:\s*|\s*:\s*|\?\s+)(.*?)\s*$/);
     if (!match) return;
 
     const label = normalizeLabel(match[1]);
@@ -60,6 +60,83 @@ export function parseAgentJobForm(text) {
     result[definition.key] = value;
   });
 
+  return result;
+}
+
+const normalizeFormName = (value) => String(value || "")
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, " ")
+  .trim();
+
+export function parseCatalogServiceForm(text, formFields = []) {
+  const result = {};
+  const parsedStandardFields = parseAgentJobForm(text);
+  const aliases = {
+    previousSelfServiceModification: "previousSelfServiceModification",
+    nin: "nin",
+    surname: "surname",
+    lastName: "surname",
+    firstName: "firstName",
+    middleName: "middleName",
+    dateOfBirth: "dateOfBirth",
+    email: "email",
+    emailAddress: "email",
+    whatsapp: "whatsapp",
+    phone: "whatsapp",
+    phoneNumber: "whatsapp",
+  };
+  const parsedLines = new Map();
+  String(text || "").replace(/\r\n?/g, "\n").split("\n").forEach((line) => {
+    const match = line.match(/^\s*([^:]+?)(?:\?\s*:\s*|\s*:\s*|\?\s+)(.*?)\s*$/);
+    if (match) parsedLines.set(normalizeFormName(match[1]), match[2].trim());
+  });
+
+  formFields.forEach((field) => {
+    if (!field?.key || ["title", "subtitle", "upload"].includes(field.type)) return;
+    const names = [field.label, field.key].filter(Boolean).map(normalizeFormName);
+    const direct = names.find((name) => parsedLines.has(name));
+    if (direct) {
+      let value = parsedLines.get(direct);
+      const options = Array.isArray(field.options)
+        ? field.options
+        : String(field.options || "").split(",").map((option) => option.trim()).filter(Boolean);
+      const checkedYes = value.match(/\byes\s*\[\s*([x✓✔]?)\s*\]/i);
+      const checkedNo = value.match(/\bno\s*\[\s*([x✓✔]?)\s*\]/i);
+      if (checkedYes?.[1] && checkedNo?.[1]) return;
+      const choice = checkedYes?.[1] ? "yes" : checkedNo?.[1] ? "no" : value.match(/^\s*(yes|no)\s*$/i)?.[1];
+      if (field.type === "checkbox" && choice) {
+        value = choice.toLowerCase() === "yes";
+      } else if (field.type === "select" && choice) {
+        value = options.find((option) => String(option).toLowerCase() === choice.toLowerCase()) || value;
+      }
+      if (field.type === "date" && typeof value === "string") {
+        const dateMatch = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+        if (dateMatch) {
+          const [, first, second, year] = dateMatch;
+          const month = Number(first) > 12 ? second : first;
+          const day = Number(first) > 12 ? first : second;
+          value = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+        }
+      }
+      result[field.key] = value;
+      return;
+    }
+
+    const standardKey = aliases[field.key];
+    if (standardKey && Object.prototype.hasOwnProperty.call(parsedStandardFields, standardKey)) {
+      const value = parsedStandardFields[standardKey];
+      if (field.type === "checkbox" && /^(yes|no)$/i.test(value)) {
+        result[field.key] = value.toLowerCase() === "yes";
+      } else if (field.type === "select") {
+        const options = Array.isArray(field.options)
+          ? field.options
+          : String(field.options || "").split(",").map((option) => option.trim()).filter(Boolean);
+        result[field.key] = options.find((option) => String(option).toLowerCase() === value.toLowerCase()) || value;
+      } else {
+        result[field.key] = value;
+      }
+    }
+  });
   return result;
 }
 

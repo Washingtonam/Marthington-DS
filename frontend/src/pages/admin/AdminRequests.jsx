@@ -281,6 +281,9 @@ export default function AdminRequests() {
     if (request.pipelineSource === "cac") {
       return request.serviceType ? request.serviceType.replace(/_/g, " ") : "CAC";
     }
+    if (request.pipelineSource === "agent-job") {
+      return request.serviceName || request.serviceType || request.service || request.type || "Agent job";
+    }
     return request.serviceName || request.service || request.type || request.serviceType || "General";
   };
 

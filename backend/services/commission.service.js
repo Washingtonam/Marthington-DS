@@ -1,13 +1,6 @@
 const User = require('../models/User.model');
 const Transaction = require('../models/transaction.model');
-const SystemSettings = require('../models/SystemSettings.model');
 const Pricing = require('../models/Pricing.model');
-
-const resolveDefaultCommissionValue = () => Number(
-  process.env.DEFAULT_COMMISSION_AMOUNT_NAIRA
-  || process.env.COMMISSION_AMOUNT_NAIRA
-  || 2000
-);
 
 const resolveJobPriceNaira = (request) => {
   const candidates = [request.priceAtTimeOfRequest, request.amountCharged, request.amount];
@@ -48,7 +41,6 @@ const awardCommissionIfEligible = async ({
   request,
   UserModel = User,
   TransactionModel = Transaction,
-  SystemSettingsModel = SystemSettings,
   PricingModel = Pricing,
   userUpdate = UserModel,
 }) => {
@@ -83,7 +75,6 @@ const awardCommissionIfEligible = async ({
     return { awarded: false, reason: 'ineligible_role' };
   }
 
-  const settings = await SystemSettingsModel.findOne({ key: 'global' });
   let serviceCommission;
   if (request.service || request.serviceType || request.serviceCode || request.type) {
     const catalog = await PricingModel.getServiceCatalog();
@@ -92,12 +83,11 @@ const awardCommissionIfEligible = async ({
   const hasServiceCommission = serviceCommission
     && serviceCommission.commissionType !== undefined
     && serviceCommission.commissionValue !== undefined;
-  const commissionType = hasServiceCommission
-    ? serviceCommission.commissionType
-    : (settings?.commissionType || 'FLAT');
-  const rateOrAmountApplied = hasServiceCommission
-    ? Number(serviceCommission.commissionValue)
-    : (settings ? Number(settings.commissionValue) : resolveDefaultCommissionValue());
+  if (!hasServiceCommission) {
+    return { awarded: false, reason: 'service_commission_not_configured' };
+  }
+  const commissionType = serviceCommission.commissionType;
+  const rateOrAmountApplied = Number(serviceCommission.commissionValue);
   if (
     !['FLAT', 'PERCENTAGE'].includes(commissionType)
     || !Number.isFinite(rateOrAmountApplied)

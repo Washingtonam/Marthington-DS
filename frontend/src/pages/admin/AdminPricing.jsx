@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import api from "../../lib/axios";
 import { parseImportedFormText } from "../../lib/formTextParser";
-import AgentCommissionSettings from "../../components/admin/AgentCommissionSettings";
 import CoreServicePricing from "../../components/admin/CoreServicePricing";
 import ServiceFormEditor from "../../components/admin/ServiceFormEditor";
 import SlideOver from "../../components/ui/SlideOver";
@@ -65,13 +65,14 @@ const FEATURED_SERVICE_ORDER = [
 export default function AdminPricing() {
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const headers = useMemo(() => ({ email: user?.email || "" }), [user?.email]);
+  const navigate = useNavigate();
+  const { category: routeCategory } = useParams();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [category, setCategory] = useState("NIMC");
   const [categories, setCategories] = useState([]);
-  const [services, setServices] = useState([]);
-  const [commissionDefaults, setCommissionDefaults] = useState({ commissionType: "FLAT", commissionValue: 2000 });
+  const [allServices, setAllServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
   const [serviceForm, setServiceForm] = useState(defaultServiceModel);
   const [isCreating, setIsCreating] = useState(false);
@@ -83,11 +84,20 @@ export default function AdminPricing() {
   const groupedSummary = useMemo(() => {
     const summary = {};
     categories.forEach(({ label }) => {
-      const name = label;
-      summary[name] = services.filter((service) => String(service.category || "").toUpperCase() === name).length;
+      const slug = normalizeServiceCode(label);
+      summary[label] = allServices.filter((service) => {
+        const serviceSlug = normalizeServiceCode(service.category);
+        return (serviceSlug === "nin" ? "nimc" : serviceSlug) === (slug === "nin" ? "nimc" : slug);
+      }).length;
     });
     return summary;
-  }, [categories, services]);
+  }, [categories, allServices]);
+
+  const services = useMemo(() => allServices.filter((service) => {
+    const serviceCategory = normalizeServiceCode(service.category);
+    const selectedCategory = normalizeServiceCode(category);
+    return (serviceCategory === "nin" ? "nimc" : serviceCategory) === (selectedCategory === "nin" ? "nimc" : selectedCategory);
+  }), [allServices, category]);
 
   const featuredServices = useMemo(() => {
     const priority = new Map(FEATURED_SERVICE_ORDER.map((code, index) => [code, index]));
@@ -123,16 +133,16 @@ export default function AdminPricing() {
     }
   };
 
-  const fetchServices = async (targetCategory = category) => {
+  const fetchServices = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/api/admin/services", { params: { category: targetCategory }, headers });
+      const res = await api.get("/api/admin/services", { headers });
       const catalog = Array.isArray(res.data?.services) ? res.data.services : [];
-      setServices(catalog);
+      setAllServices(catalog);
       setCurrentPage(1);
     } catch (err) {
       console.error("FETCH SERVICES ERROR:", err);
-      setServices([]);
+      setAllServices([]);
     } finally {
       setLoading(false);
     }
@@ -144,7 +154,7 @@ export default function AdminPricing() {
     const loadPageData = async () => {
       const [categoryResult, serviceResult] = await Promise.allSettled([
         api.get("/api/admin/categories", { headers }),
-        api.get("/api/admin/services", { params: { category }, headers }),
+        api.get("/api/admin/services", { headers }),
       ]);
       if (!isCurrent) return;
 
@@ -154,20 +164,19 @@ export default function AdminPricing() {
           ? categoryData.categories.filter((item) => item.isActive !== false)
           : [];
         setCategories(nextCategories);
-        setCategory((current) => nextCategories.some((item) => item.label === current)
-          ? current
-          : (nextCategories[0]?.label || "NIMC"));
+        const routeMatch = nextCategories.find((item) => item.slug === routeCategory);
+        setCategory(routeMatch?.label || (nextCategories[0]?.label || "NIMC"));
       } else {
         console.error("FETCH CATEGORIES ERROR:", categoryResult.reason);
         setCategories([]);
       }
 
       if (serviceResult.status === "fulfilled") {
-        setServices(Array.isArray(serviceResult.value.data?.services) ? serviceResult.value.data.services : []);
+        setAllServices(Array.isArray(serviceResult.value.data?.services) ? serviceResult.value.data.services : []);
         setCurrentPage(1);
       } else {
         console.error("FETCH SERVICES ERROR:", serviceResult.reason);
-        setServices([]);
+        setAllServices([]);
       }
       setLoading(false);
     };
@@ -176,7 +185,13 @@ export default function AdminPricing() {
     return () => {
       isCurrent = false;
     };
-  }, [category, headers]);
+  }, [routeCategory, headers]);
+
+  const selectCategory = (item) => {
+    setCategory(item.label);
+    setCurrentPage(1);
+    navigate(`/admin/services-engine/${encodeURIComponent(item.slug)}`);
+  };
 
   const createCategory = async () => {
     const label = window.prompt("Category name");
@@ -184,7 +199,9 @@ export default function AdminPricing() {
     try {
       const res = await api.post("/api/admin/categories", { label: label.trim() }, { headers });
       await fetchCategories();
-      setCategory(res.data?.category?.label || label.trim());
+      const createdCategory = res.data?.category || { label: label.trim(), slug: label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") };
+      setCategory(createdCategory.label);
+      navigate(`/admin/services-engine/${encodeURIComponent(createdCategory.slug)}`);
     } catch (err) {
       alert(err?.response?.data?.message || "Unable to create category.");
     }
@@ -196,7 +213,9 @@ export default function AdminPricing() {
     try {
       const res = await api.put(`/api/admin/categories/${item.slug}`, { label: label.trim() }, { headers });
       await fetchCategories();
-      setCategory(res.data?.category?.label || label.trim());
+      const updatedCategory = res.data?.category || { label: label.trim(), slug: label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") };
+      setCategory(updatedCategory.label);
+      navigate(`/admin/services-engine/${encodeURIComponent(updatedCategory.slug)}`);
     } catch (err) {
       alert(err?.response?.data?.message || "Unable to rename category.");
     }
@@ -207,6 +226,11 @@ export default function AdminPricing() {
     try {
       await api.delete(`/api/admin/categories/${item.slug}`, { headers });
       await fetchCategories();
+      if (category === item.label) {
+        const nextCategory = categories.find((candidate) => candidate.slug !== item.slug);
+        if (nextCategory) selectCategory(nextCategory);
+        else navigate("/admin/services-engine");
+      }
     } catch (err) {
       alert(err?.response?.data?.message || "Unable to remove category.");
     }
@@ -220,8 +244,8 @@ export default function AdminPricing() {
     setServiceForm({
       ...defaultServiceModel,
       category,
-      commissionType: commissionDefaults.commissionType,
-      commissionValue: commissionDefaults.commissionValue,
+      commissionType: "FLAT",
+      commissionValue: 0,
       metadata: {
         description: "",
         formFields: [emptyFormField()],
@@ -240,8 +264,8 @@ export default function AdminPricing() {
       name: service.name || "",
       status: service.status || "active",
       price: service.price || 0,
-      commissionType: service.commissionType || commissionDefaults.commissionType,
-      commissionValue: service.commissionValue ?? commissionDefaults.commissionValue,
+      commissionType: service.commissionType || "FLAT",
+      commissionValue: service.commissionValue ?? 0,
       metadata: {
         description: service.metadata?.description || "",
         formFields: Array.isArray(service.metadata?.formFields) && service.metadata.formFields.length
@@ -443,7 +467,7 @@ export default function AdminPricing() {
       setIsCreating(false);
       setSelectedService(null);
       closeServiceEditor();
-      await fetchServices(category);
+      await fetchServices();
     } catch (err) {
       console.error("SERVICE SAVE ERROR:", err);
       alert(err?.response?.data?.message || "Unable to save service.");
@@ -456,7 +480,7 @@ export default function AdminPricing() {
     try {
       const nextStatus = service.status === "active" ? "paused" : "active";
       await api.patch(`/api/admin/services/${service.serviceCode}/status`, { status: nextStatus }, { headers });
-      await fetchServices(category);
+      await fetchServices();
     } catch (err) {
       console.error("TOGGLE STATUS ERROR:", err);
       alert(err?.response?.data?.message || "Unable to update service status.");
@@ -467,7 +491,7 @@ export default function AdminPricing() {
     if (!window.confirm(`Disable ${service.name} from the service list?`)) return;
     try {
       await api.patch(`/api/admin/services/${service.serviceCode}/status`, { status: "disabled" }, { headers });
-      await fetchServices(category);
+      await fetchServices();
     } catch (err) {
       console.error("DISABLE SERVICE ERROR:", err);
       alert(err?.response?.data?.message || "Unable to disable service.");
@@ -521,7 +545,6 @@ export default function AdminPricing() {
         </div>
       </div>
 
-      <AgentCommissionSettings onSettingsLoaded={setCommissionDefaults} />
       <CoreServicePricing />
 
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -533,14 +556,11 @@ export default function AdminPricing() {
           <Plus size={16} /> Add category
         </button>
       </div>
-      <div className="grid gap-4 mb-8 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 mb-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {categories.map((item) => (
           <button
             key={item.slug}
-            onClick={() => {
-              setCategory(item.label);
-              setCurrentPage(1);
-            }}
+            onClick={() => selectCategory(item)}
             className={`rounded-2xl border p-4 text-left transition ${
               category === item.label
                 ? "border-blue-500 bg-blue-50 text-blue-700"
@@ -634,10 +654,11 @@ export default function AdminPricing() {
                     <div className="flex items-center gap-2">
                       <span>₦{Number(service.price || 0).toLocaleString()}</span>
                       <span className="text-xs text-emerald-700">
-                        {service.commissionType === "PERCENTAGE"
-                          ? `${Number(service.commissionValue ?? commissionDefaults.commissionValue)}% commission`
-                          : `₦${Number(service.commissionValue ?? commissionDefaults.commissionValue).toLocaleString()} commission`}
-                        {service.commissionValue === undefined ? " (default)" : ""}
+                        {Number(service.commissionValue || 0) === 0
+                          ? "No commission"
+                          : service.commissionType === "PERCENTAGE"
+                            ? `${Number(service.commissionValue)}% commission`
+                            : `₦${Number(service.commissionValue).toLocaleString()} commission`}
                       </span>
                       {service.status === "active" ? <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-600">Public</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Hidden</span>}
                     </div>

@@ -145,6 +145,11 @@ const pricingSchema = new mongoose.Schema({
     }],
     default: () => defaultServiceCatalog,
   },
+  platformServices: {
+    verifyNin: {
+      enabled: { type: Boolean, default: true },
+    },
+  },
 
   // ==============================
   // 🆔 NIN PRICING (UNITS ONLY)

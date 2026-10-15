@@ -1,6 +1,6 @@
 const { awardCommissionIfEligible } = require('../services/commission.service');
 
-const createMocks = (user, settings) => {
+const createMocks = (user) => {
   const updatedUser = {
     ...user,
     commissionBalanceKobo: 200000,
@@ -9,18 +9,15 @@ const createMocks = (user, settings) => {
   const findById = jest.fn().mockResolvedValue(user);
   const findByIdAndUpdate = jest.fn().mockResolvedValue(updatedUser);
   const transactionCreate = jest.fn().mockResolvedValue([{ _id: 'tx-1' }]);
-  const settingsFindOne = jest.fn().mockResolvedValue(settings);
   const getServiceCatalog = jest.fn().mockResolvedValue([]);
   return {
     updatedUser,
     findById,
     findByIdAndUpdate,
     transactionCreate,
-    settingsFindOne,
     getServiceCatalog,
     UserModel: { findById },
     TransactionModel: { create: transactionCreate },
-    SystemSettingsModel: { findOne: settingsFindOne },
     PricingModel: { getServiceCatalog },
     userUpdate: { findByIdAndUpdate },
   };
@@ -34,10 +31,20 @@ describe('commission payouts', () => {
       commissionBalanceKobo: 0,
       commissionBalance: 0,
     };
-    const mocks = createMocks(user, { commissionType: 'FLAT', commissionValue: 2000 });
+    const mocks = createMocks(user);
+    mocks.getServiceCatalog.mockResolvedValue([{
+      serviceCode: 'validation-noRecord',
+      category: 'NIMC',
+      type: 'noRecord',
+      commissionType: 'FLAT',
+      commissionValue: 2000,
+    }]);
     const request = {
       _id: 'request-1',
       userId: 'user-1',
+      service: 'validation',
+      type: 'noRecord',
+      serviceCategory: 'NIN',
       status: 'completed',
       paymentSource: 'main',
       commissionAwarded: false,
@@ -75,10 +82,20 @@ describe('commission payouts', () => {
 
   it('calculates percentage commissions from the service price recorded on the request', async () => {
     const user = { _id: 'user-2', role: 'user' };
-    const mocks = createMocks(user, { commissionType: 'PERCENTAGE', commissionValue: 10 });
+    const mocks = createMocks(user);
+    mocks.getServiceCatalog.mockResolvedValue([{
+      serviceCode: 'validation-noRecord',
+      category: 'NIMC',
+      type: 'noRecord',
+      commissionType: 'PERCENTAGE',
+      commissionValue: 10,
+    }]);
     const request = {
       _id: 'request-2',
       userId: 'user-2',
+      service: 'validation',
+      type: 'noRecord',
+      serviceCategory: 'NIN',
       status: 'completed',
       paymentSource: 'main',
       priceAtTimeOfRequest: 1250,
@@ -99,9 +116,9 @@ describe('commission payouts', () => {
     })]);
   });
 
-  it('uses the matching service commission rule instead of the global fallback', async () => {
+  it('uses the matching service commission rule', async () => {
     const user = { _id: 'user-service', role: 'user' };
-    const mocks = createMocks(user, { commissionType: 'FLAT', commissionValue: 2000 });
+    const mocks = createMocks(user);
     mocks.getServiceCatalog.mockResolvedValue([{
       serviceCode: 'validation-vnin',
       category: 'NIMC',
@@ -143,7 +160,7 @@ describe('commission payouts', () => {
       commissionAmountKobo: 0,
       save: jest.fn(),
     };
-    const mocks = createMocks({ _id: 'user-3', role: 'user' }, { commissionType: 'FLAT', commissionValue: 2000 });
+    const mocks = createMocks({ _id: 'user-3', role: 'user' });
 
     const result = await awardCommissionIfEligible({ request, ...mocks });
 
@@ -161,12 +178,59 @@ describe('commission payouts', () => {
       paymentSource: 'main',
       commissionAwarded: true,
     };
-    const mocks = createMocks({ _id: 'user-4', role: 'user' }, { commissionType: 'FLAT', commissionValue: 2000 });
+    const mocks = createMocks({ _id: 'user-4', role: 'user' });
 
     const result = await awardCommissionIfEligible({ request, ...mocks });
 
     expect(result).toEqual({ awarded: false, reason: 'already_awarded' });
     expect(mocks.findById).not.toHaveBeenCalled();
+    expect(mocks.transactionCreate).not.toHaveBeenCalled();
+  });
+
+  it('does not use a default when the service has no commission rule', async () => {
+    const mocks = createMocks({ _id: 'user-unconfigured', role: 'user' });
+    const request = {
+      _id: 'request-unconfigured',
+      userId: 'user-unconfigured',
+      service: 'validation',
+      type: 'noRecord',
+      serviceCategory: 'NIN',
+      status: 'completed',
+      paymentSource: 'main',
+      save: jest.fn(),
+    };
+
+    const result = await awardCommissionIfEligible({ request, ...mocks });
+
+    expect(result).toEqual({ awarded: false, reason: 'service_commission_not_configured' });
+    expect(mocks.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(mocks.transactionCreate).not.toHaveBeenCalled();
+  });
+
+  it('does not credit a service with a saved zero commission', async () => {
+    const mocks = createMocks({ _id: 'user-zero', role: 'user' });
+    mocks.getServiceCatalog.mockResolvedValue([{
+      serviceCode: 'validation-noRecord',
+      category: 'NIMC',
+      type: 'noRecord',
+      commissionType: 'FLAT',
+      commissionValue: 0,
+    }]);
+    const request = {
+      _id: 'request-zero',
+      userId: 'user-zero',
+      service: 'validation',
+      type: 'noRecord',
+      serviceCategory: 'NIN',
+      status: 'completed',
+      paymentSource: 'main',
+      save: jest.fn(),
+    };
+
+    const result = await awardCommissionIfEligible({ request, ...mocks });
+
+    expect(result).toEqual({ awarded: false, reason: 'zero_amount' });
+    expect(mocks.findByIdAndUpdate).not.toHaveBeenCalled();
     expect(mocks.transactionCreate).not.toHaveBeenCalled();
   });
 });

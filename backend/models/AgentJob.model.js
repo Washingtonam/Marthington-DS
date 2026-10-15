@@ -7,6 +7,8 @@ const AgentJobSchema = new mongoose.Schema({
   agentName: { type: String, required: true, trim: true, maxlength: 120 },
   agentEmail: { type: String, trim: true, lowercase: true, maxlength: 254, default: "" },
   agentWhatsapp: { type: String, trim: true, maxlength: 20, default: "" },
+  serviceCode: { type: String, trim: true, maxlength: 100, default: "" },
+  serviceCategory: { type: String, trim: true, maxlength: 80, default: "" },
   serviceType: { type: String, required: true, trim: true, maxlength: 100 },
   formData: { type: mongoose.Schema.Types.Mixed, default: {} },
   amount: { type: Number, min: 0, default: 0 },

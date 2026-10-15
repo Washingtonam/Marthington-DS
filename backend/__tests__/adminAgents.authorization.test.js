@@ -1,4 +1,4 @@
-jest.mock("../models/User.model", () => ({ findById: jest.fn(), findOne: jest.fn() }));
+jest.mock("../models/User.model", () => ({ findById: jest.fn(), findOne: jest.fn(), find: jest.fn() }));
 jest.mock("../models/Agent.model", () => ({
   find: jest.fn(),
   create: jest.fn(),
@@ -10,6 +10,10 @@ jest.mock("../models/AgentJob.model", () => ({
   aggregate: jest.fn(),
   findByIdAndUpdate: jest.fn(),
 }));
+jest.mock("../models/Pricing.model", () => ({
+  getPricing: jest.fn(),
+  getDefaultServiceCatalog: jest.fn(),
+}));
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
@@ -17,6 +21,7 @@ const request = require("supertest");
 const User = require("../models/User.model");
 const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
+const Pricing = require("../models/Pricing.model");
 const { JWT_SECRET_FALLBACK } = require("../config/constants");
 const { verifyToken } = require("../shared/authGuard");
 const adminRouter = require("../routes/admin.routes");
@@ -128,6 +133,55 @@ describe("agent management authorization", () => {
     expect(Agent.findByIdAndUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it("returns account segment fields for every registered user contact", async () => {
+    User.findById.mockResolvedValueOnce({
+      id: "super-admin",
+      _id: "super-admin",
+      email: "root@example.test",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    const lastLogin = new Date("2025-01-10T12:00:00.000Z");
+    User.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([{
+            _id: "507f1f77bcf86cd799439011",
+            firstName: "Registered",
+            lastName: "Account",
+            email: "account@example.test",
+            phone: "+2348000000000",
+            role: "user",
+            status: "active",
+            approvalStatus: "approved",
+            walletBalance: 120,
+            walletBalanceKobo: 12000,
+            lastLogin,
+          }]),
+        }),
+      }),
+    });
+    Agent.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
+    });
+    AgentJob.aggregate.mockResolvedValue([]);
+
+    const response = await request(app)
+      .get("/api/admin/agents")
+      .set("Authorization", `Bearer ${jwt.sign({ id: "super-admin" }, secret)}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.registeredUsers[0]).toMatchObject({
+      name: "Registered Account",
+      status: "active",
+      approvalStatus: "approved",
+      walletBalance: 120,
+      walletBalanceKobo: 12000,
+      lastLogin: lastLogin.toISOString(),
+    });
+  });
+
   it("only links logged work to approved registered user accounts", async () => {
     User.findById.mockResolvedValue({
       id: "super-admin",
@@ -162,5 +216,57 @@ describe("agent management authorization", () => {
       approvalStatus: "approved",
     });
     expect(AgentJob.create).not.toHaveBeenCalled();
+  });
+
+  it("uses the catalog price when a logged job amount is zero", async () => {
+    const customerId = "507f1f77bcf86cd799439011";
+    User.findById.mockResolvedValue({
+      id: "super-admin",
+      _id: "super-admin",
+      email: "root@example.test",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    User.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          _id: customerId,
+          firstName: "Registered",
+          lastName: "Customer",
+          email: "customer@example.test",
+          phone: "+2348000000000",
+        }),
+      }),
+    });
+    Pricing.getPricing.mockResolvedValue({
+      serviceCatalog: [{
+        serviceCode: "modification-name",
+        category: "NIMC",
+        name: "Name Modification",
+        status: "active",
+        price: 12000,
+      }],
+    });
+    AgentJob.create.mockResolvedValue({ _id: "job-1" });
+
+    const response = await request(app)
+      .post("/api/admin/agents/jobs")
+      .set("Authorization", `Bearer ${jwt.sign({ id: "super-admin" }, secret)}`)
+      .send({
+        customerType: "registered",
+        registeredUserId: customerId,
+        serviceCode: "modification-name",
+        serviceType: "Name Modification",
+        amount: 0,
+        formData: {},
+      });
+
+    expect(response.status).toBe(201);
+    expect(AgentJob.create).toHaveBeenCalledWith(expect.objectContaining({
+      serviceCode: "modification-name",
+      serviceType: "Name Modification",
+      amount: 12000,
+    }));
   });
 });

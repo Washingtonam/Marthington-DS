@@ -1,7 +1,8 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../../../lib/axios", () => ({
   default: {
@@ -45,15 +46,49 @@ const services = [
     status: "active",
     metadata: { formFields: [] },
   })),
+  ...Array.from({ length: 3 }, (_, index) => ({
+    serviceCode: `cac-${index}`,
+    category: "CAC",
+    name: `CAC Service ${index}`,
+    type: `cac${index}`,
+    price: 1000,
+    status: "active",
+    metadata: { formFields: [] },
+  })),
 ];
 
+function CurrentPath() {
+  return <output data-testid="current-path">{useLocation().pathname}</output>;
+}
+
+function renderAdminPricing(initialEntry = "/admin/services-engine") {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route path="/admin/services-engine" element={<AdminPricing />} />
+        <Route path="/admin/services-engine/:category" element={<AdminPricing />} />
+      </Routes>
+      <CurrentPath />
+    </MemoryRouter>
+  );
+}
+
 describe("AdminPricing", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("alert", vi.fn());
     localStorage.setItem("user", JSON.stringify({ email: "admin@example.com" }));
     api.get.mockImplementation((path) => {
       if (path === "/api/admin/categories") {
-        return Promise.resolve({ data: { categories: [{ slug: "nimc", label: "NIMC", isActive: true }] } });
+        return Promise.resolve({ data: { categories: [
+          { slug: "nimc", label: "NIMC", isActive: true },
+          { slug: "cac", label: "CAC", isActive: true },
+        ] } });
       }
       if (path === "/api/admin/services") {
         return Promise.resolve({ data: { services } });
@@ -63,7 +98,7 @@ describe("AdminPricing", () => {
   });
 
   test("prioritizes featured NIMC services and paginates the full list", async () => {
-    render(<AdminPricing />);
+    renderAdminPricing();
 
     const featuredHeading = await screen.findByRole("heading", { name: "Featured NIMC services" });
     const featuredSection = featuredHeading.closest("section");
@@ -77,15 +112,17 @@ describe("AdminPricing", () => {
     ]);
     expect(await screen.findByText("Page 1 of 2")).toBeTruthy();
     expect(screen.getByText("Other Service 0")).toBeTruthy();
+    expect(screen.getByText("14")).toBeTruthy();
+    expect(screen.getByText("3")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /Next/ }));
 
     expect(await screen.findByText("Page 2 of 2")).toBeTruthy();
     expect(screen.getByText("Other Service 8")).toBeTruthy();
-  });
+  }, 15000);
 
   test("opens a service editor from a catalog row and edits form fields in a separate dialog", async () => {
-    render(<AdminPricing />);
+    renderAdminPricing();
 
     const serviceCard = (await screen.findAllByRole("button"))
       .find((button) => button.textContent.includes("No Recordvalidation-noRecord"));
@@ -101,5 +138,29 @@ describe("AdminPricing", () => {
 
     await waitFor(() => expect(screen.getByRole("dialog", { name: "Edit Service" })).toBeTruthy());
     expect(screen.getByText("1 form fields configured")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save Service" }));
+    await waitFor(() => {
+      expect(api.put).toHaveBeenCalledWith(
+        "/api/admin/services/validation-noRecord",
+        expect.objectContaining({ commissionType: "FLAT", commissionValue: 0 }),
+        expect.any(Object)
+      );
+    });
+  });
+
+  test("opens each category as a route and shows the complete category count", async () => {
+    renderAdminPricing();
+
+    const cacCard = (await screen.findAllByRole("button"))
+      .find((button) => button.textContent.includes("CAC") && button.textContent.includes("3"));
+    fireEvent.click(cacCard);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-path").textContent).toBe("/admin/services-engine/cac");
+    });
+    expect((await screen.findAllByText("CAC Service 0")).length).toBeGreaterThan(0);
+    expect(screen.getByText("3 total")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Next/ })).toBeNull();
   });
 });
