@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { MessageCircle, Send, X } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import { useUser } from "../context/UserContext";
 import { useToast } from "../context/ToastContext";
 import api from "../lib/axios";
@@ -7,7 +8,8 @@ import api from "../lib/axios";
 export default function SupportChatWidget() {
   const { user } = useUser();
   const { error: toastError } = useToast();
-  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  const [open, setOpen] = useState(() => location.pathname === "/support-chat");
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,8 +27,12 @@ export default function SupportChatWidget() {
 
   useEffect(() => {
     if (!open) return undefined;
+    const initialLoad = window.setTimeout(loadConversation, 0);
     const interval = window.setInterval(loadConversation, 10000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.clearInterval(interval);
+    };
   }, [loadConversation, open]);
 
   useEffect(() => {
@@ -85,8 +91,9 @@ export default function SupportChatWidget() {
           </form>
         </section>
       )}
-      <button type="button" onClick={toggleChat} aria-label={open ? "Close agent support chat" : "Open agent support chat"} className="fixed bottom-6 right-6 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-foreground)] shadow-lg transition hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2">
-        {open ? <X size={21} /> : <MessageCircle size={22} />}
+      <button type="button" onClick={toggleChat} aria-label={open ? "Close chat with support" : "Chat with support"} className="fixed bottom-5 right-4 z-30 inline-flex min-h-12 items-center gap-2 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-foreground)] shadow-lg transition hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 sm:bottom-6 sm:right-6">
+        {open ? <X size={19} /> : <MessageCircle size={20} />}
+        <span>{open ? "Close chat" : "Chat with support"}</span>
       </button>
     </>
   );

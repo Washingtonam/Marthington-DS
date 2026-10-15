@@ -6,6 +6,7 @@ const { Resend } = require("resend");
 
 // Localized feature path configuration
 const User = require("../models/User.model");
+const AuditLog = require("../models/AuditLog.model");
 const { verifyToken } = require("../shared/authGuard");
 const { JWT_EXPIRY, SUPER_ADMIN_EMAIL, JWT_SECRET_FALLBACK } = require("../config/constants");
 
@@ -244,6 +245,16 @@ router.post("/change-password", verifyToken, async (req, res) => {
 
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
+    try {
+      await AuditLog.create({
+        action: "USER_PROFILE_UPDATED",
+        performedBy: user.email,
+        userId: user._id,
+        note: "User updated account details: password changed.",
+      });
+    } catch (auditError) {
+      console.warn("User password audit log creation failed:", auditError.message);
+    }
 
     res.json({ message: "Password updated successfully" });
 

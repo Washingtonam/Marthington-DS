@@ -1918,9 +1918,10 @@ router.get("/users/:userId/activity", isSuperAdmin, async (req, res) => {
       return res.status(400).json({ message: "Invalid user identifier." });
     }
 
-    const [serviceRequests, transactions] = await Promise.all([
+    const [serviceRequests, transactions, profileUpdates] = await Promise.all([
       ServiceRequest.find({ userId }).lean(),
       Transaction.find({ userId }).lean(),
+      AuditLog.find({ userId, action: "USER_PROFILE_UPDATED" }).lean(),
     ]);
 
     const serviceRecords = serviceRequests.map((record) => ({
@@ -1937,7 +1938,7 @@ router.get("/users/:userId/activity", isSuperAdmin, async (req, res) => {
 
     const transactionRecords = transactions.map((tx) => {
       const amountNaira = tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0;
-      const fundingTypes = ["UNIT_ADD", "credit", "admin_credit"];
+      const fundingTypes = ["UNIT_ADD", "credit", "admin_credit", "COMMISSION"];
       const category = fundingTypes.includes(tx.type) ? "Funding" : "Service";
       const description = tx.description ||
         (tx.type === "UNIT_ADD" ? "Wallet funding" :
@@ -1956,7 +1957,16 @@ router.get("/users/:userId/activity", isSuperAdmin, async (req, res) => {
       };
     });
 
-    const combinedActivity = [...serviceRecords, ...transactionRecords].sort(
+    const profileUpdateRecords = profileUpdates.map((entry) => ({
+      id: entry._id,
+      timestamp: entry.createdAt,
+      category: "Account",
+      transactionType: "Profile Update",
+      description: entry.note || "Account details updated.",
+      amount: 0,
+    }));
+
+    const combinedActivity = [...serviceRecords, ...transactionRecords, ...profileUpdateRecords].sort(
       (a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
     );
 
@@ -2071,9 +2081,10 @@ router.get('/users/:userId/history', isAdmin, async (req, res) => {
     const { userId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json({ message: 'Invalid user identifier.' });
 
-    const [serviceRequests, transactions] = await Promise.all([
+    const [serviceRequests, transactions, profileUpdates] = await Promise.all([
       ServiceRequest.find({ userId }).lean(),
       Transaction.find({ userId }).lean(),
+      AuditLog.find({ userId, action: "USER_PROFILE_UPDATED" }).lean(),
     ]);
 
     const serviceRecords = serviceRequests.map((record) => ({
@@ -2087,7 +2098,7 @@ router.get('/users/:userId/history', isAdmin, async (req, res) => {
 
     const transactionRecords = transactions.map((tx) => {
       const amountNaira = tx.amount != null ? Number(tx.amount) : tx.amountKobo != null ? Number(tx.amountKobo) / 100 : 0;
-      const fundingTypes = ['UNIT_ADD', 'credit', 'admin_credit', 'admin_debit'];
+      const fundingTypes = ['UNIT_ADD', 'credit', 'admin_credit', 'admin_debit', 'COMMISSION'];
       const isFunding = fundingTypes.includes(String(tx.type));
       return {
         id: tx._id,
@@ -2099,7 +2110,16 @@ router.get('/users/:userId/history', isAdmin, async (req, res) => {
       };
     });
 
-    const combined = [...serviceRecords, ...transactionRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const profileUpdateRecords = profileUpdates.map((entry) => ({
+      id: entry._id,
+      createdAt: entry.createdAt,
+      type: "Account Update",
+      description: entry.note || "Account details updated.",
+      amount: 0,
+    }));
+
+    const combined = [...serviceRecords, ...transactionRecords, ...profileUpdateRecords]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     res.json({ success: true, data: combined });
   } catch (err) {

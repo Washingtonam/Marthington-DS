@@ -14,7 +14,7 @@ jest.mock("../models/Pricing.model", () => ({
   getPricing: jest.fn(),
   getDefaultServiceCatalog: jest.fn(),
 }));
-jest.mock("../models/AuditLog.model", () => ({ create: jest.fn() }));
+jest.mock("../models/AuditLog.model", () => ({ create: jest.fn(), find: jest.fn() }));
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
@@ -24,10 +24,12 @@ const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
 const Pricing = require("../models/Pricing.model");
 const AuditLog = require("../models/AuditLog.model");
+const Transaction = require("../models/transaction.model");
 const bcrypt = require("bcryptjs");
 const { JWT_SECRET_FALLBACK } = require("../config/constants");
 const { verifyToken } = require("../shared/authGuard");
 const adminRouter = require("../routes/admin.routes");
+const ServiceRequest = require("../models/ServiceRequest.model");
 
 const secret = process.env.JWT_SECRET || JWT_SECRET_FALLBACK;
 const app = express();
@@ -36,6 +38,10 @@ app.use("/api/admin", verifyToken, adminRouter);
 const token = jwt.sign({ id: "ordinary-admin" }, secret);
 
 describe("agent management authorization", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     User.findById.mockResolvedValue({
@@ -67,6 +73,35 @@ describe("agent management authorization", () => {
     expect(AgentJob.find).not.toHaveBeenCalled();
     expect(AgentJob.create).not.toHaveBeenCalled();
     expect(AgentJob.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("includes user account update audit records in the audit profile history", async () => {
+    jest.spyOn(ServiceRequest, "find").mockReturnValue({
+      lean: jest.fn().mockResolvedValue([]),
+    });
+    jest.spyOn(Transaction, "find").mockReturnValue({
+      lean: jest.fn().mockResolvedValue([]),
+    });
+    AuditLog.find.mockReturnValue({
+      lean: jest.fn().mockResolvedValue([{
+        _id: "audit-update-1",
+        createdAt: new Date("2025-01-01T00:00:00.000Z"),
+        note: "User updated account fields: email, WhatsApp number.",
+      }]),
+    });
+
+    const response = await request(app)
+      .get("/api/admin/users/507f1f77bcf86cd799439011/history")
+      .auth(token, { type: "bearer" })
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "audit-update-1",
+        type: "Account Update",
+        description: "User updated account fields: email, WhatsApp number.",
+      }),
+    ]));
   });
 
   it("allows a super admin to create a validated manual agent", async () => {

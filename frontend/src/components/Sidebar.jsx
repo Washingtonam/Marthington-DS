@@ -1,6 +1,7 @@
 import React, { createElement, useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  BadgeDollarSign,
   BookOpenText,
   BriefcaseBusiness,
   CreditCard,
@@ -53,6 +54,8 @@ const userGroups = [
     icon: Wallet,
     links: [
       { to: "/wallet", label: "Wallet", icon: Wallet },
+      { to: "/commissions", label: "Commissions", icon: BadgeDollarSign },
+      { to: "/support-chat", label: "Chat with support", icon: MessageCircle },
       { to: "/profile", label: "Profile & settings", icon: Settings },
     ],
   },
@@ -72,6 +75,7 @@ const adminGroups = [
     links: [
       { to: "/admin/payments", label: "Payment requests", icon: CreditCard },
       { to: "/admin/requests", label: "Service requests", icon: BriefcaseBusiness },
+      { to: "/commissions", label: "Commissions", icon: BadgeDollarSign },
       { to: "/admin/verification-requests", label: "Verification requests", icon: ShieldCheck },
     ],
   },

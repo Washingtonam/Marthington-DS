@@ -140,9 +140,10 @@ export default function AdminPricing() {
       const catalog = Array.isArray(res.data?.services) ? res.data.services : [];
       setAllServices(catalog);
       setCurrentPage(1);
+      return catalog;
     } catch (err) {
       console.error("FETCH SERVICES ERROR:", err);
-      setAllServices([]);
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -419,7 +420,9 @@ export default function AdminPricing() {
       }
 
       const payload = {
-        serviceCode: normalizeServiceCode(serviceForm.serviceCode || serviceForm.name),
+        serviceCode: isCreating
+          ? normalizeServiceCode(serviceForm.serviceCode || serviceForm.name)
+          : selectedService.serviceCode,
         category: String(serviceForm.category).trim() || category,
         name: String(serviceForm.name).trim(),
         status: serviceForm.status,
@@ -458,19 +461,27 @@ export default function AdminPricing() {
 
       if (isCreating) {
         await api.post("/api/admin/services", payload, { headers });
-        alert("Service created successfully.");
       } else {
         await api.put(`/api/admin/services/${selectedService.serviceCode}`, payload, { headers });
-        alert("Service updated successfully.");
+      }
+
+      const refreshedServices = await fetchServices();
+      const persistedService = refreshedServices.find((service) => service.serviceCode === payload.serviceCode);
+      if (
+        !persistedService
+        || persistedService.commissionType !== payload.commissionType
+        || Number(persistedService.commissionValue || 0) !== payload.commissionValue
+      ) {
+        throw new Error("Service was saved, but its commission rate could not be confirmed in the catalog. Please reload and check before trying again.");
       }
 
       setIsCreating(false);
       setSelectedService(null);
       closeServiceEditor();
-      await fetchServices();
+      alert(isCreating ? "Service created successfully." : "Service updated successfully.");
     } catch (err) {
       console.error("SERVICE SAVE ERROR:", err);
-      alert(err?.response?.data?.message || "Unable to save service.");
+      alert(err?.response?.data?.message || err.message || "Unable to save service.");
     } finally {
       setSaving(false);
     }
@@ -710,9 +721,12 @@ export default function AdminPricing() {
               <input
                 value={serviceForm.serviceCode}
                 onChange={(e) => updateField("serviceCode", normalizeServiceCode(e.target.value))}
+                disabled={!isCreating}
                 className="w-full border border-gray-200 rounded-xl p-3"
               />
-              <div className="mt-1 text-[11px] text-slate-500">Auto-generated from the service name when left blank.</div>
+              <div className="mt-1 text-[11px] text-slate-500">
+                {isCreating ? "Auto-generated from the service name when left blank." : "Service codes are fixed after creation."}
+              </div>
             </Field>
             <Field label="Category">
               <select value={serviceForm.category} onChange={(e) => updateField("category", e.target.value)} className="w-full border border-gray-200 rounded-xl p-3">

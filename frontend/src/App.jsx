@@ -21,6 +21,7 @@ import Profile from "./pages/profile/Profile";
 import UserRequests from "./pages/UserRequests";
 import VerificationRequests from "./pages/VerificationRequests";
 import Wallet from "./pages/wallet/Wallet";
+import Commissions from "./pages/wallet/Commissions";
 import Transactions from "./pages/transactions/Transactions";
 
 // Services
@@ -48,6 +49,7 @@ import UserDetailView from "./pages/admin/UserDetailView";
 import AgentManagement from "./pages/admin/AgentManagement";
 import Communications from "./pages/admin/Communications";
 import Contact from "./pages/Contact";
+import SupportChatPage from "./pages/SupportChatPage";
 
 // Layout & Context
 import Layout from "./layout/Layout";
@@ -148,8 +150,10 @@ function AppRoutes() {
       <Route path="/my-requests" element={<ProtectedRoute><Layout><UserRequests /></Layout></ProtectedRoute>} />
       <Route path="/my-verification-requests" element={<ProtectedRoute><Layout><VerificationRequests /></Layout></ProtectedRoute>} />
       <Route path="/wallet" element={<ProtectedRoute><Layout><Wallet /></Layout></ProtectedRoute>} />
+      <Route path="/commissions" element={<ProtectedRoute><Layout><Commissions /></Layout></ProtectedRoute>} />
       <Route path="/transactions" element={<ProtectedRoute><Layout><Transactions /></Layout></ProtectedRoute>} />
       <Route path="/contact" element={<ProtectedRoute><Layout><Contact /></Layout></ProtectedRoute>} />
+      <Route path="/support-chat" element={<ProtectedRoute><Layout><SupportChatPage /></Layout></ProtectedRoute>} />
 
       {/* Services Routes */}
       <Route path="/nin-services" element={<ProtectedRoute><Layout><CategoryServicesPage defaultCategory="NIN" /></Layout></ProtectedRoute>} />

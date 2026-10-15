@@ -155,7 +155,7 @@ export default function AgentManagement({ view }) {
 
   const allContacts = useMemo(() => [
     ...manualAgents.map((agent) => ({ ...agent, contactType: "manual", source: "Offline agent" })),
-    ...registeredUsers.map((account) => ({ ...account, contactType: "registered", source: "Marketing agent" })),
+    ...registeredUsers.map((account) => ({ ...account, contactType: "registered", source: "Marthington agent" })),
   ], [manualAgents, registeredUsers]);
 
   const visibleContacts = allContacts.filter((contact) => {
@@ -254,7 +254,7 @@ export default function AgentManagement({ view }) {
   const handleCreateJob = async (event) => {
     event.preventDefault();
     if (!customerId) {
-      toastError("Choose an offline agent or Marketing agent for this job.");
+      toastError("Choose an offline agent or Marthington agent for this job.");
       return;
     }
     if (!selectedService) {
@@ -381,10 +381,10 @@ export default function AgentManagement({ view }) {
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
             {tab === "messages"
-              ? "Segment Marketing agents and prepare reviewed WhatsApp messages."
+              ? "Segment Marthington agents and prepare reviewed WhatsApp messages."
               : tab === "jobs"
                 ? "Select a catalog service, enter customer details, and log the work to service requests."
-                : "Manage offline agents and distinguish them from Marketing agents registered on the platform."}
+                : "Manage offline agents and distinguish them from Marthington agents registered on the platform."}
           </p>
         </div>
         {tab === "agents" ? (
@@ -452,7 +452,7 @@ export default function AgentManagement({ view }) {
               </button>
             ))}
           </div>
-          {!visibleContacts.length && <EmptyState message="No offline or Marketing agents match your search." />}
+          {!visibleContacts.length && <EmptyState message="No offline or Marthington agents match your search." />}
         </section>
       ) : tab === "jobs" ? (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900" aria-label="Logged agent jobs">
@@ -466,7 +466,7 @@ export default function AgentManagement({ view }) {
                   {jobs.filter((job) => `${job.agentName} ${job.serviceType} ${job.formData?.nin || ""}`.toLowerCase().includes(query.toLowerCase())).map((job) => (
                     <tr key={job._id} tabIndex={0} aria-label={`View ${job.serviceType} job for ${job.agentName}`} className="cursor-pointer transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] dark:hover:bg-slate-800/60" onClick={() => setSelectedJob(job)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedJob(job); } }}>
                       <td className="px-5 py-4"><span className="font-semibold text-slate-900 dark:text-white">{getJobServiceName(job, catalog)}</span><span className="mt-1 block text-xs text-slate-500">Request ID {String(job._id).slice(-7)}</span></td>
-                      <td className="px-5 py-4"><span className="font-medium">{job.agentName}</span><span className="mt-1 block text-xs text-slate-500">{job.customerType === "registered" ? "Marketing agent" : "Offline agent"}</span></td>
+                      <td className="px-5 py-4"><span className="font-medium">{job.agentName}</span><span className="mt-1 block text-xs text-slate-500">{job.customerType === "registered" ? "Marthington agent" : "Offline agent"}</span></td>
                       <td className="px-5 py-4 font-medium">{formatAmount(getJobAmount(job, catalog))}</td>
                       <td className="px-5 py-4"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize dark:bg-slate-800">{statusLabels[job.status] || job.status}</span></td>
                       <td className="px-5 py-4 text-slate-500">{formatDate(job.createdAt)}</td>
@@ -475,7 +475,7 @@ export default function AgentManagement({ view }) {
                 </tbody>
               </table>
             </div>
-          ) : <EmptyState message="No logged jobs yet. Log a job and associate it with an offline or Marketing agent." />}
+          ) : <EmptyState message="No logged jobs yet. Log a job and associate it with an offline or Marthington agent." />}
         </section>
       ) : (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
@@ -507,7 +507,7 @@ export default function AgentManagement({ view }) {
             <label className="mt-4 block text-sm font-semibold">Audience segment
               <select value={audience} onChange={(event) => setAudience(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal dark:border-slate-700 dark:bg-slate-950">
                 <option value="all">All contacts</option>
-                <option value="active">Active Marketing agents</option>
+                <option value="active">Active Marthington agents</option>
                 <option value="wallet">Accounts with wallet funds</option>
                 <option value="inactive">No sign-in in 30+ days / inactive</option>
                 <option value="manual">Offline agents</option>
@@ -561,7 +561,7 @@ export default function AgentManagement({ view }) {
 
       <SlideOver isOpen={showAgentForm} onClose={() => { setShowAgentForm(false); setEditingAgent(null); }} title={editingAgent ? "Edit offline agent" : "Add offline agent"}>
         <form onSubmit={handleSaveAgent} className="space-y-5">
-          <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">Offline agents are contact records created here and are kept distinct from Marketing agents registered on the platform.</p>
+          <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">Offline agents are contact records created here and are kept distinct from Marthington agents registered on the platform.</p>
           <label className="block text-sm font-semibold">Agent name
             <input required maxLength={120} value={agentForm.name} onChange={(event) => setAgentForm((current) => ({ ...current, name: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
           </label>
@@ -580,11 +580,11 @@ export default function AgentManagement({ view }) {
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-semibold">Agent type
               <select value={customerType} onChange={(event) => { setCustomerType(event.target.value); setCustomerId(""); setShowJobAgentForm(false); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
-                <option value="manual">Offline agent</option><option value="registered">Marketing agent</option>
+                <option value="manual">Offline agent</option><option value="registered">Marthington agent</option>
               </select>
             </label>
             <div>
-              <label className="block text-sm font-semibold">{customerType === "manual" ? "Offline agent" : "Marketing agent"}
+              <label className="block text-sm font-semibold">{customerType === "manual" ? "Offline agent" : "Marthington agent"}
               <select required value={customerId} onChange={(event) => setCustomerId(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
                 <option value="">Select an agent</option>
                 {(customerType === "manual" ? manualAgents.filter((agent) => agent.active !== false) : eligibleRegisteredUsers).map((contact) => (
@@ -734,7 +734,7 @@ export default function AgentManagement({ view }) {
           <div className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <Summary label="Customer" value={selectedJob.agentName} />
-              <Summary label="Source" value={selectedJob.customerType === "registered" ? "Marketing agent" : "Offline agent"} />
+              <Summary label="Source" value={selectedJob.customerType === "registered" ? "Marthington agent" : "Offline agent"} />
               <Summary label="Amount" value={formatAmount(getJobAmount(selectedJob, catalog))} />
               <Summary label="Logged" value={new Date(selectedJob.createdAt).toLocaleString()} />
             </div>

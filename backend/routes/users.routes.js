@@ -2,14 +2,146 @@ const express = require("express");
 const usersController = require("../controllers/users.controller");
 
 const User = require("../models/User.model");
+const AuditLog = require("../models/AuditLog.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
+const { SUPER_ADMIN_EMAIL } = require("../config/constants");
 
 // Lazy-loaded model definitions for localized structural feature calls
 const Transaction = require("../models/transaction.model");
 const ServiceRequest = require("../models/ServiceRequest.model");
 const CacRequest = require("../models/CacRequest.model");
+const Pricing = require("../models/Pricing.model");
 
 const router = express.Router();
+
+router.get("/commission", verifyToken, async (req, res) => {
+  try {
+    const [user, transactions, services] = await Promise.all([
+      User.findById(req.user.id).select("commissionBalance commissionBalanceKobo").lean(),
+      Transaction.find({ userId: req.user.id, type: "COMMISSION" })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean(),
+      Pricing.getServiceCatalog(),
+    ]);
+
+    if (!user) return res.status(404).json({ success: false, message: "User not found." });
+
+    const commissionBalanceKobo = Number(user.commissionBalanceKobo ?? Math.round(Number(user.commissionBalance || 0) * 100));
+    return res.json({
+      success: true,
+      balance: Number((commissionBalanceKobo / 100).toFixed(2)),
+      balanceKobo: commissionBalanceKobo,
+      history: transactions.map((transaction) => ({
+        id: transaction._id,
+        amount: Number(transaction.amountKobo != null
+          ? Number(transaction.amountKobo) / 100
+          : transaction.amount || 0),
+        description: transaction.description || "Commission earned",
+        createdAt: transaction.createdAt,
+        status: transaction.status,
+      })),
+      services: services
+        .filter((service) => service.status === "active"
+          && ["FLAT", "PERCENTAGE"].includes(service.commissionType)
+          && Number(service.commissionValue) > 0)
+        .map((service) => ({
+          serviceCode: service.serviceCode,
+          name: service.name,
+          category: service.category,
+          price: Number(service.price || 0),
+          commissionType: service.commissionType,
+          commissionValue: Number(service.commissionValue),
+        })),
+    });
+  } catch (error) {
+    console.error("USER COMMISSION SUMMARY ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to load commission summary." });
+  }
+});
+
+router.put("/profile", verifyToken, async (req, res) => {
+  try {
+    const allowedFields = ["firstName", "lastName", "email", "phone"];
+    const submittedFields = Object.keys(req.body || {});
+    if (!submittedFields.length || submittedFields.some((field) => !allowedFields.includes(field))) {
+      return res.status(400).json({ success: false, message: "Submit one or more supported account fields." });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: "User not found." });
+
+    const changedFields = [];
+    for (const field of ["firstName", "lastName"]) {
+      if (req.body[field] === undefined) continue;
+      if (typeof req.body[field] !== "string" || req.body[field].trim().length > 100) {
+        return res.status(400).json({ success: false, message: `${field} must be 100 characters or fewer.` });
+      }
+      const nextValue = req.body[field].trim();
+      if (user[field] !== nextValue) {
+        changedFields.push(`${field}: "${user[field] || "(empty)"}" -> "${nextValue || "(empty)"}"`);
+        user[field] = nextValue;
+      }
+    }
+
+    if (req.body.email !== undefined) {
+      if (typeof req.body.email !== "string") {
+        return res.status(400).json({ success: false, message: "Enter a valid email address." });
+      }
+      const email = req.body.email.trim().toLowerCase();
+      if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ success: false, message: "Enter a valid email address." });
+      }
+      if (email === SUPER_ADMIN_EMAIL.toLowerCase()) {
+        return res.status(400).json({ success: false, message: "This email address is reserved." });
+      }
+      const existingUser = await User.findOne({ email, _id: { $ne: user._id } }).select("_id").lean();
+      if (existingUser) return res.status(409).json({ success: false, message: "That email address is already in use." });
+      if (user.email !== email) {
+        changedFields.push(`email: "${user.email || "(empty)"}" -> "${email}"`);
+        user.email = email;
+      }
+    }
+
+    if (req.body.phone !== undefined) {
+      if (typeof req.body.phone !== "string") {
+        return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
+      }
+      const rawPhone = req.body.phone.trim();
+      const phone = rawPhone.replace(/[^\d+]/g, "");
+      if (rawPhone && !/^\+?\d{7,15}$/.test(phone)) {
+        return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
+      }
+      if (user.phone !== phone) {
+        changedFields.push(`WhatsApp number: "${user.phone || "(empty)"}" -> "${phone || "(empty)"}"`);
+        user.phone = phone;
+      }
+    }
+
+    if (changedFields.length) {
+      await user.save();
+      try {
+        await AuditLog.create({
+          action: "USER_PROFILE_UPDATED",
+          performedBy: user.email,
+          userId: user._id,
+          note: `User updated account details: ${changedFields.join("; ")}.`,
+        });
+      } catch (auditError) {
+        console.warn("User account audit log creation failed:", auditError.message);
+      }
+    }
+
+    const updatedUser = await User.findById(user._id).select("-password").lean();
+    return res.json({ success: true, message: "Account details updated.", data: updatedUser });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ success: false, message: "That email address is already in use." });
+    }
+    console.error("USER PROFILE UPDATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to update account details." });
+  }
+});
 
 // ==============================
 // 🔥 GET USER UNITS (SECURED VIA JWT)
@@ -18,7 +150,7 @@ router.get("/balance", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id; 
     const user = await User.findById(userId)
-      .select("walletBalance walletBalanceKobo units commissionBalance commissionBalanceKobo role")
+      .select("walletBalance walletBalanceKobo units commissionBalance commissionBalanceKobo")
       .lean()
       .exec();
     if (!user) {
@@ -27,8 +159,7 @@ router.get("/balance", verifyToken, async (req, res) => {
 
     const walletBalanceKobo = user.walletBalanceKobo || 0;
     const walletBalance = Number((walletBalanceKobo / 100).toFixed(2));
-    const eligibleForCommission = ["admin", "super_admin"].includes(String(user.role || "").toLowerCase());
-    const commissionBalanceKobo = eligibleForCommission ? (user.commissionBalanceKobo || 0) : 0;
+    const commissionBalanceKobo = Number(user.commissionBalanceKobo ?? Math.round(Number(user.commissionBalance || 0) * 100));
     const commissionBalance = Number((commissionBalanceKobo / 100).toFixed(2));
 
     return res.json({
@@ -36,7 +167,8 @@ router.get("/balance", verifyToken, async (req, res) => {
       walletBalance,
       walletBalanceKobo,
       balance: user.balance || 0,
-      ...(eligibleForCommission ? { commissionBalance, commissionBalanceKobo } : {}),
+      commissionBalance,
+      commissionBalanceKobo,
     });
   } catch (error) {
     console.error("🔥 BALANCE ERROR:", error.message);
@@ -50,7 +182,7 @@ router.get("/wallet", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const user = await User.findById(userId)
-      .select("walletBalance walletBalanceKobo units commissionBalance commissionBalanceKobo role")
+      .select("walletBalance walletBalanceKobo units commissionBalance commissionBalanceKobo")
       .lean()
       .exec();
     if (!user) {
@@ -59,8 +191,7 @@ router.get("/wallet", verifyToken, async (req, res) => {
 
     const walletBalanceKobo = user.walletBalanceKobo || 0;
     const walletBalance = Number((walletBalanceKobo / 100).toFixed(2));
-    const eligibleForCommission = ["admin", "super_admin"].includes(String(user.role || "").toLowerCase());
-    const commissionBalanceKobo = eligibleForCommission ? (user.commissionBalanceKobo || 0) : 0;
+    const commissionBalanceKobo = Number(user.commissionBalanceKobo ?? Math.round(Number(user.commissionBalance || 0) * 100));
     const commissionBalance = Number((commissionBalanceKobo / 100).toFixed(2));
 
     return res.json({
@@ -68,7 +199,8 @@ router.get("/wallet", verifyToken, async (req, res) => {
       walletBalance,
       walletBalanceKobo,
       balance: user.balance || 0,
-      ...(eligibleForCommission ? { commissionBalance, commissionBalanceKobo } : {}),
+      commissionBalance,
+      commissionBalanceKobo,
     });
   } catch (error) {
     console.error("🔥 WALLET ERROR:", error.message);

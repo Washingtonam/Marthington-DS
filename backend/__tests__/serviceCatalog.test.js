@@ -13,6 +13,10 @@ const makeSuperAdminToken = () => jwt.sign({
 }, process.env.JWT_SECRET || 'test-jwt-secret');
 
 describe('service catalog API', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('includes the DOB modification form fields and parent details in the default catalog', () => {
     const dobService = Pricing.getDefaultServiceCatalog()
       .find((service) => service.serviceCode === 'modification-dob');
@@ -95,6 +99,7 @@ describe('service catalog API', () => {
       status: 'active',
       approvalStatus: 'approved',
     });
+
     const token = makeSuperAdminToken();
     const createResponse = await request(app)
       .post('/api/admin/services')
@@ -124,6 +129,61 @@ describe('service catalog API', () => {
     expect(catalogResponse.body.services.some((service) => service.serviceCode === 'jamb-application')).toBe(true);
     expect(catalogResponse.body.services.find((service) => service.serviceCode === 'jamb-application').price).toBe(4200);
     expect(catalogResponse.body.services.find((service) => service.serviceCode === 'jamb-application').commissionValue).toBe(12);
+  });
+
+  it('persists service commission settings and returns them on the next catalog read', async () => {
+    User.findById.mockResolvedValue({
+      id: 'admin-user-1',
+      _id: 'admin-user-1',
+      email: 'admin@xcombinator.com',
+      role: 'super_admin',
+      status: 'active',
+      approvalStatus: 'approved',
+    });
+    const token = makeSuperAdminToken();
+    const pricing = {
+      serviceCatalog: [{
+        serviceCode: 'existing-service',
+        category: 'NIMC',
+        name: 'Existing Service',
+        status: 'active',
+        price: 5000,
+        commissionType: 'FLAT',
+        commissionValue: 0,
+        metadata: {},
+      }],
+      markModified: jest.fn(),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    jest.spyOn(Pricing, 'getPricing').mockResolvedValue(pricing);
+    jest.spyOn(Pricing, 'getServiceCatalog').mockImplementation(async () => pricing.serviceCatalog);
+
+    const updateResponse = await request(app)
+      .put('/api/admin/services/existing-service')
+      .auth(token, { type: 'bearer' })
+      .send({
+        commissionType: 'PERCENTAGE',
+        commissionValue: 12.5,
+      });
+
+    expect(updateResponse.status).toBe(200);
+    expect(pricing.serviceCatalog[0]).toEqual(expect.objectContaining({
+      commissionType: 'PERCENTAGE',
+      commissionValue: 12.5,
+    }));
+    expect(pricing.markModified).toHaveBeenCalledWith('serviceCatalog');
+    expect(pricing.save).toHaveBeenCalledTimes(1);
+
+    const catalogResponse = await request(app)
+      .get('/api/admin/services')
+      .auth(token, { type: 'bearer' });
+
+    expect(catalogResponse.status).toBe(200);
+    expect(catalogResponse.body.services[0]).toEqual(expect.objectContaining({
+      serviceCode: 'existing-service',
+      commissionType: 'PERCENTAGE',
+      commissionValue: 12.5,
+    }));
   });
 
   it('saves platform service visibility through the admin pricing endpoint', async () => {

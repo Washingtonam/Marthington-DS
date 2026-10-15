@@ -31,6 +31,7 @@ vi.mock("../../../components/ui/SlideOver", () => ({
 import api from "../../../lib/axios";
 import AdminPricing from "../AdminPricing";
 
+let persistedServices;
 const services = [
   { serviceCode: "validation-noRecord", category: "NIMC", name: "No Record", type: "noRecord", price: 1000, status: "active", metadata: { trending: true, formFields: [{ key: "nin", label: "NIN", type: "text", required: true }] } },
   { serviceCode: "modification-name", category: "NIMC", name: "Name Modification", type: "name", price: 12000, status: "active", metadata: { trending: true, formFields: [] } },
@@ -82,6 +83,7 @@ describe("AdminPricing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("alert", vi.fn());
+    persistedServices = services.map((service) => ({ ...service }));
     localStorage.setItem("user", JSON.stringify({ email: "admin@example.com" }));
     api.get.mockImplementation((path) => {
       if (path === "/api/admin/categories") {
@@ -91,9 +93,16 @@ describe("AdminPricing", () => {
         ] } });
       }
       if (path === "/api/admin/services") {
-        return Promise.resolve({ data: { services } });
+        return Promise.resolve({ data: { services: persistedServices } });
       }
       return Promise.resolve({ data: { settings: { commissionType: "FLAT", commissionValue: 2000 } } });
+    });
+    api.put.mockImplementation((path, payload) => {
+      const serviceCode = path.split("/").pop();
+      persistedServices = persistedServices.map((service) => service.serviceCode === serviceCode
+        ? { ...service, ...payload }
+        : service);
+      return Promise.resolve({ data: { success: true, service: payload } });
     });
   });
 
@@ -129,6 +138,7 @@ describe("AdminPricing", () => {
     fireEvent.click(serviceCard);
 
     expect(await screen.findByRole("dialog", { name: "Edit Service" })).toBeTruthy();
+    expect(screen.getByText("Service Code").closest("label").querySelector("input").disabled).toBe(true);
     expect(screen.getByText("1 form fields configured")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Edit form fields/ }));
 
@@ -147,6 +157,46 @@ describe("AdminPricing", () => {
         expect.any(Object)
       );
     });
+  });
+
+  test("saves a service commission and shows the saved rate after reloading the catalog", async () => {
+    renderAdminPricing();
+
+    const serviceCard = (await screen.findAllByRole("button"))
+      .find((button) => button.textContent.includes("No Recordvalidation-noRecord"));
+    fireEvent.click(serviceCard);
+    expect(await screen.findByRole("dialog", { name: "Edit Service" })).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Commission Type"), { target: { value: "FLAT" } });
+    const commissionInput = screen.getByText("Commission (₦)").closest("label").querySelector("input");
+    fireEvent.change(commissionInput, { target: { value: "2000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Service" }));
+
+    await waitFor(() => {
+      expect(api.put).toHaveBeenCalledWith(
+        "/api/admin/services/validation-noRecord",
+        expect.objectContaining({ commissionType: "FLAT", commissionValue: 2000 }),
+        expect.any(Object),
+      );
+      expect(window.alert).toHaveBeenCalledWith("Service updated successfully.");
+    });
+    expect(await screen.findByText("₦2,000 commission")).toBeTruthy();
+  });
+
+  test("does not report a commission save as confirmed when the catalog still has the old rate", async () => {
+    api.put.mockResolvedValueOnce({ data: { success: true } });
+    renderAdminPricing();
+
+    const serviceCard = (await screen.findAllByRole("button"))
+      .find((button) => button.textContent.includes("No Recordvalidation-noRecord"));
+    fireEvent.click(serviceCard);
+    await screen.findByRole("dialog", { name: "Edit Service" });
+    fireEvent.change(screen.getByText("Commission (₦)").closest("label").querySelector("input"), {
+      target: { value: "2000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Service" }));
+
+    await waitFor(() => expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("commission rate could not be confirmed")));
   });
 
   test("opens each category as a route and shows the complete category count", async () => {

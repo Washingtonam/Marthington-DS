@@ -1,9 +1,9 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
 import { 
-  UserCircle2, Mail, ShieldCheck, Wallet, LockKeyhole, 
+  UserCircle2, ShieldCheck, Wallet, LockKeyhole,
   Eye, EyeOff, CreditCard, FileText, ArrowRight, BadgeCheck, Loader2 
 } from "lucide-react";
 import { formatNaira } from "../../lib/currency";
@@ -12,11 +12,40 @@ import AppearanceSettings from "../../components/AppearanceSettings";
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user } = useUser();
-  
+  const { user, setUser } = useUser();
+
   const [passwords, setPasswords] = useState({ current: "", new: "" });
   const [show, setShow] = useState({ current: false, new: false });
   const [loading, setLoading] = useState(false);
+  const [accountForm, setAccountForm] = useState(null);
+  const [accountLoading, setAccountLoading] = useState(false);
+  const accountValues = accountForm || {
+    firstName: user?.firstName || "",
+    lastName: user?.lastName || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
+  };
+  const AnimatedDiv = motion.div;
+
+  const handleAccountUpdate = async (event) => {
+    event.preventDefault();
+    setAccountLoading(true);
+    try {
+      const response = await api.put("/api/users/profile", accountValues);
+      setAccountForm({
+        firstName: response.data.data.firstName || "",
+        lastName: response.data.data.lastName || "",
+        email: response.data.data.email || "",
+        phone: response.data.data.phone || "",
+      });
+      setUser(response.data.data);
+      alert(response.data.message || "Account details updated.");
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to update account details.");
+    } finally {
+      setAccountLoading(false);
+    }
+  };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -24,8 +53,7 @@ export default function Profile() {
 
     setLoading(true);
     try {
-      await api.post("/api/change-password", {
-        userId: user.id || user._id,
+      await api.post("/api/auth/change-password", {
         currentPassword: passwords.current,
         newPassword: passwords.new,
       });
@@ -43,7 +71,7 @@ export default function Profile() {
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* HEADER CARD */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 text-white p-10 shadow-2xl">
+      <AnimatedDiv initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 text-white p-10 shadow-2xl">
         <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
           <div className="flex items-center gap-5">
@@ -60,7 +88,7 @@ export default function Profile() {
             <h2 className="text-5xl font-black">{formatNaira(user.walletBalance ?? 0)}</h2>
           </div>
         </div>
-      </motion.div>
+      </AnimatedDiv>
 
       <AppearanceSettings />
 
@@ -69,8 +97,57 @@ export default function Profile() {
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 p-6">
             <h2 className="font-bold text-lg mb-6 flex items-center gap-2"><ShieldCheck className="text-blue-600" /> Account Info</h2>
-            <div className="space-y-4">
-              <InfoItem label="Email" value={user.email} icon={<Mail size={18} />} />
+            <form onSubmit={handleAccountUpdate} className="space-y-4">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                First name
+                <input
+                  value={accountValues.firstName}
+                  onChange={(event) => setAccountForm((current) => ({ ...accountValues, ...current, firstName: event.target.value }))}
+                  maxLength={100}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Last name
+                <input
+                  value={accountValues.lastName}
+                  onChange={(event) => setAccountForm((current) => ({ ...accountValues, ...current, lastName: event.target.value }))}
+                  maxLength={100}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Email
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={accountValues.email}
+                  onChange={(event) => setAccountForm((current) => ({ ...accountValues, ...current, email: event.target.value }))}
+                  maxLength={254}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                WhatsApp number
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  value={accountValues.phone}
+                  onChange={(event) => setAccountForm((current) => ({ ...accountValues, ...current, phone: event.target.value }))}
+                  maxLength={20}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={accountLoading}
+                className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--accent-foreground)] disabled:opacity-60"
+              >
+                {accountLoading ? "Saving account…" : "Save account details"}
+              </button>
+            </form>
+            <div className="mt-5 space-y-4 border-t border-slate-100 pt-5 dark:border-slate-800">
               <InfoItem label="Role" value={user.role?.replace("_", " ")} icon={<BadgeCheck size={18} />} />
               <InfoItem label="Wallet Balance" value={formatNaira(user.walletBalance ?? 0)} icon={<Wallet size={18} />} />
             </div>

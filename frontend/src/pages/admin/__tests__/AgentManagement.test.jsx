@@ -69,10 +69,10 @@ describe("AgentManagement", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit offline agent" })).toBeNull());
   });
 
-  test("opens a registered Marketing agent's audit profile from the directory", async () => {
+  test("opens a registered Marthington agent's audit profile from the directory", async () => {
     const registeredAccount = {
       _id: "registered-user-1",
-      name: "Marketing Agent",
+      name: "Marthington agent",
       email: "marketing@example.test",
       whatsapp: "+2348000000002",
       role: "user",
@@ -101,7 +101,7 @@ describe("AgentManagement", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: /Marketing Agent/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Marthington agent/ }));
 
     expect(await screen.findByText("User Audit Profile")).toBeTruthy();
     expect(screen.getByTestId("current-path").textContent).toBe("/admin/user/registered-user-1/details");

@@ -152,6 +152,20 @@ describe("dashboard shell navigation", () => {
     expect(screen.getByRole("link", { name: "JAMB services" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Verify BVN" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Verify NIN" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Expand Account navigation group" }));
+    expect(screen.getByRole("link", { name: "Chat with support" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("link", { name: "Chat with support" }));
+    expect(screen.getByLabelText("Current route").textContent).toBe("/support-chat");
+  });
+
+  test("shows commissions in the account navigation for regular registered users", () => {
+    window.innerWidth = 1280;
+    mocks.user = { id: "user-1", role: "user" };
+    renderLayout();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand Account navigation group" }));
+
+    expect(screen.getByRole("link", { name: "Commissions" }).getAttribute("href")).toBe("/commissions");
   });
 
   test("shows agent and communication navigation only in the super-admin workspace", () => {

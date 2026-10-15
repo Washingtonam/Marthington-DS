@@ -31,6 +31,7 @@ const pageTitles = [
   ["/wallet", "Wallet"],
   ["/transactions", "Transactions"],
   ["/contact", "Contact support"],
+  ["/support-chat", "Chat with support"],
   ["/nin-services", "NIN services"],
   ["/cac-services", "CAC services"],
   ["/services", "Services"],

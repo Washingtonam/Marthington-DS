@@ -1,10 +1,13 @@
-jest.mock("../models/User.model", () => ({ findOne: jest.fn(), create: jest.fn() }));
+jest.mock("../models/User.model", () => ({ findOne: jest.fn(), create: jest.fn(), findById: jest.fn() }));
+jest.mock("../models/AuditLog.model", () => ({ create: jest.fn() }));
 
 const express = require("express");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const request = require("supertest");
 const User = require("../models/User.model");
-const { SUPER_ADMIN_EMAIL } = require("../config/constants");
+const AuditLog = require("../models/AuditLog.model");
+const { JWT_SECRET_FALLBACK, SUPER_ADMIN_EMAIL } = require("../config/constants");
 const authRouter = require("../routes/auth.routes");
 
 const app = express();
@@ -26,6 +29,37 @@ const registration = (email = "agent@example.com") => ({
 
 describe("agent account approval during registration and login", () => {
   beforeEach(() => jest.clearAllMocks());
+
+  it("audits a user's password update without recording the password", async () => {
+    const passwordHash = await bcrypt.hash("current-secret", 10);
+    const user = {
+      id: "user-id",
+      _id: "user-id",
+      email: "agent@example.com",
+      role: "user",
+      status: "active",
+      approvalStatus: "approved",
+      password: passwordHash,
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    User.findById.mockResolvedValue(user);
+    AuditLog.create.mockResolvedValue({});
+    const token = jwt.sign({ id: "user-id" }, process.env.JWT_SECRET || JWT_SECRET_FALLBACK);
+
+    const response = await request(app)
+      .post("/api/auth/change-password")
+      .auth(token, { type: "bearer" })
+      .send({ currentPassword: "current-secret", newPassword: "new-secret" });
+
+    expect(response.status).toBe(200);
+    expect(await bcrypt.compare("new-secret", user.password)).toBe(true);
+    expect(AuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      action: "USER_PROFILE_UPDATED",
+      userId: "user-id",
+      note: "User updated account details: password changed.",
+    }));
+    expect(JSON.stringify(AuditLog.create.mock.calls)).not.toContain("new-secret");
+  });
 
   it("creates self-registered agents as pending and returns review status", async () => {
     User.findOne.mockResolvedValue(null);
