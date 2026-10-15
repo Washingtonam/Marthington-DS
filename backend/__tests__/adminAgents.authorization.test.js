@@ -81,13 +81,14 @@ describe("agent management authorization", () => {
     const response = await request(app)
       .post("/api/admin/agents")
       .set("Authorization", `Bearer ${token}`)
-      .send({ name: "Sample Agent", whatsapp: "+234 800 000 0000" });
+      .send({ name: "Sample Agent", whatsapp: "+234 800 000 0000", email: " Agent@Example.com " });
 
     expect(response.status).toBe(201);
     expect(response.body.agent.name).toBe("Sample Agent");
     expect(Agent.create).toHaveBeenCalledWith({
       name: "Sample Agent",
       whatsapp: "+2348000000000",
+      email: "agent@example.com",
       createdBy: "super-admin",
     });
   });

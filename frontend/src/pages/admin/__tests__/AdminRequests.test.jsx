@@ -69,28 +69,33 @@ describe("AdminRequests", () => {
     });
   });
 
-  test("shows filtered aggregate metrics and separates service performance groups", async () => {
+  test("shows the metrics first and keeps service insights collapsible", async () => {
     render(<MemoryRouter><AdminRequests /></MemoryRouter>);
 
-    expect(await screen.findByRole("heading", { name: "Service requests" })).toBeTruthy();
-    expect(await screen.findByText("Request analysis")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Service Requests" })).toBeTruthy();
+    expect(screen.getByLabelText("Request metrics")).toBeTruthy();
     expect(screen.getByText("₦145,000")).toBeTruthy();
+    expect(screen.getByText("38%")).toBeTruthy();
+    expect(screen.queryByText("Highest request volume")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Service breakdown insights/ }));
     expect(screen.getByText("Highest request volume")).toBeTruthy();
     expect(screen.getByText("Lower request volume")).toBeTruthy();
     expect(screen.getAllByText("Name Modification").length).toBeGreaterThan(0);
     expect(screen.getByText("DOB Modification")).toBeTruthy();
     expect(screen.getByLabelText("Search service requests")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Advanced filters/ }));
     expect(screen.getByLabelText("From date")).toBeTruthy();
     expect(screen.getByLabelText("Maximum amount")).toBeTruthy();
   });
 
   test("applies date and amount filters without requiring a wide fixed toolbar", async () => {
     render(<MemoryRouter><AdminRequests /></MemoryRouter>);
-    await screen.findByRole("heading", { name: "Service requests" });
+    await screen.findByRole("heading", { name: "Service Requests" });
 
+    fireEvent.click(screen.getByRole("button", { name: /Advanced filters/ }));
     fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2025-04-01" } });
     fireEvent.change(screen.getByLabelText("Maximum amount"), { target: { value: "50000" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Apply" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
     await waitFor(() => {
       const requestCall = api.get.mock.calls.filter(([path]) => path === "/api/admin/requests").at(-1);

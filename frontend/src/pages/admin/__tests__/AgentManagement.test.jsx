@@ -159,11 +159,13 @@ describe("AgentManagement", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Add offline agent" }));
     fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "New Offline Agent" } });
     fireEvent.change(screen.getByLabelText("WhatsApp number"), { target: { value: "+2348000000001" } });
+    fireEvent.change(screen.getByLabelText(/Email address/), { target: { value: "new-agent@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Save and select offline agent" }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/api/admin/agents", {
       name: "New Offline Agent",
       whatsapp: "+2348000000001",
+      email: "new-agent@example.com",
     }));
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Offline agent" }).value).toBe("agent-new"));
     expect(screen.queryByText("Save a new offline agent")).toBeNull();

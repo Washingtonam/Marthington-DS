@@ -117,6 +117,11 @@ const normalizeWhatsapp = (value) => {
   if (digits.length < 7 || digits.length > 15) return null;
   return `${input.startsWith("+") ? "+" : ""}${digits}`;
 };
+const normalizeAgentEmail = (value) => {
+  const email = String(value || "").trim().toLowerCase();
+  if (!email) return "";
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
+};
 
 const sanitizeJobFormData = (value) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -180,13 +185,17 @@ router.post("/agents", isSuperAdmin, async (req, res) => {
   try {
     const name = String(req.body?.name || "").trim();
     const whatsapp = normalizeWhatsapp(req.body?.whatsapp);
+    const email = normalizeAgentEmail(req.body?.email);
     if (!name || name.length > 120) {
       return res.status(400).json({ success: false, message: "Enter an agent name (up to 120 characters)." });
     }
     if (!whatsapp) {
       return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
     }
-    const agent = await Agent.create({ name, whatsapp, createdBy: req.user.id });
+    if (email === null) {
+      return res.status(400).json({ success: false, message: "Enter a valid email address." });
+    }
+    const agent = await Agent.create({ name, whatsapp, ...(email ? { email } : {}), createdBy: req.user.id });
     return res.status(201).json({ success: true, agent: { ...agent.toObject(), source: "manual", jobs: 0, totalAmount: 0 } });
   } catch (error) {
     console.error("ADMIN AGENT CREATE ERROR:", error);
@@ -209,6 +218,11 @@ router.put("/agents/:agentId", isSuperAdmin, async (req, res) => {
       const whatsapp = normalizeWhatsapp(req.body.whatsapp);
       if (!whatsapp) return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
       updates.whatsapp = whatsapp;
+    }
+    if (req.body?.email !== undefined) {
+      const email = normalizeAgentEmail(req.body.email);
+      if (email === null) return res.status(400).json({ success: false, message: "Enter a valid email address." });
+      updates.email = email;
     }
     if (req.body?.active !== undefined) {
       if (typeof req.body.active !== "boolean") return res.status(400).json({ success: false, message: "Invalid agent status." });

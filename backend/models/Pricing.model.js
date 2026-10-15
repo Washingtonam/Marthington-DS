@@ -310,16 +310,8 @@ pricingSchema.statics.getPricing = async function () {
   } else {
     const normalizedCatalog = normalizeServiceCatalog(pricing.serviceCatalog);
     const normalizedCategories = getCategoriesFromCatalog(normalizedCatalog, pricing.categories);
-    const hasLegacyEntries = JSON.stringify(normalizedCatalog) !== JSON.stringify(pricing.serviceCatalog || [])
-      || JSON.stringify(normalizedCategories) !== JSON.stringify(pricing.categories || []);
-
-    if (hasLegacyEntries) {
-      pricing.serviceCatalog = normalizedCatalog;
-      pricing.categories = normalizedCategories;
-      pricing.markModified('serviceCatalog');
-      pricing.markModified('categories');
-      await pricing.save();
-    }
+    pricing.serviceCatalog = normalizedCatalog;
+    pricing.categories = normalizedCategories;
   }
   return pricing;
 };

@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const AgentSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 120 },
   whatsapp: { type: String, required: true, trim: true, maxlength: 20 },
+  email: { type: String, trim: true, lowercase: true, default: "", maxlength: 254 },
   active: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 }, { timestamps: true });

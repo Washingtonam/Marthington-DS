@@ -47,6 +47,7 @@ import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminArticles from "./pages/admin/AdminArticles";
 import UserDetailView from "./pages/admin/UserDetailView";
 import AgentManagement from "./pages/admin/AgentManagement";
+import Communications from "./pages/admin/Communications";
 import Contact from "./pages/Contact";
 
 // Layout & Context
@@ -182,7 +183,7 @@ function AppRoutes() {
       <Route path="/admin/settings" element={<SuperAdminRoute><Layout><BrandingSettings /></Layout></SuperAdminRoute>} />
       <Route path="/admin/agents" element={<SuperAdminRoute><Layout><AgentManagement view="agents" /></Layout></SuperAdminRoute>} />
       <Route path="/admin/agents/jobs" element={<SuperAdminRoute><Layout><AgentManagement view="jobs" /></Layout></SuperAdminRoute>} />
-      <Route path="/admin/communications" element={<SuperAdminRoute><Layout><AgentManagement view="messages" /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/communications" element={<AdminRoute><Layout><Communications /></Layout></AdminRoute>} />
       <Route path="/admin/user/:userId/details" element={<AdminRoute><Layout><UserDetailView /></Layout></AdminRoute>} />
 
       {/* Catch all */}

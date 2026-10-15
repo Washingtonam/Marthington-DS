@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Clock3,
+  ChevronDown,
   Download,
   Layers3,
   SlidersHorizontal,
@@ -21,13 +22,13 @@ import { useToast } from "../../context/ToastContext";
 
 // 🎨 Status Badge Color Mapping
 const statusColors = {
-  "pending": "bg-yellow-100 text-yellow-800 border border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-600",
-  "in-progress": "bg-blue-100 text-blue-800 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-600",
-  "processing": "bg-purple-100 text-purple-800 border border-purple-300 dark:bg-purple-900/30 dark:text-purple-200 dark:border-purple-600",
-  "approved": "bg-green-100 text-green-800 border border-green-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-600",
+  "pending": "bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20",
+  "in-progress": "bg-blue-100 text-blue-800 ring-1 ring-inset ring-blue-200 dark:bg-blue-400/10 dark:text-blue-300 dark:ring-blue-400/20",
+  "processing": "bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20",
+  "approved": "bg-blue-100 text-blue-800 ring-1 ring-inset ring-blue-200 dark:bg-blue-400/10 dark:text-blue-300 dark:ring-blue-400/20",
   "completed": "bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-600",
-  "rejected": "bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/30 dark:text-red-200 dark:border-red-600",
-  "failed": "bg-orange-100 text-orange-800 border border-orange-300 dark:bg-orange-900/30 dark:text-orange-200 dark:border-orange-600"
+  "rejected": "bg-red-100 text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-400/10 dark:text-red-300 dark:ring-red-400/20",
+  "failed": "bg-red-100 text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-400/10 dark:text-red-300 dark:ring-red-400/20"
 };
 
 const emptyAnalytics = {
@@ -46,7 +47,7 @@ const formatAmount = (amount) => new Intl.NumberFormat("en-NG", {
   maximumFractionDigits: 0,
 }).format(Number(amount) || 0);
 
-function MetricCard({ icon, label, value, detail }) {
+function MetricCard({ icon, label, value, detail, progress }) {
   return (
     <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
       <div className="flex items-start justify-between gap-3">
@@ -58,6 +59,11 @@ function MetricCard({ icon, label, value, detail }) {
           {React.createElement(icon, { size: 19, "aria-hidden": true })}
         </span>
       </div>
+      {progress !== undefined && (
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+          <div className="h-full rounded-full bg-[var(--accent)] transition-[width]" style={{ width: `${progress}%` }} />
+        </div>
+      )}
       <p className="mt-3 truncate text-xs text-slate-500 dark:text-slate-400">{detail}</p>
     </article>
   );
@@ -130,6 +136,8 @@ export default function AdminRequests() {
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
   const [filtersVersion, setFiltersVersion] = useState(0);
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
 
   const serviceColors = {
     "Validation": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200",
@@ -360,6 +368,18 @@ export default function AdminRequests() {
   };
 
   const displayedRequests = requests;
+  const completionRate = analytics.totalRequests
+    ? Math.round((analytics.completed / analytics.totalRequests) * 100)
+    : 0;
+  const activeFilterCount = [
+    activeTab !== "all",
+    selectedServices.length > 0,
+    activeStatus !== "all",
+    requesterRole !== "all",
+    Boolean(searchQuery.trim()),
+    Boolean(fromDate || toDate),
+    Boolean(minAmount || maxAmount),
+  ].filter(Boolean).length;
   const topServices = analytics.services.slice(0, Math.min(5, Math.ceil(analytics.services.length / 2)));
   const lowerVolumeServices = [...analytics.services]
     .sort((a, b) => a.count - b.count)
@@ -393,9 +413,9 @@ export default function AdminRequests() {
       <header className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-text)]">Operations overview</p>
-          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">Service requests</h2>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">Service Requests</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Review customer work, track request progress, and compare service demand and value.
+            Monitor incoming work, follow request progress, and prioritize customer service.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -412,6 +432,29 @@ export default function AdminRequests() {
         </div>
       </header>
 
+      <section aria-label="Request metrics" className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          icon={Layers3}
+          label="Total requests"
+          value={analytics.totalRequests.toLocaleString()}
+          detail={activeFilterCount ? `${activeFilterCount} filters applied · matching requests` : "All matching requests"}
+        />
+        <MetricCard icon={CircleDollarSign} label="Total request value" value={formatAmount(analytics.totalAmount)} detail="Across the matching request set" />
+        <MetricCard
+          icon={Clock3}
+          label="Active pipeline"
+          value={(analytics.pending + analytics.inProgress).toLocaleString()}
+          detail={`${analytics.pending} pending · ${analytics.inProgress} in progress`}
+        />
+        <MetricCard
+          icon={CheckCircle2}
+          label="Completion rate"
+          value={`${completionRate}%`}
+          detail={`${analytics.completed.toLocaleString()} completed requests`}
+          progress={completionRate}
+        />
+      </section>
+
       <section aria-label="Request filters" className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
         <div className="flex flex-wrap items-center gap-2">
           {[{ slug: "all", label: "All services" }, ...serviceCategories].map((tab) => (
@@ -427,8 +470,8 @@ export default function AdminRequests() {
           ))}
         </div>
 
-        <div className="mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(16rem,1.5fr)_repeat(3,minmax(9rem,0.7fr))_auto_auto]">
-          <label className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 dark:border-slate-700 dark:bg-slate-950">
+        <div className="mt-4 flex min-w-0 flex-wrap items-center gap-2.5">
+          <label className="flex min-w-[min(100%,16rem)] flex-[1_1_18rem] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 dark:border-slate-700 dark:bg-slate-950">
             <Search size={17} className="shrink-0 text-slate-400" aria-hidden="true" />
             <input
               value={searchTerm}
@@ -445,68 +488,75 @@ export default function AdminRequests() {
               onChange={(event) => setSelectedServices(event.target.value ? [event.target.value] : [])}
               aria-label="Filter by service"
               placeholder="Service code or type"
-              className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950"
+              className="min-w-[10rem] flex-[1_1_10rem] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950"
             />
           )}
           <label className="sr-only" htmlFor="request-status-filter">Status</label>
-          <select id="request-status-filter" value={activeStatus} onChange={(event) => handleStatusChange(event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+          <select id="request-status-filter" value={activeStatus} onChange={(event) => handleStatusChange(event.target.value)} className="min-w-[9rem] flex-[1_1_9rem] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
             <option value="all">All statuses</option>
             {["pending", "approved", "in-progress", "processing", "completed", "rejected", "failed"].map((status) => <option key={status} value={status}>{status.replace("-", " ")}</option>)}
           </select>
           <label className="sr-only" htmlFor="request-role-filter">Requester</label>
-          <select id="request-role-filter" value={requesterRole} onChange={(event) => handleRoleChange(event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+          <select id="request-role-filter" value={requesterRole} onChange={(event) => handleRoleChange(event.target.value)} className="min-w-[9rem] flex-[1_1_9rem] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
             <option value="all">All requesters</option>
             <option value="user">User</option>
             <option value="admin">Admin</option>
             <option value="super_admin">Super Admin</option>
           </select>
+          <button type="button" onClick={() => setAdvancedFiltersOpen((open) => !open)} aria-expanded={advancedFiltersOpen} aria-controls="request-advanced-filters" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">
+            <SlidersHorizontal size={16} aria-hidden="true" />
+            Advanced filters
+            <ChevronDown size={15} aria-hidden="true" className={`transition-transform ${advancedFiltersOpen ? "rotate-180" : ""}`} />
+          </button>
+          <button type="button" onClick={applyFilters} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)] shadow-sm hover:opacity-90">Apply filters</button>
           <button type="button" onClick={() => { if (selectedIds.size === 0) selectAllVisible(); else clearSelection(); }} className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">
             {selectedIds.size === 0 ? "Select visible" : `${selectedIds.size} selected`}
           </button>
-          <button type="button" onClick={applyFilters} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)] shadow-sm hover:opacity-90">Apply</button>
         </div>
 
-        <div className="mt-4 grid min-w-0 gap-3 border-t border-slate-100 pt-4 dark:border-slate-800 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="min-w-0">
-            <label htmlFor="requests-from-date" className="text-xs font-semibold text-slate-500 dark:text-slate-400">From date</label>
-            <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
-              <CalendarDays size={15} className="shrink-0 text-slate-400" aria-hidden="true" />
-              <input id="requests-from-date" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none dark:text-slate-100" />
-            </span>
+        {advancedFiltersOpen && (
+          <div id="request-advanced-filters" className="mt-4 grid min-w-0 gap-3 border-t border-slate-100 pt-4 dark:border-slate-800 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="min-w-0">
+              <label htmlFor="requests-from-date" className="text-xs font-semibold text-slate-600 dark:text-slate-400">From date</label>
+              <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
+                <CalendarDays size={15} className="shrink-0 text-slate-400" aria-hidden="true" />
+                <input id="requests-from-date" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none dark:text-slate-100" />
+              </span>
+            </div>
+            <div className="min-w-0">
+              <label htmlFor="requests-to-date" className="text-xs font-semibold text-slate-600 dark:text-slate-400">To date</label>
+              <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
+                <CalendarDays size={15} className="shrink-0 text-slate-400" aria-hidden="true" />
+                <input id="requests-to-date" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none dark:text-slate-100" />
+              </span>
+            </div>
+            <div className="min-w-0">
+              <label htmlFor="requests-min-amount" className="text-xs font-semibold text-slate-600 dark:text-slate-400">Minimum amount</label>
+              <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
+                <span className="text-sm font-normal text-slate-400">₦</span>
+                <input id="requests-min-amount" type="number" min="0" value={minAmount} onChange={(event) => setMinAmount(event.target.value)} placeholder="No minimum" className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100" />
+              </span>
+            </div>
+            <div className="min-w-0">
+              <label htmlFor="requests-max-amount" className="text-xs font-semibold text-slate-600 dark:text-slate-400">Maximum amount</label>
+              <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
+                <span className="text-sm font-normal text-slate-400">₦</span>
+                <input id="requests-max-amount" type="number" min="0" value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} placeholder="No maximum" className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100" />
+              </span>
+            </div>
           </div>
-          <div className="min-w-0">
-            <label htmlFor="requests-to-date" className="text-xs font-semibold text-slate-500 dark:text-slate-400">To date</label>
-            <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
-              <CalendarDays size={15} className="shrink-0 text-slate-400" aria-hidden="true" />
-              <input id="requests-to-date" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none dark:text-slate-100" />
-            </span>
-          </div>
-          <div className="min-w-0">
-            <label htmlFor="requests-min-amount" className="text-xs font-semibold text-slate-500 dark:text-slate-400">Minimum amount</label>
-            <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
-              <span className="text-sm font-normal text-slate-400">₦</span>
-              <input id="requests-min-amount" type="number" min="0" value={minAmount} onChange={(event) => setMinAmount(event.target.value)} placeholder="No minimum" className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100" />
-            </span>
-          </div>
-          <div className="min-w-0">
-            <label htmlFor="requests-max-amount" className="text-xs font-semibold text-slate-500 dark:text-slate-400">Maximum amount</label>
-            <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
-              <span className="text-sm font-normal text-slate-400">₦</span>
-              <input id="requests-max-amount" type="number" min="0" value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} placeholder="No maximum" className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100" />
-            </span>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-500 dark:text-slate-400">Date and amount filters apply when you select Apply.</p>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <button type="button" onClick={() => { setActiveStatus("all"); setActiveTab("all"); setSelectedServices([]); setRequesterRole("all"); setSearchTerm(""); setSearchQuery(""); setFromDate(""); setToDate(""); setMinAmount(""); setMaxAmount(""); setPage(1); setFiltersVersion((version) => version + 1); }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+            <X size={15} aria-hidden="true" /> Clear
+          </button>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => { setActiveStatus("all"); setActiveTab("all"); setSelectedServices([]); setRequesterRole("all"); setSearchTerm(""); setSearchQuery(""); setFromDate(""); setToDate(""); setMinAmount(""); setMaxAmount(""); setPage(1); setFiltersVersion((version) => version + 1); }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
-              <X size={15} aria-hidden="true" /> Clear filters
-            </button>
             <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-950" role="group" aria-label="Request display">
               <button type="button" aria-pressed={viewMode === "table"} onClick={() => setViewMode("table")} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${viewMode === "table" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white" : "text-slate-500"}`}>Table</button>
               <button type="button" aria-pressed={viewMode === "cards"} onClick={() => setViewMode("cards")} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${viewMode === "cards" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white" : "text-slate-500"}`}>Cards</button>
             </div>
-            <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400">
               Rows
               <select aria-label="Rows per page" value={pageSize} onChange={(event) => { const nextSize = Number(event.target.value); setPageSize(nextSize); setPage(1); fetchRequests(1); }} className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
                 {[12, 25, 50, 100].map((size) => <option key={size} value={size}>{size} / page</option>)}
@@ -516,24 +566,28 @@ export default function AdminRequests() {
         </div>
       </section>
 
-      <section aria-label="Filtered request analysis" className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Request analysis</h3>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Performance for the current filters, not only this page of results.</p>
-          </div>
-          <span className="text-xs text-slate-500 dark:text-slate-400">{analytics.services.length} services with requests</span>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard icon={Layers3} label="Total requests" value={analytics.totalRequests.toLocaleString()} detail={`${requests.length} shown on this page`} />
-          <MetricCard icon={CircleDollarSign} label="Request value" value={formatAmount(analytics.totalAmount)} detail="Across matching requests" />
-          <MetricCard icon={Clock3} label="Awaiting / in progress" value={(analytics.pending + analytics.inProgress).toLocaleString()} detail={`${analytics.pending} pending · ${analytics.inProgress} processing`} />
-          <MetricCard icon={CheckCircle2} label="Completed" value={analytics.completed.toLocaleString()} detail={`${analytics.totalRequests ? Math.round((analytics.completed / analytics.totalRequests) * 100) : 0}% completion rate`} />
-        </div>
-        {!!topServices.length && (
-          <div className={`grid min-w-0 gap-4 ${lowerVolumeServices.length ? "lg:grid-cols-2" : ""}`}>
-            <ServicePerformanceCard title="Highest request volume" description="Services with the most matching requests" services={topServices} icon={BarChart3} formatAmount={formatAmount} />
-            {!!lowerVolumeServices.length && <ServicePerformanceCard title="Lower request volume" description="Services with fewer matching requests" services={lowerVolumeServices} icon={SlidersHorizontal} formatAmount={formatAmount} />}
+      <section aria-label="Service breakdown insights" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <button type="button" aria-expanded={insightsOpen} aria-controls="request-insights" onClick={() => setInsightsOpen((open) => !open)} className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-[var(--accent-focus)] dark:hover:bg-slate-800/60 sm:px-5">
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[rgba(var(--accent-rgb),0.10)] text-[var(--accent-text)]"><BarChart3 size={18} aria-hidden="true" /></span>
+            <span className="min-w-0">
+              <span className="block font-semibold text-slate-900 dark:text-white">Service breakdown insights</span>
+              <span className="mt-1 block text-xs text-slate-600 dark:text-slate-400">{analytics.services.length} services · volume, request value and completion</span>
+            </span>
+          </span>
+          <ChevronDown size={18} aria-hidden="true" className={`shrink-0 text-slate-500 transition-transform ${insightsOpen ? "rotate-180" : ""}`} />
+        </button>
+        {insightsOpen && (
+          <div id="request-insights" className="space-y-4 border-t border-slate-100 p-4 dark:border-slate-800 sm:p-5">
+            <p className="text-sm text-slate-600 dark:text-slate-400">Performance for the current filters, across all matching requests rather than only this page.</p>
+            {topServices.length > 0 ? (
+              <div className={`grid min-w-0 gap-4 ${lowerVolumeServices.length ? "lg:grid-cols-2" : ""}`}>
+                <ServicePerformanceCard title="Highest request volume" description="Services with the most matching requests" services={topServices} icon={BarChart3} formatAmount={formatAmount} />
+                {!!lowerVolumeServices.length && <ServicePerformanceCard title="Lower request volume" description="Services with fewer matching requests" services={lowerVolumeServices} icon={SlidersHorizontal} formatAmount={formatAmount} />}
+              </div>
+            ) : (
+              <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-600 dark:border-slate-700 dark:text-slate-400">No service breakdown is available for the current filters.</p>
+            )}
           </div>
         )}
       </section>
@@ -566,26 +620,26 @@ export default function AdminRequests() {
             <table className="w-full min-w-[680px] text-sm text-slate-900 dark:text-slate-100">
               <thead className="text-xs text-slate-500 uppercase bg-slate-100 dark:bg-slate-800 dark:text-slate-300">
                 <tr>
-                  <th className="p-3"><input aria-label="Select eligible requests" type="checkbox" onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }} checked={displayedRequests.some((r) => r.pipelineSource !== "agent-job") && displayedRequests.filter((r) => r.pipelineSource !== "agent-job").every((r) => selectedIds.has(r._id))} /></th>
-                  <th scope="col" className="p-3 text-left">
+                  <th className="px-4 py-3"><input aria-label="Select eligible requests" type="checkbox" onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }} checked={displayedRequests.some((r) => r.pipelineSource !== "agent-job") && displayedRequests.filter((r) => r.pipelineSource !== "agent-job").every((r) => selectedIds.has(r._id))} /></th>
+                  <th scope="col" className="px-4 py-3 text-left">
                     <button type="button" onClick={() => { setSortBy("createdAt"); setOrder(order === "asc" ? "desc" : "asc"); fetchRequests(1); }} className="font-semibold hover:text-slate-900 dark:hover:text-white">
                       Created <span aria-hidden="true">{sortBy === "createdAt" ? (order === "asc" ? "↑" : "↓") : ""}</span>
                     </button>
                   </th>
-                  <th scope="col" className="p-3">Customer and job</th>
-                  <th className="p-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Customer and job</th>
+                  <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {displayedRequests.map((r) => (
                   <tr key={r._id} tabIndex={0} aria-label={`Open request for ${getRequestName(r)}: ${getRequestTitle(r)}`} onClick={() => setSelected(r)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(r); } }} className="cursor-pointer border-b border-slate-200 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:border-slate-700 dark:hover:bg-slate-800/70">
-                    <td className="p-3" onClick={(event) => event.stopPropagation()}><input aria-label={`Select request ${r._id}`} type="checkbox" disabled={r.pipelineSource === "agent-job"} checked={selectedIds.has(r._id)} onKeyDown={(event) => event.stopPropagation()} onChange={() => toggleSelect(r._id)} /></td>
-                    <td className="p-3">{formatDateShort(r.createdAt)}</td>
-                    <td className="p-3">
+                    <td className="px-4 py-4" onClick={(event) => event.stopPropagation()}><input aria-label={`Select request ${r._id}`} type="checkbox" disabled={r.pipelineSource === "agent-job"} checked={selectedIds.has(r._id)} onKeyDown={(event) => event.stopPropagation()} onChange={() => toggleSelect(r._id)} /></td>
+                    <td className="px-4 py-4">{formatDateShort(r.createdAt)}</td>
+                    <td className="px-4 py-4">
                       <span className="block font-semibold">{getRequestName(r)}</span>
                       <span className="mt-1 block text-xs capitalize text-slate-500 dark:text-slate-400">{getRequestTitle(r)}</span>
                     </td>
-                    <td className="p-3"><span className={`px-2 py-1 rounded ${statusColors[r.status] || 'bg-slate-100'}`}>{r.status}</span></td>
+                    <td className="px-4 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${statusColors[r.status] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{r.status}</span></td>
                   </tr>
                 ))}
               </tbody>
