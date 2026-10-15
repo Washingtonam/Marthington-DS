@@ -684,7 +684,7 @@ export default function AgentManagement({ view }) {
               </label>
             ))}
           </div>
-          {selectedService && selectedServiceFields.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-700">No customer form fields are configured for this service in Services Engine. You can still log the job and add notes in the form text above.</p>}
+          {selectedService && selectedServiceFields.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-700">No customer form fields are configured for this service in Services Management. You can still log the job and add notes in the form text above.</p>}
           <p className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600 dark:bg-slate-950 dark:text-slate-400">Parsed values are suggestions only. Review every field before saving. This logs an internal job to the admin service-request list; it does not submit to NIMC or alter a customer account.</p>
           <button type="submit" disabled={busy || !selectedService} className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-[var(--accent-foreground)] disabled:opacity-60">{busy ? "Saving…" : "Save job"}</button>
         </form>

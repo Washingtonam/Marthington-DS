@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../lib/axios";
 import { toast } from "sonner";
-import { CreditCard, FileText, Users, Wallet, Clock3, ShieldCheck, Zap, ArrowRight } from 'lucide-react';
+import { CreditCard, FileText, Users, Wallet, Clock3, ShieldCheck, Zap, ArrowRight, MessageCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import Tabs from "../../components/ui/Tabs";
@@ -324,6 +324,20 @@ export default function AdminDashboard() {
           </div>
         </div>
       </motion.div>
+
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div>
+          <h2 className="font-semibold text-slate-900 dark:text-white">Agent communications</h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage message templates and respond to support chats.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/admin/communications")}
+          className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)]"
+        >
+          <MessageCircle size={16} aria-hidden="true" /> Open communications
+        </button>
+      </div>
 
       {/* Tabs Navigation */}
       {isOverviewLoading ? (

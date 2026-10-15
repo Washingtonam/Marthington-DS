@@ -5,6 +5,10 @@ const supportConversationSchema = new mongoose.Schema({
   status: { type: String, enum: ["open", "closed"], default: "open" },
   lastMessage: { type: String, default: "" },
   lastMessageAt: { type: Date, default: Date.now },
+  lastUserMessageAt: { type: Date, default: null },
+  lastAdminMessageAt: { type: Date, default: null },
+  adminReadAt: { type: Date, default: null },
+  userReadAt: { type: Date, default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.models.SupportConversation

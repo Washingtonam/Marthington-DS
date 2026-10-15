@@ -8,6 +8,7 @@ import WorkspaceSwitcher from "../../components/WorkspaceSwitcher";
 
 const mocks = vi.hoisted(() => ({
   user: { id: "user-1", firstName: "Morgan", role: "super_admin" },
+  businessLogoUrl: "",
   error: vi.fn(),
   get: vi.fn(() => new Promise(() => {})),
 }));
@@ -29,7 +30,7 @@ vi.mock("../../context/BrandingContext", () => ({
   useBranding: () => ({
     businessName: "Marthington",
     businessTagline: "Digital Services",
-    businessLogoUrl: "",
+    businessLogoUrl: mocks.businessLogoUrl,
     applyBranding: vi.fn(),
     refreshBranding: vi.fn(),
   }),
@@ -66,6 +67,7 @@ afterEach(() => {
   cleanup();
   window.innerWidth = 1024;
   mocks.user = { id: "user-1", firstName: "Morgan", role: "super_admin" };
+  mocks.businessLogoUrl = "";
   mocks.get.mockReset();
   mocks.get.mockImplementation(() => new Promise(() => {}));
 });
@@ -78,12 +80,12 @@ describe("dashboard shell navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
 
-    expect(screen.getByRole("button", { name: "Open navigation menu" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
     expect(document.querySelector("#app-sidebar").getAttribute("aria-hidden")).toBe("false");
     expect(document.querySelector("#app-sidebar").className).toContain("w-20");
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
 
     expect(document.querySelector("#app-sidebar").getAttribute("aria-hidden")).toBe("false");
     expect(document.querySelector("#app-sidebar").className).toContain("w-72");
@@ -92,9 +94,12 @@ describe("dashboard shell navigation", () => {
 
   test("mobile drawer closes after selecting a navigation link", () => {
     window.innerWidth = 390;
+    mocks.businessLogoUrl = "https://example.test/company-logo.png";
     renderLayout();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
+    const logoButton = screen.getByRole("button", { name: "Open navigation menu" });
+    expect(logoButton.querySelector("img").getAttribute("src")).toBe("https://example.test/company-logo.png");
+    fireEvent.click(logoButton);
     const dialog = screen.getByRole("dialog", { name: "User navigation" });
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(document.body.style.overflow).toBe("hidden");
@@ -106,7 +111,6 @@ describe("dashboard shell navigation", () => {
     expect(document.body.style.overflow).toBe("");
 
     fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Expand Services navigation group" }));
     fireEvent.click(screen.getByRole("link", { name: "Verify NIN" }));
 
     expect(screen.getByLabelText("Current route").textContent).toBe("/verify-nin");
@@ -115,17 +119,17 @@ describe("dashboard shell navigation", () => {
     expect(document.querySelector('#app-sidebar a[href="/verify-nin"]').getAttribute("aria-current")).toBe("page");
   });
 
-  test("keeps more than two navigation groups expanded independently", () => {
+  test("starts with all navigation groups expanded and keeps them independently collapsible", () => {
     window.innerWidth = 1280;
     renderLayout();
-
-    ["Activity", "Account", "Services"].forEach((group) => {
-      fireEvent.click(screen.getByRole("button", { name: `Expand ${group} navigation group` }));
-    });
 
     ["activity", "account", "services"].forEach((group) => {
       expect(document.querySelector(`#sidebar-group-${group}`).hidden).toBe(false);
     });
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Activity navigation group" }));
+    expect(document.querySelector("#sidebar-group-activity").hidden).toBe(true);
+    expect(document.querySelector("#sidebar-group-account").hidden).toBe(false);
+    expect(document.querySelector("#sidebar-group-services").hidden).toBe(false);
   });
 
   test("shows active catalog categories and respects Verify NIN visibility", async () => {
@@ -145,14 +149,11 @@ describe("dashboard shell navigation", () => {
     });
     renderLayout();
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand Services navigation group" }));
-
     expect(await screen.findByRole("link", { name: "NIMC services" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "CAC services" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "JAMB services" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Verify BVN" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Verify NIN" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Account navigation group" }));
     expect(screen.getByRole("link", { name: "Chat with support" })).toBeTruthy();
     fireEvent.click(screen.getByRole("link", { name: "Chat with support" }));
     expect(screen.getByLabelText("Current route").textContent).toBe("/support-chat");
@@ -163,9 +164,18 @@ describe("dashboard shell navigation", () => {
     mocks.user = { id: "user-1", role: "user" };
     renderLayout();
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand Account navigation group" }));
-
     expect(screen.getByRole("link", { name: "Commissions" }).getAttribute("href")).toBe("/commissions");
+  });
+
+  test("shows unread support notifications on the user navigation item", async () => {
+    mocks.user = { id: "user-1", role: "user" };
+    mocks.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/unread-count") ? { unreadCount: 1 } : {},
+    }));
+    renderLayout();
+
+    const chatLink = await screen.findByRole("link", { name: /Chat with support/ });
+    expect(chatLink.querySelector('[aria-label="1 unread"]')).toBeTruthy();
   });
 
   test("shows agent and communication navigation only in the super-admin workspace", () => {

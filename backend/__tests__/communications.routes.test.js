@@ -125,6 +125,72 @@ describe("communications routes", () => {
     }));
   });
 
+  it("marks a conversation read when support opens the thread", async () => {
+    const conversation = {
+      _id: "0123456789abcdef01234567",
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    SupportConversation.findById.mockResolvedValue(conversation);
+    SupportMessage.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([]),
+        }),
+      }),
+    });
+
+    const response = await request(app)
+      .get("/api/admin/communications/conversations/0123456789abcdef01234567/messages")
+      .set("Authorization", authHeader("support-admin"));
+
+    expect(response.status).toBe(200);
+    expect(conversation.adminReadAt).toBeInstanceOf(Date);
+    expect(conversation.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks support replies as unread for the user until their inbox is opened", async () => {
+    const readAt = new Date("2026-10-15T10:00:00.000Z");
+    const replyAt = new Date("2026-10-15T10:01:00.000Z");
+    const conversation = {
+      _id: "0123456789abcdef01234567",
+      lastAdminMessageAt: replyAt,
+      userReadAt: readAt,
+    };
+    SupportConversation.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue(conversation),
+      }),
+    });
+
+    const unread = await request(app)
+      .get("/api/communications/conversation/unread-count")
+      .set("Authorization", authHeader("agent-user"));
+
+    expect(unread.status).toBe(200);
+    expect(unread.body.unreadCount).toBe(1);
+
+    const savedConversation = {
+      _id: conversation._id,
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    SupportConversation.findOne.mockResolvedValue(savedConversation);
+    SupportMessage.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([]),
+        }),
+      }),
+    });
+
+    const opened = await request(app)
+      .get("/api/communications/conversation")
+      .set("Authorization", authHeader("agent-user"));
+
+    expect(opened.status).toBe(200);
+    expect(savedConversation.userReadAt).toBeInstanceOf(Date);
+    expect(savedConversation.save).toHaveBeenCalledTimes(1);
+  });
+
   it("sends personalized email from a saved template to selected offline agents", async () => {
     const agentId = "507f1f77bcf86cd799439011";
     const templateId = "507f1f77bcf86cd799439012";

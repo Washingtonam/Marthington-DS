@@ -2688,6 +2688,8 @@ router.post("/services", isSuperAdmin, async (req, res) => {
     if (!serviceCode || !name) {
       return res.status(400).json({ success: false, message: 'serviceCode and name are required.' });
     }
+    const priceError = validateServicePrice(price);
+    if (priceError) return res.status(400).json({ success: false, message: priceError });
     const commissionError = validateServiceCommission(commissionType, commissionValue);
     if (commissionError) return res.status(400).json({ success: false, message: commissionError });
 
@@ -2739,6 +2741,8 @@ router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
   try {
     const { serviceCode } = req.params;
     const { commissionType, commissionValue } = req.body || {};
+    const priceError = req.body?.price !== undefined ? validateServicePrice(req.body.price) : '';
+    if (priceError) return res.status(400).json({ success: false, message: priceError });
     const commissionError = validateServiceCommission(commissionType, commissionValue);
     if (commissionError) return res.status(400).json({ success: false, message: commissionError });
     let pricing = null;
@@ -2798,6 +2802,18 @@ function validateServiceCommission(commissionType, commissionValue) {
   }
   if (commissionType === 'PERCENTAGE' && value > 100) {
     return 'Percentage commission cannot exceed 100%.';
+  }
+  return '';
+}
+
+function validateServicePrice(price) {
+  if (
+    price === null
+    || String(price).trim() === ''
+    || !Number.isFinite(Number(price))
+    || Number(price) < 0
+  ) {
+    return 'Service price must be a valid amount of zero or greater.';
   }
   return '';
 }

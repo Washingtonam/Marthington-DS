@@ -109,6 +109,7 @@ describe("AdminPricing", () => {
   test("prioritizes featured NIMC services and paginates the full list", async () => {
     renderAdminPricing();
 
+    expect(await screen.findByRole("heading", { name: "Services Management" })).toBeTruthy();
     const featuredHeading = await screen.findByRole("heading", { name: "Featured NIMC services" });
     const featuredSection = featuredHeading.closest("section");
     const featuredNames = within(featuredSection).getAllByRole("button").map((button) => button.querySelectorAll("span")[1].textContent);
@@ -197,6 +198,22 @@ describe("AdminPricing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save Service" }));
 
     await waitFor(() => expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("commission rate could not be confirmed")));
+  });
+
+  test("rejects an invalid catalog price before sending a service update", async () => {
+    renderAdminPricing();
+
+    const serviceCard = (await screen.findAllByRole("button"))
+      .find((button) => button.textContent.includes("No Recordvalidation-noRecord"));
+    fireEvent.click(serviceCard);
+    await screen.findByRole("dialog", { name: "Edit Service" });
+    fireEvent.change(screen.getByText("Price (₦)").closest("label").querySelector("input"), {
+      target: { value: "-1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Service" }));
+
+    expect(window.alert).toHaveBeenCalledWith("Service price must be a valid amount of zero or greater.");
+    expect(api.put).not.toHaveBeenCalled();
   });
 
   test("opens each category as a route and shows the complete category count", async () => {

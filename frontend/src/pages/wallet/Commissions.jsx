@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { BadgeDollarSign, Building2, Calculator, CircleHelp, FileUp, Loader2, Save } from "lucide-react";
+import { BadgeDollarSign, Building2, Calculator, CircleHelp, Loader2, Save } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "../../lib/axios";
 import { formatNaira } from "../../lib/currency";
@@ -11,7 +11,6 @@ export default function Commissions() {
   const [payoutError, setPayoutError] = useState("");
   const [payoutNotice, setPayoutNotice] = useState("");
   const [payoutSaving, setPayoutSaving] = useState(false);
-  const [proofFile, setProofFile] = useState(null);
   const [payoutForm, setPayoutForm] = useState({ bankName: "", accountName: "", accountNumber: "" });
   const [serviceCode, setServiceCode] = useState("");
   const [requestCount, setRequestCount] = useState("1");
@@ -49,26 +48,11 @@ export default function Commissions() {
     event.preventDefault();
     setPayoutError("");
     setPayoutNotice("");
-    if (!proofFile && !summary.payoutDetails?.proofUploaded) {
-      setPayoutError("Upload a bank document to verify your payout account.");
-      return;
-    }
-    const payload = new FormData();
-    payload.set("bankName", payoutForm.bankName);
-    payload.set("accountName", payoutForm.accountName);
-    payload.set("accountNumber", payoutForm.accountNumber);
-    if (proofFile) payload.set("proof", proofFile);
-
     setPayoutSaving(true);
     try {
-      const response = await api.put("/api/users/commission/payout-details", payload, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const response = await api.put("/api/users/commission/payout-details", payoutForm);
       setSummary((current) => ({ ...current, payoutDetails: response.data.payoutDetails }));
       setPayoutForm((current) => ({ ...current, accountNumber: "" }));
-      setProofFile(null);
-      const fileInput = document.getElementById("payout-proof");
-      if (fileInput) fileInput.value = "";
       setPayoutNotice(response.data.message || "Bank details saved for commission payouts.");
     } catch (saveError) {
       console.error("PAYOUT DETAILS SAVE ERROR:", saveError);
@@ -179,13 +163,12 @@ export default function Commissions() {
               <span className="rounded-xl bg-[rgba(var(--accent-rgb),0.1)] p-2.5 text-[var(--accent-text)]"><Building2 size={21} aria-hidden="true" /></span>
               <div>
                 <h2 className="font-semibold text-slate-900 dark:text-white">Commission payout bank account</h2>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">Save the bank account you want to use for commission payouts. Upload a bank statement, account confirmation letter, or other document showing the account holder and number. Transfers are not yet processed through the platform.</p>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">Save the bank account you want to use for commission payouts. Transfers are not yet processed through the platform.</p>
               </div>
             </div>
             {summary.payoutDetails && (
               <div className="mb-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
                 Saved payout account: <strong>{summary.payoutDetails.accountName}</strong>, {summary.payoutDetails.bankName}, account ending in {summary.payoutDetails.accountNumberMasked.slice(-4)}.
-                {summary.payoutDetails.proofUploaded && <span className="ml-1">Verification document uploaded.</span>}
               </div>
             )}
             {payoutError && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{payoutError}</p>}
@@ -199,13 +182,6 @@ export default function Commissions() {
               </label>
               <label className="text-sm font-medium text-slate-700 dark:text-slate-200">10-digit account number
                 <input required inputMode="numeric" pattern="[0-9]{10}" minLength={10} maxLength={10} autoComplete="off" value={payoutForm.accountNumber} onChange={(event) => setPayoutForm((current) => ({ ...current, accountNumber: event.target.value.replace(/\D/g, "").slice(0, 10) }))} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950" placeholder={summary.payoutDetails ? `Re-enter to update · ending ${summary.payoutDetails.accountNumberMasked.slice(-4)}` : "Enter account number"} />
-              </label>
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Bank account proof
-                <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-950">
-                  <FileUp size={17} className="shrink-0 text-slate-500" aria-hidden="true" />
-                  <input id="payout-proof" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required={!summary.payoutDetails?.proofUploaded} onChange={(event) => setProofFile(event.target.files?.[0] || null)} className="min-w-0 flex-1 text-xs file:mr-2 file:rounded-md file:border-0 file:bg-slate-200 file:px-2 file:py-1.5 file:font-semibold dark:file:bg-slate-800" />
-                </span>
-                <span className="mt-1 block text-xs font-normal text-slate-500">PDF, JPG, or PNG · up to 5 MB{summary.payoutDetails?.proofUploaded ? " · Leave blank to keep your current document" : ""}</span>
               </label>
               <div className="sm:col-span-2">
                 <button type="submit" disabled={payoutSaving} className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)] disabled:opacity-60">

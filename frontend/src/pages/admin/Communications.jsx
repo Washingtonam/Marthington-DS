@@ -75,9 +75,19 @@ export default function Communications() {
 
   const loadThread = useCallback(async (conversation) => {
     const response = await api.get(`/api/admin/communications/conversations/${conversation._id}/messages`);
+    window.dispatchEvent(new Event("support-conversation-read"));
     setSelectedConversation(response.data.conversation);
     setMessages(response.data.messages || []);
-  }, []);
+    setConversations((current) => current.map((item) => (
+      String(item._id) === String(conversation._id) ? { ...item, unreadCount: 0 } : item
+    )));
+    await loadConversations();
+  }, [loadConversations]);
+
+  const unreadConversationCount = conversations.reduce(
+    (total, conversation) => total + Number(conversation.unreadCount || 0),
+    0,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -219,6 +229,16 @@ export default function Communications() {
     }
   };
 
+  useEffect(() => {
+    if (activeTab !== "inbox") return undefined;
+    const interval = window.setInterval(() => {
+      loadConversations().catch((refreshError) => {
+        console.error("Support inbox polling failed:", refreshError);
+      });
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [activeTab, loadConversations]);
+
   const changeTab = (tab) => {
     setActiveTab(tab);
     setSearchParams(tab === "templates" ? {} : { tab }, { replace: true });
@@ -249,7 +269,7 @@ export default function Communications() {
             </>
         )}
         <button type="button" role="tab" aria-selected={activeTab === "inbox"} onClick={() => changeTab("inbox")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "inbox" ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
-          Support inbox <span className="ml-1 rounded-full bg-white/20 px-2 py-0.5">{conversations.length}</span>
+          Support inbox <span className="ml-1 rounded-full bg-white/20 px-2 py-0.5">{unreadConversationCount}</span>
         </button>
       </div>
 
@@ -443,7 +463,7 @@ export default function Communications() {
             <div className="space-y-2">
               {conversations.map((conversation) => (
                 <button type="button" key={conversation._id} onClick={() => loadThread(conversation).catch((loadError) => { console.error("Support thread load failed:", loadError); toastError("Could not load this conversation."); })} className={`w-full rounded-xl border p-3 text-left ${selectedConversation?._id === conversation._id ? "border-[var(--accent)] bg-[rgba(var(--accent-rgb),0.06)]" : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`}>
-                  <span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold">{conversation.user?.name || "Former agent"}</span><span className="shrink-0 text-[10px] text-slate-500">{formatDate(conversation.lastMessageAt)}</span></span>
+                  <span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold">{conversation.user?.name || "Former agent"}</span><span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-500">{conversation.unreadCount > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">New</span>}{formatDate(conversation.lastMessageAt)}</span></span>
                   <span className="mt-1 block truncate text-xs text-slate-500">{conversation.lastMessage}</span>
                 </button>
               ))}

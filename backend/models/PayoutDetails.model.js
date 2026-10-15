@@ -5,8 +5,6 @@ const payoutDetailsSchema = new mongoose.Schema({
   bankName: { type: String, required: true, trim: true, maxlength: 100 },
   accountName: { type: String, required: true, trim: true, maxlength: 120 },
   accountNumber: { type: String, required: true, match: /^\d{10}$/ },
-  proofPublicId: { type: String, required: true, trim: true },
-  proofFormat: { type: String, enum: ["pdf", "jpg", "png"], required: true },
 }, { timestamps: true });
 
 module.exports = mongoose.models.PayoutDetails

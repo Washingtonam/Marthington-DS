@@ -113,6 +113,44 @@ describe("Communications", () => {
     ));
   });
 
+  test("shows unread conversations in the inbox count and clears it after reading", async () => {
+    mockUseUser.mockReturnValue({ user: { id: "admin-1", role: "admin" } });
+    let inboxLoads = 0;
+    api.get.mockImplementation((path) => {
+      if (path.endsWith("/conversations")) {
+        inboxLoads += 1;
+        return Promise.resolve({
+          data: {
+            conversations: [{
+              _id: "conversation-1",
+              unreadCount: inboxLoads === 1 ? 1 : 0,
+              user: { name: "Ayo Agent", email: "ayo@example.com" },
+              lastMessage: "I need help",
+            }],
+          },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          conversation: { _id: "conversation-1" },
+          messages: [{ _id: "message-1", senderId: "agent-1", senderName: "Ayo Agent", text: "I need help" }],
+        },
+      });
+    });
+
+    render(<MemoryRouter><Communications /></MemoryRouter>);
+
+    const inboxTab = await screen.findByRole("tab", { name: "Support inbox 1" });
+    expect(screen.getByText("New")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Ayo Agent/ }));
+
+    expect(await screen.findByRole("tab", { name: "Support inbox 0" })).toBeTruthy();
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith(
+      "/api/admin/communications/conversations/conversation-1/messages",
+    ));
+    expect(inboxTab).toBeTruthy();
+  });
+
   test("shows the notification center inside Communications", async () => {
     api.get.mockImplementation((path) => Promise.resolve({
       data: path.endsWith("/conversations")

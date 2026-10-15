@@ -86,7 +86,7 @@ const adminGroups = [
     icon: Settings,
     links: [
       { to: "/admin/users", label: "User management", icon: Users, superAdminOnly: true },
-      { to: "/admin/services-engine", label: "Services & pricing", icon: SlidersHorizontal, superAdminOnly: true },
+      { to: "/admin/services-engine", label: "Services Management", icon: SlidersHorizontal, superAdminOnly: true },
       { to: "/admin/communications", label: "Communications", icon: MessageCircle },
       { to: "/admin/articles", label: "Guides & updates", icon: BookOpenText, superAdminOnly: true },
       { to: "/admin/settings", label: "General settings", icon: Settings, superAdminOnly: true },
@@ -107,11 +107,15 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose, on
   const [serviceCategories, setServiceCategories] = useState([]);
   const [verifyNinEnabled, setVerifyNinEnabled] = useState(true);
   const [pendingPayments, setPendingPayments] = useState(0);
+  const [unreadSupportCount, setUnreadSupportCount] = useState(0);
   const [openGroups, setOpenGroups] = useState(() => new Set(
     [...userGroups, ...adminGroups].map((group) => group.id),
   ));
   const showLabels = !collapsed || isMobile;
   const visible = !isMobile || open;
+  const visibleSupportUnreadCount = !isAdminWorkspace && location.pathname === "/support-chat"
+    ? 0
+    : unreadSupportCount;
 
   useEffect(() => {
     let cancelled = false;
@@ -157,12 +161,46 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose, on
     return () => { cancelled = true; };
   }, [isAdminWorkspace, userRole]);
 
+  useEffect(() => {
+    if (isAdminWorkspace && !["admin", "super_admin"].includes(userRole)) return undefined;
+    if (!isAdminWorkspace && location.pathname === "/support-chat") return undefined;
+    let cancelled = false;
+    const fetchUnreadSupport = async () => {
+      try {
+        if (isAdminWorkspace) {
+          const response = await api.get("/api/admin/communications/conversations");
+          const conversations = response.data?.conversations || [];
+          if (!cancelled) {
+            setUnreadSupportCount(conversations.reduce((total, conversation) => total + Number(conversation.unreadCount || 0), 0));
+          }
+        } else {
+          const response = await api.get("/api/communications/conversation/unread-count");
+          if (!cancelled) setUnreadSupportCount(Number(response.data?.unreadCount || 0));
+        }
+      } catch (error) {
+        console.error("Sidebar support notification count fetch failed:", error?.message || error);
+      }
+    };
+    void fetchUnreadSupport();
+    const interval = window.setInterval(fetchUnreadSupport, 15000);
+    window.addEventListener("support-conversation-read", fetchUnreadSupport);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("support-conversation-read", fetchUnreadSupport);
+    };
+  }, [isAdminWorkspace, location.pathname, userRole]);
+
   const groups = useMemo(() => {
     if (isAdminWorkspace) {
       return adminGroups.map((group) => ({
         ...group,
         links: group.links.filter((link) => !link.superAdminOnly || isSuperAdmin)
-          .map((link) => link.to === "/admin/payments" ? { ...link, badge: pendingPayments } : link),
+          .map((link) => {
+            if (link.to === "/admin/payments") return { ...link, badge: pendingPayments };
+            if (link.to === "/admin/communications") return { ...link, badge: visibleSupportUnreadCount };
+            return link;
+          }),
       })).filter((group) => group.links.length > 0);
     }
 
@@ -181,8 +219,10 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose, on
       : [];
     return userGroups.map((group) => group.id === "services"
       ? { ...group, links: [...platformLinks, ...group.links, ...categories] }
-      : group);
-  }, [isAdminWorkspace, isSuperAdmin, pendingPayments, serviceCategories, verifyNinEnabled]);
+      : group.id === "account"
+        ? { ...group, links: group.links.map((link) => link.to === "/support-chat" ? { ...link, badge: visibleSupportUnreadCount } : link) }
+        : group);
+  }, [isAdminWorkspace, isSuperAdmin, pendingPayments, serviceCategories, verifyNinEnabled, visibleSupportUnreadCount]);
 
   const handleLogout = () => {
     clearUser();
@@ -261,7 +301,7 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose, on
         )}
       </div>
 
-      <nav hidden={!showLabels} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-5" aria-label="Dashboard">
+      <nav className={`min-h-0 flex-1 space-y-5 overflow-y-auto py-5 ${showLabels ? "px-3" : "px-1.5"}`} aria-label="Dashboard">
         {groups.map((group) => {
           const GroupIcon = group.icon;
           const expanded = openGroups.has(group.id);
@@ -296,7 +336,7 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose, on
         })}
       </nav>
 
-      <div hidden={!showLabels} className="border-t border-slate-200 p-3 dark:border-slate-800">
+      <div className={`border-t border-slate-200 dark:border-slate-800 ${showLabels ? "p-3" : "p-1.5"}`}>
         <button
           type="button"
           onClick={handleLogout}

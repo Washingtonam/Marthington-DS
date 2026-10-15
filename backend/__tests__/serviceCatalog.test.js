@@ -186,6 +186,49 @@ describe('service catalog API', () => {
     }));
   });
 
+  it('rejects negative catalog prices when creating or updating services', async () => {
+    User.findById.mockResolvedValue({
+      id: 'admin-user-1',
+      _id: 'admin-user-1',
+      email: 'admin@xcombinator.com',
+      role: 'super_admin',
+      status: 'active',
+      approvalStatus: 'approved',
+    });
+    const token = makeSuperAdminToken();
+    const pricing = {
+      serviceCatalog: [{
+        serviceCode: 'existing-service',
+        category: 'NIMC',
+        name: 'Existing Service',
+        status: 'active',
+        price: 5000,
+        metadata: {},
+      }],
+      markModified: jest.fn(),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    jest.spyOn(Pricing, 'getPricing').mockResolvedValue(pricing);
+
+    const createResponse = await request(app)
+      .post('/api/admin/services')
+      .auth(token, { type: 'bearer' })
+      .send({
+        serviceCode: 'negative-price',
+        category: 'NIMC',
+        name: 'Invalid Price',
+        price: -1,
+      });
+    const updateResponse = await request(app)
+      .put('/api/admin/services/existing-service')
+      .auth(token, { type: 'bearer' })
+      .send({ price: -1 });
+
+    expect(createResponse.status).toBe(400);
+    expect(updateResponse.status).toBe(400);
+    expect(pricing.save).not.toHaveBeenCalled();
+  });
+
   it('saves platform service visibility through the admin pricing endpoint', async () => {
     User.findById.mockResolvedValue({
       id: 'admin-user-1',

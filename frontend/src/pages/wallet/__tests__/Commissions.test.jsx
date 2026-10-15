@@ -48,13 +48,13 @@ describe("Commissions", () => {
     expect(screen.getByLabelText("Bank name")).toBeTruthy();
     expect(screen.getByLabelText("Account holder name")).toBeTruthy();
     expect(screen.getByLabelText("10-digit account number")).toBeTruthy();
-    expect(screen.getByLabelText(/Bank account proof/).required).toBe(true);
+    expect(screen.queryByLabelText(/Bank account proof/i)).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Completed requests"), { target: { value: "2" } });
     expect(screen.getByText(/1,000\.00/)).toBeTruthy();
   });
 
-  test("submits bank details and proof document to the payout endpoint", async () => {
+  test("submits bank details to the payout endpoint without a document", async () => {
     api.put.mockResolvedValue({
       data: {
         message: "Bank details saved for your commission payouts.",
@@ -62,7 +62,6 @@ describe("Commissions", () => {
           bankName: "First Bank",
           accountName: "Ada Agent",
           accountNumberMasked: "••••••1234",
-          proofUploaded: true,
         },
       },
     });
@@ -71,14 +70,11 @@ describe("Commissions", () => {
     fireEvent.change(screen.getByLabelText("Bank name"), { target: { value: "First Bank" } });
     fireEvent.change(screen.getByLabelText("Account holder name"), { target: { value: "Ada Agent" } });
     fireEvent.change(screen.getByLabelText("10-digit account number"), { target: { value: "1234561234" } });
-    const proof = new File(["%PDF-1.4"], "account-proof.pdf", { type: "application/pdf" });
-    fireEvent.change(screen.getByLabelText(/Bank account proof/), { target: { files: [proof] } });
     fireEvent.submit(screen.getByRole("button", { name: "Save payout account" }).closest("form"));
 
     await waitFor(() => expect(api.put).toHaveBeenCalledWith(
       "/api/users/commission/payout-details",
-      expect.any(FormData),
-      { headers: { "Content-Type": "multipart/form-data" } },
+      { bankName: "First Bank", accountName: "Ada Agent", accountNumber: "1234561234" },
     ));
     expect((await screen.findByRole("status")).textContent).toContain("Bank details saved");
   });

@@ -3,9 +3,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   LogOut,
-  Menu,
   Moon,
   Sun,
+  Activity,
   UserRound,
   Wallet,
   X,
@@ -39,8 +39,8 @@ const pageTitles = [
   ["/admin/payments", "Payment requests"],
   ["/admin/requests", "Service requests"],
   ["/admin/verification-requests", "Verification requests"],
-  ["/admin/pricing", "Services & pricing"],
-  ["/admin/services-engine", "Services & pricing"],
+  ["/admin/pricing", "Services Management"],
+  ["/admin/services-engine", "Services Management"],
   ["/admin/articles", "Guides & updates"],
   ["/admin/agents/jobs", "Log jobs"],
   ["/admin/agents", "Agents"],
@@ -62,7 +62,7 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const { user, walletBalance, isBalanceLoading, clearUser } = useUser();
   const { theme, toggleTheme } = useTheme();
-  const { businessName, businessTagline } = useBranding();
+  const { businessName, businessTagline, businessLogoUrl } = useBranding();
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
   const [mobileDrawerPath, setMobileDrawerPath] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -180,7 +180,9 @@ export default function Layout({ children }) {
                 aria-controls="app-sidebar"
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-slate-300 dark:hover:bg-slate-900"
               >
-                {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+                {businessLogoUrl
+                  ? <img src={businessLogoUrl} alt="" className="h-8 w-8 object-contain" />
+                  : <Activity size={21} aria-hidden="true" />}
               </button>
             )}
 

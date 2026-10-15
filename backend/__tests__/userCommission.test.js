@@ -3,7 +3,6 @@ jest.mock("../models/transaction.model", () => ({ find: jest.fn() }));
 jest.mock("../models/AuditLog.model", () => ({ create: jest.fn() }));
 jest.mock("../models/Pricing.model", () => ({ getServiceCatalog: jest.fn() }));
 jest.mock("../models/PayoutDetails.model", () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
-jest.mock("../shared/cloudinary", () => ({ cloudinary: { uploader: { upload: jest.fn() } } }));
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
@@ -13,7 +12,6 @@ const Transaction = require("../models/transaction.model");
 const AuditLog = require("../models/AuditLog.model");
 const Pricing = require("../models/Pricing.model");
 const PayoutDetails = require("../models/PayoutDetails.model");
-const { cloudinary } = require("../shared/cloudinary");
 const { JWT_SECRET_FALLBACK } = require("../config/constants");
 const usersRouter = require("../routes/users.routes");
 
@@ -86,7 +84,6 @@ describe("registered user commissions and profile updates", () => {
           bankName: "First Bank",
           accountName: "Ada Agent",
           accountNumber: "1234561234",
-          proofPublicId: "payout-verification/proof",
           updatedAt: new Date("2025-01-01T00:00:00.000Z"),
         }),
       }),
@@ -102,7 +99,6 @@ describe("registered user commissions and profile updates", () => {
       bankName: "First Bank",
       accountName: "Ada Agent",
       accountNumberMasked: "••••••1234",
-      proofUploaded: true,
     }));
     expect(response.body.payoutDetails.accountNumber).toBeUndefined();
     expect(response.body.history).toHaveLength(1);
@@ -116,14 +112,11 @@ describe("registered user commissions and profile updates", () => {
     expect(Pricing.getServiceCatalog).toHaveBeenCalledTimes(1);
   });
 
-  it("saves bank details with a private uploaded verification document", async () => {
-    PayoutDetails.findOne.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
-    cloudinary.uploader.upload.mockResolvedValue({ public_id: "payout-verification/proof" });
+  it("saves bank details without requiring a document upload", async () => {
     const savedDetails = {
       bankName: "First Bank",
       accountName: "Ada Agent",
       accountNumber: "1234561234",
-      proofPublicId: "payout-verification/proof",
       updatedAt: new Date("2025-01-01T00:00:00.000Z"),
     };
     PayoutDetails.findOneAndUpdate.mockReturnValue({
@@ -133,37 +126,35 @@ describe("registered user commissions and profile updates", () => {
     const response = await request(app)
       .put("/api/users/commission/payout-details")
       .set("Authorization", `Bearer ${token}`)
-      .field("bankName", "First Bank")
-      .field("accountName", "Ada Agent")
-      .field("accountNumber", "1234561234")
-      .attach("proof", Buffer.from("%PDF-1.4 sample"), { filename: "proof.pdf", contentType: "application/pdf" });
+      .send({
+        bankName: "First Bank",
+        accountName: "Ada Agent",
+        accountNumber: "1234561234",
+      });
 
     expect(response.status).toBe(200);
     expect(response.body.payoutDetails.accountNumberMasked).toBe("••••••1234");
     expect(response.body.payoutDetails.accountNumber).toBeUndefined();
-    expect(cloudinary.uploader.upload).toHaveBeenCalledWith(
-      expect.stringMatching(/^data:application\/pdf;base64,/),
-      expect.objectContaining({ resource_type: "raw", type: "authenticated" }),
-    );
     expect(PayoutDetails.findOneAndUpdate).toHaveBeenCalledWith(
       { userId },
-      { $set: expect.objectContaining({ accountNumber: "1234561234", proofPublicId: "payout-verification/proof" }) },
+      { $set: expect.objectContaining({ bankName: "First Bank", accountName: "Ada Agent", accountNumber: "1234561234" }) },
       expect.objectContaining({ upsert: true, runValidators: true }),
     );
   });
 
-  it("rejects a bank document whose contents do not match its declared type", async () => {
+  it("rejects an invalid account number", async () => {
     const response = await request(app)
       .put("/api/users/commission/payout-details")
       .set("Authorization", `Bearer ${token}`)
-      .field("bankName", "First Bank")
-      .field("accountName", "Ada Agent")
-      .field("accountNumber", "1234561234")
-      .attach("proof", Buffer.from("not a PDF"), { filename: "proof.pdf", contentType: "application/pdf" });
+      .send({
+        bankName: "First Bank",
+        accountName: "Ada Agent",
+        accountNumber: "12345",
+      });
 
     expect(response.status).toBe(400);
-    expect(response.body.message).toMatch(/does not match its file type/i);
-    expect(cloudinary.uploader.upload).not.toHaveBeenCalled();
+    expect(response.body.message).toMatch(/valid 10-digit account number/i);
+    expect(PayoutDetails.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it("lets users update their own contact details and records an audit entry", async () => {

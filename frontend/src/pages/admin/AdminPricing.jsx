@@ -419,6 +419,12 @@ export default function AdminPricing() {
         return;
       }
 
+      const price = Number(serviceForm.price);
+      if (String(serviceForm.price).trim() === "" || !Number.isFinite(price) || price < 0) {
+        alert("Service price must be a valid amount of zero or greater.");
+        return;
+      }
+
       const payload = {
         serviceCode: isCreating
           ? normalizeServiceCode(serviceForm.serviceCode || serviceForm.name)
@@ -426,7 +432,7 @@ export default function AdminPricing() {
         category: String(serviceForm.category).trim() || category,
         name: String(serviceForm.name).trim(),
         status: serviceForm.status,
-        price: Number(serviceForm.price) || 0,
+        price,
         commissionType: serviceForm.commissionType,
         commissionValue: Number(serviceForm.commissionValue),
         metadata: {
@@ -520,7 +526,7 @@ export default function AdminPricing() {
       <div className="min-h-[60vh] flex justify-center items-center">
         <div className="text-center">
           <Loader2 className="animate-spin mx-auto mb-4 text-blue-600" size={40} />
-          <p className="text-gray-500 font-medium">Loading services engine...</p>
+          <p className="text-gray-500 font-medium">Loading Services Management...</p>
         </div>
       </div>
     );
@@ -541,7 +547,7 @@ export default function AdminPricing() {
               <Settings2 size={18} />
               <span className="uppercase tracking-widest text-xs opacity-80">SERVICE CONTROL CENTER</span>
             </div>
-            <h1 className="text-4xl font-bold mb-3">Services Engine</h1>
+            <h1 className="text-4xl font-bold mb-3">Services Management</h1>
             <p className="max-w-2xl opacity-80">
               Manage service catalog, pricing, live availability, and form definitions from one control panel.
             </p>

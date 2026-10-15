@@ -13,7 +13,7 @@ export default function SidebarNavItem({ to, icon, label, badge = 0, open, onNav
       title={open ? undefined : label}
       aria-label={label}
       aria-current={isActive ? "page" : undefined}
-      className={`group flex min-h-10 items-center rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
+      className={`group relative flex min-h-10 items-center rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
         open ? "gap-3" : "justify-center"
       } ${
         isActive
@@ -23,11 +23,14 @@ export default function SidebarNavItem({ to, icon, label, badge = 0, open, onNav
     >
       <span className="flex shrink-0 items-center justify-center">{icon}</span>
       {open && <span className="min-w-0 flex-1 truncate">{label}</span>}
-      {open && badge > 0 && (
-        <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold ${
-          isActive ? "bg-black/10" : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-200"
-        }`}>
-          {badge}
+      {badge > 0 && (
+        <span
+          aria-label={`${badge} unread`}
+          className={open
+            ? `min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold ${isActive ? "bg-black/10" : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-200"}`
+            : "absolute right-1 top-1 h-2.5 min-w-2.5 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-950"}
+        >
+          {open ? badge : <span className="sr-only">{badge}</span>}
         </span>
       )}
     </Link>

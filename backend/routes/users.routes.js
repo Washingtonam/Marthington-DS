@@ -12,35 +12,13 @@ const ServiceRequest = require("../models/ServiceRequest.model");
 const CacRequest = require("../models/CacRequest.model");
 const Pricing = require("../models/Pricing.model");
 const PayoutDetails = require("../models/PayoutDetails.model");
-const multer = require("multer");
-const { cloudinary } = require("../shared/cloudinary");
 
 const router = express.Router();
-
-const payoutProofUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, callback) => {
-    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.mimetype)) {
-      return callback(new Error("Upload a PDF, JPG, or PNG bank document."));
-    }
-    callback(null, true);
-  },
-});
-
-const handlePayoutProofUpload = (req, res, next) => payoutProofUpload.single("proof")(req, res, (error) => {
-  if (!error) return next();
-  return res.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({
-    success: false,
-    message: error.message || "Unable to process the bank document.",
-  });
-});
 
 const getPayoutSummary = (details) => details ? ({
   bankName: details.bankName,
   accountName: details.accountName,
   accountNumberMasked: `••••••${details.accountNumber.slice(-4)}`,
-  proofUploaded: Boolean(details.proofPublicId),
   updatedAt: details.updatedAt,
 }) : null;
 
@@ -53,7 +31,7 @@ router.get("/commission", verifyToken, async (req, res) => {
         .limit(50)
         .lean(),
       Pricing.getServiceCatalog(),
-      PayoutDetails.findOne({ userId: req.user.id }).select("bankName accountName accountNumber proofPublicId updatedAt").lean(),
+      PayoutDetails.findOne({ userId: req.user.id }).select("bankName accountName accountNumber updatedAt").lean(),
     ]);
 
     if (!user) return res.status(404).json({ success: false, message: "User not found." });
@@ -92,7 +70,7 @@ router.get("/commission", verifyToken, async (req, res) => {
   }
 });
 
-router.put("/commission/payout-details", verifyToken, handlePayoutProofUpload, async (req, res) => {
+router.put("/commission/payout-details", verifyToken, async (req, res) => {
   const bankName = typeof req.body?.bankName === "string" ? req.body.bankName.trim() : "";
   const accountName = typeof req.body?.accountName === "string" ? req.body.accountName.trim() : "";
   const accountNumber = typeof req.body?.accountNumber === "string" ? req.body.accountNumber.trim() : "";
@@ -107,40 +85,7 @@ router.put("/commission/payout-details", verifyToken, handlePayoutProofUpload, a
     return res.status(400).json({ success: false, message: "Enter a valid 10-digit account number." });
   }
 
-  const fileFormat = req.file?.mimetype === "application/pdf"
-    ? "pdf"
-    : req.file?.mimetype === "image/jpeg" ? "jpg" : req.file?.mimetype === "image/png" ? "png" : "";
-  if (req.file && !fileFormat) {
-    return res.status(400).json({ success: false, message: "Upload a PDF, JPG, or PNG bank document." });
-  }
-  const fileSignatureValid = !req.file || (fileFormat === "pdf"
-    ? req.file.buffer.subarray(0, 5).toString() === "%PDF-"
-    : fileFormat === "png"
-      ? req.file.buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-      : req.file.buffer[0] === 0xff && req.file.buffer[1] === 0xd8 && req.file.buffer[2] === 0xff);
-  if (!fileSignatureValid) {
-    return res.status(400).json({ success: false, message: "The uploaded bank document does not match its file type." });
-  }
-
   try {
-    const currentDetails = await PayoutDetails.findOne({ userId: req.user.id }).lean();
-    if (!req.file && !currentDetails?.proofPublicId) {
-      return res.status(400).json({ success: false, message: "Upload a bank document to verify your payout account." });
-    }
-    let proofPublicId = currentDetails?.proofPublicId;
-    let proofFormat = currentDetails?.proofFormat;
-    if (req.file) {
-      const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
-      const uploaded = await cloudinary.uploader.upload(dataUrl, {
-        folder: "payout-verification",
-        resource_type: "raw",
-        type: "authenticated",
-        use_filename: false,
-        unique_filename: true,
-      });
-      proofPublicId = uploaded.public_id;
-      proofFormat = fileFormat;
-    }
     const payoutDetails = await PayoutDetails.findOneAndUpdate(
       { userId: req.user.id },
       {
@@ -148,8 +93,6 @@ router.put("/commission/payout-details", verifyToken, handlePayoutProofUpload, a
           bankName,
           accountName,
           accountNumber,
-          proofPublicId,
-          proofFormat,
         },
       },
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
