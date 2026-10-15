@@ -71,7 +71,7 @@ afterEach(() => {
 });
 
 describe("dashboard shell navigation", () => {
-  test("fully hides desktop navigation when collapsed and reopens it with the menu button", () => {
+  test("collapses desktop navigation to an icon rail and restores the full sidebar", () => {
     window.innerWidth = 1280;
     renderLayout();
     fireEvent(window, new Event("resize"));
@@ -79,12 +79,14 @@ describe("dashboard shell navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
 
     expect(screen.getByRole("button", { name: "Open navigation menu" })).toBeTruthy();
-    expect(document.querySelector("#app-sidebar").getAttribute("aria-hidden")).toBe("true");
-    expect(screen.queryByRole("link", { name: "Dashboard" })).toBeNull();
+    expect(document.querySelector("#app-sidebar").getAttribute("aria-hidden")).toBe("false");
+    expect(document.querySelector("#app-sidebar").className).toContain("w-20");
+    expect(screen.getByRole("link", { name: "Dashboard" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
 
     expect(document.querySelector("#app-sidebar").getAttribute("aria-hidden")).toBe("false");
+    expect(document.querySelector("#app-sidebar").className).toContain("w-72");
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeTruthy();
   });
 
@@ -159,6 +161,7 @@ describe("dashboard shell navigation", () => {
 
     expect(screen.getByRole("link", { name: "Agents" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Log jobs" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Notification center" })).toBeNull();
     fireEvent.click(screen.getByRole("link", { name: "Communications" }));
     expect(screen.getByLabelText("Current route").textContent).toBe("/admin/communications");
 

@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const { mockUseUser, mockSuccess, mockError } = vi.hoisted(() => ({
@@ -18,6 +19,8 @@ vi.mock("../../../lib/axios", () => ({
     get: vi.fn(),
     post: vi.fn(),
     put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
   },
 }));
 
@@ -59,9 +62,11 @@ describe("Communications", () => {
 
   test("sends a saved email template to the selected agent", async () => {
     api.post.mockResolvedValue({ data: { success: true, sent: 1, failed: 0 } });
-    render(<Communications />);
+    render(<MemoryRouter><Communications /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Welcome/ }));
+    await screen.findByRole("button", { name: /Welcome/ });
+    fireEvent.click(screen.getByRole("tab", { name: "Dispatch & recipients" }));
+    fireEvent.change(screen.getByLabelText("Message template"), { target: { value: "template-1" } });
     fireEvent.click(screen.getByLabelText(/Ayo Agent/));
     fireEvent.click(await screen.findByRole("button", { name: "Send email to 1 selected agent" }));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(
@@ -73,7 +78,7 @@ describe("Communications", () => {
   test("saves an edited message template", async () => {
     const updated = { ...template, message: "Updated, {{name}}!" };
     api.put.mockResolvedValue({ data: { template: updated } });
-    render(<Communications />);
+    render(<MemoryRouter><Communications /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: /Welcome/ }));
     fireEvent.change(screen.getByLabelText("Message"), { target: { value: updated.message } });
@@ -96,7 +101,7 @@ describe("Communications", () => {
       data: { message: { _id: "message-2", senderId: "admin-1", senderName: "Support", text: "How can I help?" } },
     });
 
-    render(<Communications />);
+    render(<MemoryRouter><Communications /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: /Ayo Agent/ }));
     expect(await screen.findByText("I need help")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Text reply"), { target: { value: "How can I help?" } });
@@ -106,5 +111,27 @@ describe("Communications", () => {
       "/api/admin/communications/conversations/conversation-1/messages",
       { text: "How can I help?" },
     ));
+  });
+
+  test("shows the notification center inside Communications", async () => {
+    api.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/conversations")
+        ? { conversations: [] }
+        : path.endsWith("/templates")
+          ? { templates: [template] }
+          : path.endsWith("/agents")
+            ? { manualAgents: [], registeredUsers: [agent] }
+            : { notifications: [] },
+    }));
+
+    render(
+      <MemoryRouter initialEntries={["/admin/communications?tab=notifications"]}>
+        <Communications />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Keep users informed" })).toBeTruthy();
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith("/api/admin/notifications"));
+    expect(screen.getByRole("tab", { name: "Notification center" }).getAttribute("aria-selected")).toBe("true");
   });
 });

@@ -14,6 +14,7 @@ jest.mock("../models/Pricing.model", () => ({
   getPricing: jest.fn(),
   getDefaultServiceCatalog: jest.fn(),
 }));
+jest.mock("../models/AuditLog.model", () => ({ create: jest.fn() }));
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
@@ -22,6 +23,8 @@ const User = require("../models/User.model");
 const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
 const Pricing = require("../models/Pricing.model");
+const AuditLog = require("../models/AuditLog.model");
+const bcrypt = require("bcryptjs");
 const { JWT_SECRET_FALLBACK } = require("../config/constants");
 const { verifyToken } = require("../shared/authGuard");
 const adminRouter = require("../routes/admin.routes");
@@ -48,6 +51,7 @@ describe("agent management authorization", () => {
   it.each([
     ["get", "/api/admin/agents"],
     ["post", "/api/admin/agents"],
+    ["put", "/api/admin/users/507f1f77bcf86cd799439011/profile"],
     ["get", "/api/admin/agents/jobs"],
     ["post", "/api/admin/agents/jobs"],
     ["patch", "/api/admin/agents/jobs/507f1f77bcf86cd799439011/status"],
@@ -92,6 +96,102 @@ describe("agent management authorization", () => {
       createdBy: "super-admin",
     });
   });
+
+    it("lets super admins update registered contact details and hashes optional passwords", async () => {
+      const userId = "507f1f77bcf86cd799439011";
+      const savedUser = {
+        _id: userId,
+        firstName: "Registered",
+        lastName: "Agent",
+        email: "agent@example.test",
+        phone: "+2348000000000",
+        role: "user",
+        password: "old-hash",
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      const updatedUserResponse = {
+        _id: userId,
+        firstName: "Updated",
+        lastName: "Agent",
+        email: "updated@example.test",
+        phone: "+2348000000001",
+        role: "user",
+      };
+      let targetLookups = 0;
+      User.findById.mockImplementation((id) => {
+        if (String(id) !== userId) {
+          return Promise.resolve({
+            id: "super-admin",
+            _id: "super-admin",
+            email: "root@example.test",
+            role: "super_admin",
+            status: "active",
+            approvalStatus: "approved",
+          });
+        }
+        targetLookups += 1;
+        if (targetLookups === 1) return Promise.resolve(savedUser);
+        return {
+          select: jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue(updatedUserResponse),
+          }),
+        };
+      });
+      User.findOne.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue(null),
+        }),
+      });
+      AuditLog.create.mockResolvedValue({});
+      const adminToken = jwt.sign({ id: "super-admin" }, secret);
+
+      const response = await request(app)
+        .put(`/api/admin/users/${userId}/profile`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({
+          firstName: "Updated",
+          email: "Updated@Example.Test",
+          phone: "+234 800 000 0001",
+          password: "new-secret",
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual(updatedUserResponse);
+      expect(response.body.data.password).toBeUndefined();
+      expect(savedUser.email).toBe("updated@example.test");
+      expect(savedUser.phone).toBe("+2348000000001");
+      expect(await bcrypt.compare("new-secret", savedUser.password)).toBe(true);
+      expect(savedUser.save).toHaveBeenCalledTimes(1);
+      expect(AuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+        action: "USER_PROFILE_UPDATED",
+        userId,
+        note: expect.not.stringContaining("new-secret"),
+      }));
+    });
+
+    it("rejects attempts to assign the reserved super admin email to a user", async () => {
+      const userId = "507f1f77bcf86cd799439011";
+      const savedUser = { _id: userId, role: "user", save: jest.fn() };
+      User.findById.mockImplementation((id) => String(id) === userId
+        ? Promise.resolve(savedUser)
+        : Promise.resolve({
+          id: "super-admin",
+          _id: "super-admin",
+          email: "root@example.test",
+          role: "super_admin",
+          status: "active",
+          approvalStatus: "approved",
+        }));
+      const adminToken = jwt.sign({ id: "super-admin" }, secret);
+
+      const response = await request(app)
+        .put(`/api/admin/users/${userId}/profile`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ email: "admin@xcombinator.com" });
+
+      expect(response.status).toBe(400);
+      expect(savedUser.save).not.toHaveBeenCalled();
+    });
 
   it("updates a manual agent and rejects invalid phone numbers", async () => {
     User.findById.mockResolvedValue({

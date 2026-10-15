@@ -43,7 +43,6 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminPricing from "./pages/admin/AdminPricing";
 import AdminRequests from "./pages/admin/AdminRequests";
-import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminArticles from "./pages/admin/AdminArticles";
 import UserDetailView from "./pages/admin/UserDetailView";
 import AgentManagement from "./pages/admin/AgentManagement";
@@ -178,7 +177,7 @@ function AppRoutes() {
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/services-engine" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/services-engine/:category" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
-      <Route path="/admin/notifications" element={<SuperAdminRoute><Layout><AdminNotifications /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/notifications" element={<Navigate to="/admin/communications?tab=notifications" replace />} />
       <Route path="/admin/articles" element={<SuperAdminRoute><Layout><AdminArticles /></Layout></SuperAdminRoute>} />
       <Route path="/admin/settings" element={<SuperAdminRoute><Layout><BrandingSettings /></Layout></SuperAdminRoute>} />
       <Route path="/admin/agents" element={<SuperAdminRoute><Layout><AgentManagement view="agents" /></Layout></SuperAdminRoute>} />

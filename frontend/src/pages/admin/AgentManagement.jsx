@@ -428,7 +428,9 @@ export default function AgentManagement({ view }) {
               <button
                 key={`${contact.contactType}:${contact._id}`}
                 type="button"
-                onClick={() => setSelectedAgent(contact)}
+                onClick={() => contact.contactType === "registered"
+                  ? navigate(`/admin/user/${contact._id}/details`)
+                  : setSelectedAgent(contact)}
                 className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--accent)] hover:shadow-md focus-visible:outline-2 dark:border-slate-800 dark:bg-slate-900"
               >
                 <div className="flex items-start gap-3">

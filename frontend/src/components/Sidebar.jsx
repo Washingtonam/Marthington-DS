@@ -12,7 +12,6 @@ import {
   SlidersHorizontal,
   Users,
   Wallet,
-  Bell,
   X,
   MessageCircle,
 } from "lucide-react";
@@ -83,12 +82,11 @@ const adminGroups = [
     links: [
       { to: "/admin/users", label: "Manage users", icon: Users, superAdminOnly: true },
       { to: "/admin/services-engine", label: "Services & pricing", icon: SlidersHorizontal, superAdminOnly: true },
-      { to: "/admin/notifications", label: "Notification center", icon: Bell, superAdminOnly: true },
+      { to: "/admin/communications", label: "Communications", icon: MessageCircle },
       { to: "/admin/articles", label: "Guides & updates", icon: BookOpenText, superAdminOnly: true },
-      { to: "/admin/settings", label: "Business settings", icon: Settings, superAdminOnly: true },
+      { to: "/admin/settings", label: "General settings", icon: Settings, superAdminOnly: true },
       { to: "/admin/agents", label: "Agents", icon: Users, superAdminOnly: true },
       { to: "/admin/agents/jobs", label: "Log jobs", icon: BriefcaseBusiness, superAdminOnly: true },
-      { to: "/admin/communications", label: "Communications", icon: MessageCircle },
     ],
   },
 ];
@@ -113,7 +111,7 @@ function activeGroupForPath(pathname, isAdminWorkspace) {
   )))?.id || groups[0].id;
 }
 
-export default function Sidebar({ open, isMobile, onClose }) {
+export default function Sidebar({ open, isMobile, collapsed = false, onClose }) {
   const { user, clearUser } = useUser();
   const { businessName, businessTagline, businessLogoUrl } = useBranding();
   const location = useLocation();
@@ -126,6 +124,8 @@ export default function Sidebar({ open, isMobile, onClose }) {
   const [pendingPayments, setPendingPayments] = useState(0);
   const [openGroups, setOpenGroups] = useState(() => new Set());
   const activeGroup = activeGroupForPath(location.pathname, isAdminWorkspace);
+  const showLabels = !collapsed || isMobile;
+  const visible = !isMobile || open;
 
   useEffect(() => {
     let cancelled = false;
@@ -208,22 +208,24 @@ export default function Sidebar({ open, isMobile, onClose }) {
       id="app-sidebar"
       role={isMobile && open ? "dialog" : undefined}
       aria-modal={isMobile && open ? true : undefined}
-      aria-hidden={!open}
-      inert={!open ? true : undefined}
+      aria-hidden={!visible}
+      inert={!visible ? true : undefined}
       aria-label={isAdminWorkspace ? `${isSuperAdmin ? "Super Admin" : "Admin"} navigation` : "User navigation"}
       className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white shadow-xl transition-[width,transform] duration-200 dark:border-slate-800 dark:bg-slate-950 ${
         isMobile
           ? `w-[min(18rem,calc(100vw-2rem))] ${open ? "translate-x-0" : "-translate-x-full"}`
-          : `w-72 ${open ? "translate-x-0" : "-translate-x-full"}`
+          : `${collapsed ? "w-20" : "w-72"} translate-x-0`
       }`}
     >
-      <div className="flex h-20 shrink-0 items-center gap-3 border-b border-slate-200 px-5 dark:border-slate-800">
+      <div className={`flex h-20 shrink-0 items-center border-b border-slate-200 dark:border-slate-800 ${
+        collapsed && !isMobile ? "justify-center px-0" : "gap-3 px-5"
+      }`}>
         <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[rgba(var(--accent-rgb),0.10)] text-[var(--accent-text)]">
           {businessLogoUrl
             ? <img src={businessLogoUrl} alt="" className="h-full w-full object-contain p-1" />
             : <Activity size={21} aria-hidden="true" />}
         </div>
-        {(open || isMobile) && (
+        {showLabels && (
           <div className="min-w-0">
             <p className="truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white">{businessName}</p>
             <p className="truncate text-xs text-slate-500 dark:text-slate-400">{businessTagline}</p>
@@ -252,7 +254,7 @@ export default function Sidebar({ open, isMobile, onClose }) {
               id={group.id}
               title={group.title}
               icon={<GroupIcon size={18} aria-hidden="true" />}
-              open={open || isMobile}
+              open={showLabels}
               expanded={expanded}
               canToggle={activeGroup !== group.id}
               onToggle={() => setOpenGroups((current) => {
@@ -269,7 +271,7 @@ export default function Sidebar({ open, isMobile, onClose }) {
                   label={label}
                   icon={createElement(Icon, { size: 18, "aria-hidden": true })}
                   badge={badge}
-                  open={open || isMobile}
+                  open={showLabels}
                   onNavigate={() => { if (isMobile) onClose(); }}
                 />
               ))}
@@ -282,14 +284,14 @@ export default function Sidebar({ open, isMobile, onClose }) {
         <button
           type="button"
           onClick={handleLogout}
-          title={open || isMobile ? undefined : "Sign out"}
+          title={showLabels ? undefined : "Sign out"}
           aria-label="Sign out"
           className={`flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white ${
-            open || isMobile ? "gap-3" : "justify-center"
+            showLabels ? "gap-3" : "justify-center"
           }`}
         >
           <LogOut size={18} aria-hidden="true" />
-          {(open || isMobile) && <span>Sign out</span>}
+          {showLabels && <span>Sign out</span>}
         </button>
       </div>
     </aside>

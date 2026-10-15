@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../../../context/UserContext", () => ({
@@ -67,6 +67,44 @@ describe("AgentManagement", () => {
       whatsapp: "+2348000000000",
     }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit offline agent" })).toBeNull());
+  });
+
+  test("opens a registered Marketing agent's audit profile from the directory", async () => {
+    const registeredAccount = {
+      _id: "registered-user-1",
+      name: "Marketing Agent",
+      email: "marketing@example.test",
+      whatsapp: "+2348000000002",
+      role: "user",
+      status: "active",
+      approvalStatus: "approved",
+      jobs: 1,
+      totalAmount: 6000,
+    };
+    api.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/jobs")
+        ? { jobs: [] }
+        : { manualAgents: [], registeredUsers: [registeredAccount] },
+    }));
+
+    function CurrentLocation() {
+      return <output data-testid="current-path">{useLocation().pathname}</output>;
+    }
+
+    render(
+      <MemoryRouter initialEntries={["/admin/agents"]}>
+        <Routes>
+          <Route path="/admin/agents" element={<AgentManagement view="agents" />} />
+          <Route path="/admin/user/:userId/details" element={<div>User Audit Profile</div>} />
+        </Routes>
+        <CurrentLocation />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Marketing Agent/ }));
+
+    expect(await screen.findByText("User Audit Profile")).toBeTruthy();
+    expect(screen.getByTestId("current-path").textContent).toBe("/admin/user/registered-user-1/details");
   });
 
   test("archives and reactivates a manual agent without deleting its history", async () => {

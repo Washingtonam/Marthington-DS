@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const mongoose = require("mongoose");
 const multer = require("multer");
+const bcrypt = require("bcryptjs");
 
 const User = require("../models/User.model");
 const Transaction = require("../models/transaction.model");
@@ -14,6 +15,7 @@ const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
 const { normalizeServiceType } = require("../config/serviceTypes");
+const { SUPER_ADMIN_EMAIL } = require("../config/constants");
 const { awardCommissionIfEligible } = require("../services/commission.service");
 
 // =========================================================================
@@ -1976,6 +1978,90 @@ router.get('/user/:id', isAdmin, async (req, res) => {
   } catch (err) {
     console.error('GET USER ERROR:', err);
     res.status(500).json({ message: 'Failed to fetch user' });
+  }
+});
+
+router.put("/users/:userId/profile", isSuperAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: "Invalid user identifier." });
+    }
+
+    const allowedFields = ["firstName", "lastName", "email", "phone", "password"];
+    const submittedFields = Object.keys(req.body || {});
+    if (!submittedFields.length || submittedFields.some((field) => !allowedFields.includes(field))) {
+      return res.status(400).json({ success: false, message: "Submit one or more supported profile fields." });
+    }
+
+    const user = await User.findById(userId);
+    if (!user || user.role !== "user") {
+      return res.status(404).json({ success: false, message: "Registered user not found." });
+    }
+
+    const changedFields = [];
+    for (const field of ["firstName", "lastName"]) {
+      if (req.body[field] === undefined) continue;
+      const value = String(req.body[field]).trim();
+      if (value.length > 100) {
+        return res.status(400).json({ success: false, message: `${field} must be 100 characters or fewer.` });
+      }
+      user[field] = value;
+      changedFields.push(field);
+    }
+
+    if (req.body.email !== undefined) {
+      const email = normalizeAgentEmail(req.body.email);
+      if (!email) return res.status(400).json({ success: false, message: "Enter a valid email address." });
+      if (email === SUPER_ADMIN_EMAIL.toLowerCase()) {
+        return res.status(400).json({ success: false, message: "This email address is reserved for the super admin account." });
+      }
+      const existingUser = await User.findOne({ email, _id: { $ne: userId } }).select("_id").lean();
+      if (existingUser) return res.status(409).json({ success: false, message: "That email address is already in use." });
+      user.email = email;
+      changedFields.push("email");
+    }
+
+    if (req.body.phone !== undefined) {
+      const rawPhone = String(req.body.phone).trim();
+      if (rawPhone) {
+        const phone = normalizeWhatsapp(rawPhone);
+        if (!phone) return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
+        user.phone = phone;
+      } else {
+        user.phone = "";
+      }
+      changedFields.push("WhatsApp number");
+    }
+
+    if (req.body.password !== undefined) {
+      if (typeof req.body.password !== "string" || req.body.password.length < 6 || req.body.password.length > 128) {
+        return res.status(400).json({ success: false, message: "Password must be between 6 and 128 characters." });
+      }
+      user.password = await bcrypt.hash(req.body.password, 10);
+      changedFields.push("password");
+    }
+
+    await user.save();
+    try {
+      await AuditLog.create({
+        action: "USER_PROFILE_UPDATED",
+        performedBy: req.user.email || req.user.id,
+        userId: user._id,
+        note: `Updated profile fields: ${changedFields.join(", ")}.`,
+      });
+    } catch (auditError) {
+      console.warn("User profile audit log creation failed:", auditError.message);
+    }
+
+    const updatedUser = await User.findById(userId).select("-password").lean();
+    return res.json({ success: true, message: "User profile updated.", data: updatedUser });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ success: false, message: "That email address is already in use." });
+    }
+    console.error("ADMIN USER PROFILE UPDATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to update user profile." });
   }
 });
 
