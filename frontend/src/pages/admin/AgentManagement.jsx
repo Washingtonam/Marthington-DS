@@ -15,6 +15,7 @@ import api from "../../lib/axios";
 import SlideOver from "../../components/ui/SlideOver";
 import {
   agentJobFieldLabels,
+  generateCatalogServiceForm,
   parseCatalogServiceForm,
 } from "../../lib/agentJobForm";
 
@@ -86,8 +87,10 @@ export default function AgentManagement({ view }) {
   const [showAgentForm, setShowAgentForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
   const [showJobForm, setShowJobForm] = useState(hasRequestedCustomer);
+  const [showJobAgentForm, setShowJobAgentForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [agentForm, setAgentForm] = useState({ name: "", whatsapp: "" });
+  const [jobAgentForm, setJobAgentForm] = useState({ name: "", whatsapp: "" });
   const [customerType, setCustomerType] = useState(() => (
     ["manual", "registered"].includes(initialCustomerType) ? initialCustomerType : "manual"
   ));
@@ -107,7 +110,11 @@ export default function AgentManagement({ view }) {
         api.get("/api/admin/agents"),
         api.get("/api/admin/agents/jobs"),
       ]);
-      setManualAgents(agentsResponse.data?.manualAgents || []);
+      const savedAgents = agentsResponse.data?.manualAgents || [];
+      setManualAgents((current) => {
+        const savedIds = new Set(savedAgents.map((agent) => String(agent._id)));
+        return [...savedAgents, ...current.filter((agent) => !savedIds.has(String(agent._id)))];
+      });
       setRegisteredUsers(agentsResponse.data?.registeredUsers || []);
       setJobs(jobsResponse.data?.jobs || []);
       setNow(Date.now());
@@ -147,8 +154,8 @@ export default function AgentManagement({ view }) {
     : [];
 
   const allContacts = useMemo(() => [
-    ...manualAgents.map((agent) => ({ ...agent, contactType: "manual", source: "Manual agent" })),
-    ...registeredUsers.map((account) => ({ ...account, contactType: "registered", source: "BMS registered" })),
+    ...manualAgents.map((agent) => ({ ...agent, contactType: "manual", source: "Offline agent" })),
+    ...registeredUsers.map((account) => ({ ...account, contactType: "registered", source: "Marketing agent" })),
   ], [manualAgents, registeredUsers]);
 
   const visibleContacts = allContacts.filter((contact) => {
@@ -202,6 +209,28 @@ export default function AgentManagement({ view }) {
     }
   };
 
+  const handleAddJobAgent = async () => {
+    setBusy(true);
+    try {
+      const response = await api.post("/api/admin/agents", jobAgentForm);
+      const agent = response.data?.agent;
+      if (!agent?._id) throw new Error("The saved offline agent was not returned by the server.");
+      setManualAgents((current) => current.some((item) => String(item._id) === String(agent._id))
+        ? current
+        : [...current, { ...agent, jobs: 0, totalAmount: 0 }]);
+      setCustomerType("manual");
+      setCustomerId(agent._id);
+      setJobAgentForm({ name: "", whatsapp: "" });
+      setShowJobAgentForm(false);
+      success("Offline agent saved and selected for this job.");
+    } catch (saveError) {
+      console.error("Offline agent creation from job form failed:", saveError);
+      toastError(saveError.response?.data?.message || "Could not save this offline agent.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const setAgentActive = async (agent, active) => {
     try {
       const response = await api.put(`/api/admin/agents/${agent._id}`, { active });
@@ -221,7 +250,7 @@ export default function AgentManagement({ view }) {
   const handleCreateJob = async (event) => {
     event.preventDefault();
     if (!customerId) {
-      toastError("Choose an agent or registered account for this job.");
+      toastError("Choose an offline agent or Marketing agent for this job.");
       return;
     }
     if (!selectedService) {
@@ -269,6 +298,22 @@ export default function AgentManagement({ view }) {
     setJobFormData((current) => ({ ...current, ...parsed }));
     if (!Object.keys(parsed).length) toastError("No recognized form fields found. Check the pasted labels and try again.");
     else success(`${Object.keys(parsed).length} form fields detected. Review them before saving.`);
+  };
+
+  const handleCopyServiceForm = async () => {
+    const text = generateCatalogServiceForm(selectedServiceFields);
+    if (!text) {
+      toastError("This service has no copyable form fields configured.");
+      return;
+    }
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable.");
+      await navigator.clipboard.writeText(text);
+      success("Customer form copied. Send this format so its fields can be parsed when returned.");
+    } catch (copyError) {
+      console.error("Customer form copy failed:", copyError);
+      toastError("Could not copy the form. Select and copy the generated form text below.");
+    }
   };
 
   const updateJobStatus = async (job, status) => {
@@ -332,10 +377,10 @@ export default function AgentManagement({ view }) {
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
             {tab === "messages"
-              ? "Segment registered accounts and prepare reviewed WhatsApp messages."
+              ? "Segment Marketing agents and prepare reviewed WhatsApp messages."
               : tab === "jobs"
                 ? "Select a catalog service, enter customer details, and log the work to service requests."
-                : "Distinguish manual agent contacts from registered BMS accounts and track their logged work."}
+                : "Manage offline agents and distinguish them from Marketing agents registered on the platform."}
           </p>
         </div>
         {tab === "agents" ? (
@@ -344,7 +389,7 @@ export default function AgentManagement({ view }) {
               <BriefcaseBusiness size={16} aria-hidden="true" /> View logged jobs
             </button>
             <button type="button" onClick={() => { setEditingAgent(null); setAgentForm({ name: "", whatsapp: "" }); setShowAgentForm(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)]">
-              <Plus size={17} aria-hidden="true" /> Add manual agent
+              <Plus size={17} aria-hidden="true" /> Add offline agent
             </button>
           </div>
         ) : tab === "jobs" ? (
@@ -401,7 +446,7 @@ export default function AgentManagement({ view }) {
               </button>
             ))}
           </div>
-          {!visibleContacts.length && <EmptyState message="No agents or registered accounts match your search." />}
+          {!visibleContacts.length && <EmptyState message="No offline or Marketing agents match your search." />}
         </section>
       ) : tab === "jobs" ? (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900" aria-label="Logged agent jobs">
@@ -415,7 +460,7 @@ export default function AgentManagement({ view }) {
                   {jobs.filter((job) => `${job.agentName} ${job.serviceType} ${job.formData?.nin || ""}`.toLowerCase().includes(query.toLowerCase())).map((job) => (
                     <tr key={job._id} tabIndex={0} aria-label={`View ${job.serviceType} job for ${job.agentName}`} className="cursor-pointer transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] dark:hover:bg-slate-800/60" onClick={() => setSelectedJob(job)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedJob(job); } }}>
                       <td className="px-5 py-4"><span className="font-semibold text-slate-900 dark:text-white">{getJobServiceName(job, catalog)}</span><span className="mt-1 block text-xs text-slate-500">Request ID {String(job._id).slice(-7)}</span></td>
-                      <td className="px-5 py-4"><span className="font-medium">{job.agentName}</span><span className="mt-1 block text-xs text-slate-500">{job.customerType === "registered" ? "BMS registered" : "Manual agent"}</span></td>
+                      <td className="px-5 py-4"><span className="font-medium">{job.agentName}</span><span className="mt-1 block text-xs text-slate-500">{job.customerType === "registered" ? "Marketing agent" : "Offline agent"}</span></td>
                       <td className="px-5 py-4 font-medium">{formatAmount(getJobAmount(job, catalog))}</td>
                       <td className="px-5 py-4"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize dark:bg-slate-800">{statusLabels[job.status] || job.status}</span></td>
                       <td className="px-5 py-4 text-slate-500">{formatDate(job.createdAt)}</td>
@@ -424,7 +469,7 @@ export default function AgentManagement({ view }) {
                 </tbody>
               </table>
             </div>
-          ) : <EmptyState message="No logged jobs yet. Log a job to associate it with an agent or registered account." />}
+          ) : <EmptyState message="No logged jobs yet. Log a job and associate it with an offline or Marketing agent." />}
         </section>
       ) : (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
@@ -456,10 +501,10 @@ export default function AgentManagement({ view }) {
             <label className="mt-4 block text-sm font-semibold">Audience segment
               <select value={audience} onChange={(event) => setAudience(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal dark:border-slate-700 dark:bg-slate-950">
                 <option value="all">All contacts</option>
-                <option value="active">Active registered accounts</option>
+                <option value="active">Active Marketing agents</option>
                 <option value="wallet">Accounts with wallet funds</option>
                 <option value="inactive">No sign-in in 30+ days / inactive</option>
-                <option value="manual">Manual agents</option>
+                <option value="manual">Offline agents</option>
               </select>
             </label>
             <label className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
@@ -508,9 +553,9 @@ export default function AgentManagement({ view }) {
         </div>
       )}
 
-      <SlideOver isOpen={showAgentForm} onClose={() => { setShowAgentForm(false); setEditingAgent(null); }} title={editingAgent ? "Edit manual agent" : "Add manual agent"}>
+      <SlideOver isOpen={showAgentForm} onClose={() => { setShowAgentForm(false); setEditingAgent(null); }} title={editingAgent ? "Edit offline agent" : "Add offline agent"}>
         <form onSubmit={handleSaveAgent} className="space-y-5">
-          <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">Manual agents are contact records created here and are kept distinct from accounts registered on BMS.</p>
+          <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">Offline agents are contact records created here and are kept distinct from Marketing agents registered on the platform.</p>
           <label className="block text-sm font-semibold">Agent name
             <input required maxLength={120} value={agentForm.name} onChange={(event) => setAgentForm((current) => ({ ...current, name: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
           </label>
@@ -524,20 +569,42 @@ export default function AgentManagement({ view }) {
       <SlideOver isOpen={showJobForm} onClose={() => setShowJobForm(false)} title="Log an agent job">
         <form onSubmit={handleCreateJob} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm font-semibold">Customer source
-              <select value={customerType} onChange={(event) => { setCustomerType(event.target.value); setCustomerId(""); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
-                <option value="manual">Manual agent</option><option value="registered">BMS registered account</option>
+            <label className="block text-sm font-semibold">Agent type
+              <select value={customerType} onChange={(event) => { setCustomerType(event.target.value); setCustomerId(""); setShowJobAgentForm(false); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
+                <option value="manual">Offline agent</option><option value="registered">Marketing agent</option>
               </select>
             </label>
-            <label className="block text-sm font-semibold">Agent / account
+            <div>
+              <label className="block text-sm font-semibold">{customerType === "manual" ? "Offline agent" : "Marketing agent"}
               <select required value={customerId} onChange={(event) => setCustomerId(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
-                <option value="">Select a contact</option>
+                <option value="">Select an agent</option>
                 {(customerType === "manual" ? manualAgents.filter((agent) => agent.active !== false) : eligibleRegisteredUsers).map((contact) => (
                   <option key={contact._id} value={contact._id}>{contact.name}{contact.whatsapp ? ` — ${contact.whatsapp}` : ""}</option>
                 ))}
               </select>
-            </label>
+              </label>
+              {customerType === "manual" && (
+                <button type="button" onClick={() => { setJobAgentForm({ name: "", whatsapp: "" }); setShowJobAgentForm((current) => !current); }} className="mt-2 text-sm font-semibold text-[var(--accent-text)] hover:underline">
+                  {showJobAgentForm ? "Cancel adding agent" : "+ Add offline agent"}
+                </button>
+              )}
+            </div>
           </div>
+          {showJobAgentForm && customerType === "manual" && (
+            <div className="space-y-3 rounded-xl border border-[rgba(var(--accent-rgb),0.3)] bg-[rgba(var(--accent-rgb),0.05)] p-4">
+              <p className="text-sm font-semibold">Save a new offline agent</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400">This creates an offline agent contact and selects them for the job you are logging.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm font-medium">Agent name
+                  <input required maxLength={120} value={jobAgentForm.name} onChange={(event) => setJobAgentForm((current) => ({ ...current, name: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-normal dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="block text-sm font-medium">WhatsApp number
+                  <input required type="tel" maxLength={20} value={jobAgentForm.whatsapp} onChange={(event) => setJobAgentForm((current) => ({ ...current, whatsapp: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-normal dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+              </div>
+              <button type="button" disabled={busy || !jobAgentForm.name.trim() || !jobAgentForm.whatsapp.trim()} onClick={handleAddJobAgent} className="rounded-lg bg-[var(--accent)] px-3.5 py-2 text-sm font-semibold text-[var(--accent-foreground)] disabled:opacity-60">{busy ? "Saving…" : "Save and select offline agent"}</button>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-semibold">Service category
               <select value={serviceCategory} onChange={(event) => { setServiceCategory(event.target.value); setServiceCode(""); setJobFormData({}); setAmount(""); }} required className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
@@ -565,6 +632,18 @@ export default function AgentManagement({ view }) {
           <label className="block text-sm font-semibold">Paste the customer’s form
             <textarea rows={7} value={pastedForm} onChange={(event) => setPastedForm(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 font-mono text-xs leading-5 dark:border-slate-700 dark:bg-slate-950" placeholder={"Paste the customer form here using the service field labels.\nExample: NIN: ..."} />
           </label>
+          {selectedService && selectedServiceFields.length > 0 && (
+            <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold">Customer form template</h3>
+                  <p className="mt-1 text-xs text-slate-500">Copy and send this exact field format. The returned text can be pasted above and parsed.</p>
+                </div>
+                <button type="button" onClick={handleCopyServiceForm} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold hover:bg-slate-50 focus-visible:outline-2 dark:border-slate-700 dark:hover:bg-slate-800">Copy form</button>
+              </div>
+              <textarea readOnly rows={Math.min(10, selectedServiceFields.length)} value={generateCatalogServiceForm(selectedServiceFields)} aria-label="Generated customer form" onFocus={(event) => event.currentTarget.select()} className="mt-3 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs leading-5 dark:border-slate-700 dark:bg-slate-950" />
+            </div>
+          )}
           <button type="button" disabled={!selectedService} onClick={handleParseForm} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">Parse pasted form</button>
           <div className="grid gap-4 sm:grid-cols-2">
             {selectedServiceFields.map((field) => (
@@ -643,7 +722,7 @@ export default function AgentManagement({ view }) {
           <div className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <Summary label="Customer" value={selectedJob.agentName} />
-              <Summary label="Source" value={selectedJob.customerType === "registered" ? "BMS registered account" : "Manual agent"} />
+              <Summary label="Source" value={selectedJob.customerType === "registered" ? "Marketing agent" : "Offline agent"} />
               <Summary label="Amount" value={formatAmount(getJobAmount(selectedJob, catalog))} />
               <Summary label="Logged" value={new Date(selectedJob.createdAt).toLocaleString()} />
             </div>

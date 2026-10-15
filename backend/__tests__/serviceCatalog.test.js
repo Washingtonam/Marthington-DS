@@ -13,6 +13,23 @@ const makeSuperAdminToken = () => jwt.sign({
 }, process.env.JWT_SECRET || 'test-jwt-secret');
 
 describe('service catalog API', () => {
+  it('includes the DOB modification form fields and parent details in the default catalog', () => {
+    const dobService = Pricing.getDefaultServiceCatalog()
+      .find((service) => service.serviceCode === 'modification-dob');
+    const formFields = dobService.metadata.formFields;
+
+    expect(formFields.map((field) => field.key)).toEqual(expect.arrayContaining([
+      'newDob',
+      'oldDob',
+      'fatherSurname',
+      'fatherFirstname',
+      'fatherStateOfOrigin',
+      'motherSurname',
+      'motherMaidenName',
+      'motherStateOfOrigin',
+    ]));
+  });
+
   it('exposes a public catalog with the canonical NIMC and CAC services', async () => {
     const response = await request(app).get('/api/services/catalog');
 

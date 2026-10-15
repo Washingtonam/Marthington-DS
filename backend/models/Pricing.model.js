@@ -31,11 +31,41 @@ const defaultServiceCatalog = [
   { serviceCode: 'modification-phone', category: 'NIN', name: 'Phone Number Modification', type: 'phone', status: 'active', price: 12000, metadata: { description: 'Update the phone number attached to the NIN.', formFields: [] } },
   { serviceCode: 'modification-address', category: 'NIN', name: 'Address Modification', type: 'address', status: 'active', price: 12000, metadata: { description: 'Correct or update the residential address record.', formFields: [] } },
   { serviceCode: 'modification-dob', category: 'NIN', name: 'DOB Modification & NPC Attestation', type: 'dob', status: 'active', price: 65000, metadata: { description: 'Correct date of birth and request NPC attestation support.', trending: true, formFields: [
-    { key: 'nin', label: 'NIN', type: 'text', required: true, placeholder: 'Enter your 11-digit NIN' },
-    { key: 'fullName', label: 'Full name', type: 'text', required: true, placeholder: 'Enter your full name' },
-    { key: 'currentDob', label: 'Current date of birth', type: 'date', required: true },
-    { key: 'newDob', label: 'Requested date of birth', type: 'date', required: true },
-    { key: 'reason', label: 'Reason for modification', type: 'textarea', required: true, placeholder: 'Briefly explain the requested change' },
+    { key: 'previousModification', label: 'Have you ever done modification before via NIMC Self-Service Portal?', type: 'select', options: ['Yes', 'No'], required: true },
+    { key: 'nin', label: 'NIN', type: 'text', required: true, placeholder: 'Enter NIN (11 digits)' },
+    { key: 'surname', label: 'Last Name / Surname', type: 'text', required: true, placeholder: 'Surname' },
+    { key: 'firstname', label: 'First Name', type: 'text', required: true, placeholder: 'First name' },
+    { key: 'middlename', label: 'Middle Name (Optional)', type: 'text', required: false, placeholder: 'Middle name' },
+    { key: 'gsm', label: 'GSM', type: 'text', required: true, placeholder: 'Phone number' },
+    { key: 'email', label: 'Email', type: 'email', required: true, placeholder: 'Email address' },
+    { key: 'newDob', label: 'New Date of Birth', type: 'date', required: true },
+    { key: 'gender', label: 'Gender', type: 'text', required: true, placeholder: 'Gender' },
+    { key: 'maritalStatus', label: 'Marital Status', type: 'text', required: true, placeholder: 'Marital status' },
+    { key: 'stateOfOrigin', label: 'State of Origin', type: 'text', required: true, placeholder: 'State of origin' },
+    { key: 'lgaOfOrigin', label: 'LGA of Origin', type: 'text', required: true, placeholder: 'LGA of origin' },
+    { key: 'townOfOrigin', label: 'Town/Village of Origin', type: 'text', required: true, placeholder: 'Town/village of origin' },
+    { key: 'placeOfBirth', label: 'Place of Birth', type: 'text', required: true, placeholder: 'Place of birth' },
+    { key: 'stateOfBirth', label: 'State of Birth', type: 'text', required: true, placeholder: 'State of birth' },
+    { key: 'lgaOfBirth', label: 'LGA of Birth', type: 'text', required: true, placeholder: 'LGA of birth' },
+    { key: 'residentState', label: 'Resident State (Birth Registration)', type: 'text', required: true, placeholder: 'Resident state' },
+    { key: 'residentLga', label: 'Resident LGA (Birth Registration)', type: 'text', required: true, placeholder: 'Resident LGA' },
+    { key: 'nearestCenter', label: 'Nearest Registration Center', type: 'text', required: true, placeholder: 'Nearest registration center' },
+    { key: 'fullAddress', label: 'Full House Address', type: 'text', required: true, placeholder: 'Full house address' },
+    { key: 'educationLevel', label: 'Education Level', type: 'text', required: true, placeholder: 'Education level' },
+    { key: 'occupation', label: 'Occupation', type: 'text', required: true, placeholder: 'Occupation' },
+    { key: 'workAddress', label: 'Work Address', type: 'text', required: true, placeholder: 'Work address' },
+    { key: 'oldDob', label: 'Old Date of Birth', type: 'date', required: true },
+    { key: 'fatherSurname', label: 'Father’s Surname', type: 'text', required: true, placeholder: 'Father’s surname' },
+    { key: 'fatherFirstname', label: 'Father’s First Name', type: 'text', required: true, placeholder: 'Father’s first name' },
+    { key: 'fatherMiddlename', label: 'Father’s Middle Name (Optional)', type: 'text', required: false, placeholder: 'Father’s middle name' },
+    { key: 'fatherStateOfOrigin', label: 'Father’s State of Origin', type: 'text', required: true, placeholder: 'Father’s state of origin' },
+    { key: 'fatherLgaOfOrigin', label: 'Father’s LGA of Origin', type: 'text', required: true, placeholder: 'Father’s LGA of origin' },
+    { key: 'fatherVillage', label: 'Father’s Village/Town', type: 'text', required: true, placeholder: 'Father’s village/town' },
+    { key: 'motherSurname', label: 'Mother’s Surname', type: 'text', required: true, placeholder: 'Mother’s surname' },
+    { key: 'motherMaidenName', label: 'Mother’s Maiden Name (Compulsory)', type: 'text', required: true, placeholder: 'Mother’s maiden name' },
+    { key: 'motherStateOfOrigin', label: 'Mother’s State of Origin', type: 'text', required: true, placeholder: 'Mother’s state of origin' },
+    { key: 'motherLgaOfOrigin', label: 'Mother’s LGA of Origin', type: 'text', required: true, placeholder: 'Mother’s LGA of origin' },
+    { key: 'motherVillage', label: 'Mother’s Village/Town', type: 'text', required: true, placeholder: 'Mother’s village/town' },
   ] } },
   { serviceCode: 'personalization-tracking', category: 'NIN', name: 'Tracking ID Search', type: 'tracking', status: 'active', price: 1000, metadata: { description: 'Search and validate a personalization tracking record.', formFields: [] } },
   { serviceCode: 'self-service-emailRetrieval', category: 'NIN', name: 'Email Retrieval', type: 'emailRetrieval', status: 'active', price: 1500, metadata: { description: 'Recover email details linked to a self-service account.', formFields: [] } },
@@ -88,23 +118,39 @@ const LEGACY_GENERIC_SERVICE_CODES = new Set([
   'demographic-verification',
 ]);
 
-const normalizeCatalogService = (service = {}, fallback = {}) => ({
-  ...fallback,
-  ...service,
-  serviceCode: String(service.serviceCode || fallback.serviceCode || '').trim(),
-  category: normalizeCategory({ label: service.category || fallback.category || 'NIMC' }).label,
-  name: String(service.name || fallback.name || '').trim() || 'Unnamed Service',
-  type: String(service.type || fallback.type || '').trim(),
-  status: ['active', 'paused', 'disabled'].includes(service.status || fallback.status) ? (service.status || fallback.status) : 'active',
-  price: Number(service.price ?? fallback.price ?? 0) || 0,
-  metadata: {
-    ...(fallback.metadata || {}),
-    ...(service.metadata || {}),
-    formFields: Array.isArray(service.metadata?.formFields) && service.metadata.formFields.length
-      ? service.metadata.formFields
-      : (fallback.metadata?.formFields || []),
-  },
-});
+const normalizeCatalogService = (service = {}, fallback = {}) => {
+  const serviceCode = String(service.serviceCode || fallback.serviceCode || '').trim();
+  const configuredFields = Array.isArray(service.metadata?.formFields) ? service.metadata.formFields : [];
+  const fallbackFields = fallback.metadata?.formFields || [];
+  const legacyDobFieldKeys = new Set(['nin', 'fullName', 'currentDob', 'newDob', 'reason']);
+  const hasLegacyDobForm = serviceCode === 'modification-dob'
+    && configuredFields.length > 0
+    && configuredFields.every((field) => legacyDobFieldKeys.has(field.key));
+  let formFields = configuredFields.length && !hasLegacyDobForm ? configuredFields : fallbackFields;
+  if (serviceCode === 'modification-dob' && configuredFields.length && !hasLegacyDobForm) {
+    const configuredKeys = new Set(formFields.map((field) => field.key));
+    formFields = [
+      ...formFields,
+      ...fallbackFields.filter((field) => !configuredKeys.has(field.key)),
+    ];
+  }
+
+  return {
+    ...fallback,
+    ...service,
+    serviceCode,
+    category: normalizeCategory({ label: service.category || fallback.category || 'NIMC' }).label,
+    name: String(service.name || fallback.name || '').trim() || 'Unnamed Service',
+    type: String(service.type || fallback.type || '').trim(),
+    status: ['active', 'paused', 'disabled'].includes(service.status || fallback.status) ? (service.status || fallback.status) : 'active',
+    price: Number(service.price ?? fallback.price ?? 0) || 0,
+    metadata: {
+      ...(fallback.metadata || {}),
+      ...(service.metadata || {}),
+      formFields,
+    },
+  };
+};
 
 const normalizeServiceCatalog = (catalog = []) => {
   const merged = new Map();

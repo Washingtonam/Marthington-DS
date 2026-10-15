@@ -68,6 +68,25 @@ const normalizeFormName = (value) => String(value || "")
   .replace(/[^a-z0-9]+/g, " ")
   .trim();
 
+const formFieldOptions = (field) => (
+  Array.isArray(field?.options)
+    ? field.options
+    : String(field?.options || "").split(",").map((option) => option.trim()).filter(Boolean)
+);
+
+export function generateCatalogServiceForm(formFields = []) {
+  return formFields
+    .filter((field) => field?.key && !["title", "subtitle", "upload"].includes(field.type))
+    .map((field) => {
+      const label = field.label || agentJobFieldLabels[field.key] || field.key;
+      if (field.type === "select" && formFieldOptions(field).some((option) => /^(yes|no)$/i.test(String(option)))) {
+        return `${label}: Yes [ ] No [ ]`;
+      }
+      return `${label}:`;
+    })
+    .join("\n");
+}
+
 export function parseCatalogServiceForm(text, formFields = []) {
   const result = {};
   const parsedStandardFields = parseAgentJobForm(text);
@@ -97,9 +116,7 @@ export function parseCatalogServiceForm(text, formFields = []) {
     const direct = names.find((name) => parsedLines.has(name));
     if (direct) {
       let value = parsedLines.get(direct);
-      const options = Array.isArray(field.options)
-        ? field.options
-        : String(field.options || "").split(",").map((option) => option.trim()).filter(Boolean);
+      const options = formFieldOptions(field);
       const checkedYes = value.match(/\byes\s*\[\s*([x✓✔]?)\s*\]/i);
       const checkedNo = value.match(/\bno\s*\[\s*([x✓✔]?)\s*\]/i);
       if (checkedYes?.[1] && checkedNo?.[1]) return;
@@ -128,9 +145,7 @@ export function parseCatalogServiceForm(text, formFields = []) {
       if (field.type === "checkbox" && /^(yes|no)$/i.test(value)) {
         result[field.key] = value.toLowerCase() === "yes";
       } else if (field.type === "select") {
-        const options = Array.isArray(field.options)
-          ? field.options
-          : String(field.options || "").split(",").map((option) => option.trim()).filter(Boolean);
+        const options = formFieldOptions(field);
         result[field.key] = options.find((option) => String(option).toLowerCase() === value.toLowerCase()) || value;
       } else {
         result[field.key] = value;

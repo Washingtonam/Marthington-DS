@@ -58,7 +58,7 @@ describe("AgentManagement", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Sample Agent/ }));
     fireEvent.click(screen.getByRole("button", { name: "Edit agent" }));
 
-    expect(screen.getByRole("dialog", { name: "Edit manual agent" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Edit offline agent" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "Updated Agent" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -66,7 +66,7 @@ describe("AgentManagement", () => {
       name: "Updated Agent",
       whatsapp: "+2348000000000",
     }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit manual agent" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit offline agent" })).toBeNull());
   });
 
   test("archives and reactivates a manual agent without deleting its history", async () => {
@@ -140,6 +140,33 @@ describe("AgentManagement", () => {
       amount: 12000,
       formData: { "nin-number": "12345678901", "previous-modification": "No" },
     }));
+  });
+
+  test("creates an offline agent inside the job form and selects it for the job", async () => {
+    api.post.mockResolvedValue({
+      data: {
+        agent: {
+          _id: "agent-new",
+          name: "New Offline Agent",
+          whatsapp: "+2348000000001",
+          active: true,
+        },
+      },
+    });
+
+    render(<MemoryRouter initialEntries={["/admin/agents/jobs"]}><AgentManagement view="jobs" /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Log a job" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add offline agent" }));
+    fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "New Offline Agent" } });
+    fireEvent.change(screen.getByLabelText("WhatsApp number"), { target: { value: "+2348000000001" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save and select offline agent" }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith("/api/admin/agents", {
+      name: "New Offline Agent",
+      whatsapp: "+2348000000001",
+    }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Offline agent" }).value).toBe("agent-new"));
+    expect(screen.queryByText("Save a new offline agent")).toBeNull();
   });
 
   test("shows the catalog name and price for legacy jobs stored without an amount", async () => {

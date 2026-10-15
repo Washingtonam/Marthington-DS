@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAgentJobFormFields, parseAgentJobForm, parseCatalogServiceForm } from "../agentJobForm";
+import { generateCatalogServiceForm, getAgentJobFormFields, parseAgentJobForm, parseCatalogServiceForm } from "../agentJobForm";
 
 describe("agent job form parser", () => {
   it("maps recognized name-modification fields and checked yes/no choices", () => {
@@ -65,5 +65,32 @@ describe("agent job form parser", () => {
     expect(parseCatalogServiceForm("Previous modification?: No", [
       { key: "previous-modification", label: "Previous modification?", type: "select", options: ["Yes", "No"] },
     ])).toEqual({ "previous-modification": "No" });
+  });
+
+  it("generates a copyable service form and parses DOB and parent details pasted together", () => {
+    const fields = [
+      { key: "previousModification", label: "Have you ever done modification before via NIMC Self-Service Portal?", type: "select", options: ["Yes", "No"] },
+      { key: "newDob", label: "New Date of Birth", type: "date" },
+      { key: "fatherSurname", label: "Father’s Surname", type: "text" },
+      { key: "fatherFirstname", label: "Father’s First Name", type: "text" },
+      { key: "motherMaidenName", label: "Mother’s Maiden Name (Compulsory)", type: "text" },
+    ];
+    const template = generateCatalogServiceForm(fields);
+    expect(template).toContain("Have you ever done modification before via NIMC Self-Service Portal?: Yes [ ] No [ ]");
+    expect(template).toContain("Father’s First Name:");
+
+    expect(parseCatalogServiceForm([
+      "Have you ever done modification before via NIMC Self-Service Portal?: Yes [x] No [ ]",
+      "New Date of Birth: 15/03/2000",
+      "Father’s Surname: Example",
+      "Father’s First Name: Sample",
+      "Mother’s Maiden Name (Compulsory): Parent",
+    ].join("\n"), fields)).toEqual({
+      previousModification: "Yes",
+      newDob: "2000-03-15",
+      fatherSurname: "Example",
+      fatherFirstname: "Sample",
+      motherMaidenName: "Parent",
+    });
   });
 });
