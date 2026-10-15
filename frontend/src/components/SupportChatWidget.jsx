@@ -5,11 +5,11 @@ import { useUser } from "../context/UserContext";
 import { useToast } from "../context/ToastContext";
 import api from "../lib/axios";
 
-export default function SupportChatWidget() {
+export default function SupportChatWidget({ inline = false }) {
   const { user } = useUser();
   const { error: toastError } = useToast();
   const location = useLocation();
-  const [open, setOpen] = useState(() => location.pathname === "/support-chat");
+  const [open, setOpen] = useState(() => inline || location.pathname === "/support-chat");
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -60,15 +60,19 @@ export default function SupportChatWidget() {
     setOpen((current) => !current);
   };
 
-  if (!user || user.role === "admin" || user.role === "super_admin") return null;
+  if (!user
+    || (location.pathname.startsWith("/admin") && !inline)
+    || (location.pathname === "/support-chat" && !inline)) return null;
 
   return (
     <>
       {open && (
-        <section aria-label="Chat with support" className="fixed bottom-24 right-4 z-40 flex h-[min(34rem,70vh)] w-[min(23rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:right-6">
+        <section aria-label="Chat with support" className={inline
+          ? "flex h-[min(34rem,65vh)] min-h-80 w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
+          : "fixed bottom-24 right-4 z-40 flex h-[min(34rem,70vh)] w-[min(23rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:right-6"}>
           <header className="flex items-center justify-between bg-[var(--accent)] px-4 py-3 text-[var(--accent-foreground)]">
             <div><h2 className="font-bold">Agent support</h2><p className="text-xs opacity-80">Send us a text message</p></div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close support chat" className="rounded-lg p-2 hover:bg-black/10"><X size={18} /></button>
+            {!inline && <button type="button" onClick={() => setOpen(false)} aria-label="Close support chat" className="rounded-lg p-2 hover:bg-black/10"><X size={18} /></button>}
           </header>
           <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4 dark:bg-slate-950">
             {!messages.length && <p className="rounded-xl bg-white p-3 text-sm leading-6 text-slate-600 shadow-sm dark:bg-slate-800 dark:text-slate-300">Welcome. Send a message and our support team will reply here.</p>}
@@ -91,10 +95,12 @@ export default function SupportChatWidget() {
           </form>
         </section>
       )}
-      <button type="button" onClick={toggleChat} aria-label={open ? "Close chat with support" : "Chat with support"} className="fixed bottom-5 right-4 z-30 inline-flex min-h-12 items-center gap-2 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-foreground)] shadow-lg transition hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 sm:bottom-6 sm:right-6">
-        {open ? <X size={19} /> : <MessageCircle size={20} />}
-        <span>{open ? "Close chat" : "Chat with support"}</span>
-      </button>
+      {!inline && (
+        <button type="button" onClick={toggleChat} aria-label={open ? "Close chat with support" : "Chat with support"} className="fixed bottom-5 right-4 z-30 inline-flex min-h-12 items-center gap-2 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-foreground)] shadow-lg transition hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 sm:bottom-6 sm:right-6">
+          {open ? <X size={19} /> : <MessageCircle size={20} />}
+          <span>{open ? "Close chat" : "Chat with support"}</span>
+        </button>
+      )}
     </>
   );
 }

@@ -1,5 +1,6 @@
 import React from "react";
 import { MessageCircle } from "lucide-react";
+import SupportChatWidget from "../components/SupportChatWidget";
 
 export default function SupportChatPage() {
   return (
@@ -9,11 +10,11 @@ export default function SupportChatPage() {
       </div>
       <h2 className="mt-5 text-2xl font-bold text-slate-900 dark:text-white">Chat with support</h2>
       <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-        Send our team a message right here on the platform. You can leave this page and come back later to read our reply.
+        Message our support team here and return later to read their reply.
       </p>
-      <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:bg-slate-950 dark:text-slate-300">
-        Open the chat using the <MessageCircle size={15} className="mx-1 inline" aria-hidden="true" /> support button in the bottom-right corner of the page.
-      </p>
+      <div className="mt-6">
+        <SupportChatWidget inline />
+      </div>
     </section>
   );
 }

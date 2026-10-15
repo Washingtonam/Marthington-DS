@@ -1,11 +1,11 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../../../lib/axios", () => ({
-  default: { get: vi.fn() },
+  default: { get: vi.fn(), put: vi.fn() },
 }));
 
 import api from "../../../lib/axios";
@@ -37,7 +37,7 @@ describe("Commissions", () => {
     });
   });
 
-  test("shows every registered user's balance, commission estimate, history, and account details link", async () => {
+  test("shows the user's commission summary and bank payout details form", async () => {
     render(<MemoryRouter><Commissions /></MemoryRouter>);
 
     expect(await screen.findByText("Available commission balance")).toBeTruthy();
@@ -45,9 +45,41 @@ describe("Commissions", () => {
     expect(screen.getByLabelText("Service")).toBeTruthy();
     expect(screen.getByLabelText("Completed requests")).toBeTruthy();
     expect(screen.getByText("Commission payout for completed request")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Update account details/ }).getAttribute("href")).toBe("/profile");
+    expect(screen.getByLabelText("Bank name")).toBeTruthy();
+    expect(screen.getByLabelText("Account holder name")).toBeTruthy();
+    expect(screen.getByLabelText("10-digit account number")).toBeTruthy();
+    expect(screen.getByLabelText(/Bank account proof/).required).toBe(true);
 
     fireEvent.change(screen.getByLabelText("Completed requests"), { target: { value: "2" } });
     expect(screen.getByText(/1,000\.00/)).toBeTruthy();
+  });
+
+  test("submits bank details and proof document to the payout endpoint", async () => {
+    api.put.mockResolvedValue({
+      data: {
+        message: "Bank details saved for your commission payouts.",
+        payoutDetails: {
+          bankName: "First Bank",
+          accountName: "Ada Agent",
+          accountNumberMasked: "••••••1234",
+          proofUploaded: true,
+        },
+      },
+    });
+    render(<MemoryRouter><Commissions /></MemoryRouter>);
+    await screen.findByText("Commission calculator");
+    fireEvent.change(screen.getByLabelText("Bank name"), { target: { value: "First Bank" } });
+    fireEvent.change(screen.getByLabelText("Account holder name"), { target: { value: "Ada Agent" } });
+    fireEvent.change(screen.getByLabelText("10-digit account number"), { target: { value: "1234561234" } });
+    const proof = new File(["%PDF-1.4"], "account-proof.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText(/Bank account proof/), { target: { files: [proof] } });
+    fireEvent.submit(screen.getByRole("button", { name: "Save payout account" }).closest("form"));
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith(
+      "/api/users/commission/payout-details",
+      expect.any(FormData),
+      { headers: { "Content-Type": "multipart/form-data" } },
+    ));
+    expect((await screen.findByRole("status")).textContent).toContain("Bank details saved");
   });
 });

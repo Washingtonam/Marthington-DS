@@ -4,10 +4,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-const mockToastError = vi.hoisted(() => vi.fn());
+const { mockToastError, mockUser } = vi.hoisted(() => ({
+  mockToastError: vi.fn(),
+  mockUser: { id: "agent-1", role: "user" },
+}));
 
 vi.mock("../../context/UserContext", () => ({
-  useUser: () => ({ user: { id: "agent-1", role: "user" } }),
+  useUser: () => ({ user: mockUser }),
 }));
 vi.mock("../../context/ToastContext", () => ({ useToast: () => ({ error: mockToastError }) }));
 vi.mock("../../lib/axios", () => ({
@@ -46,14 +49,29 @@ describe("SupportChatWidget", () => {
     expect(await screen.findByText("Please help me")).toBeTruthy();
   });
 
-  test("opens automatically when a user navigates to Chat with support", async () => {
+  test("does not duplicate the inline chat with a floating launcher on the support page", async () => {
     render(
       <MemoryRouter initialEntries={["/support-chat"]}>
         <SupportChatWidget />
       </MemoryRouter>,
     );
 
+    expect(screen.queryByRole("region", { name: "Chat with support" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Chat with support" })).toBeNull();
+    expect(api.get).not.toHaveBeenCalled();
+  });
+
+  test("renders the inline chat for a super-admin in the user workspace", async () => {
+    mockUser.role = "super_admin";
+    render(
+      <MemoryRouter initialEntries={["/support-chat"]}>
+        <SupportChatWidget inline />
+      </MemoryRouter>,
+    );
+
     expect(await screen.findByRole("region", { name: "Chat with support" })).toBeTruthy();
-    await waitFor(() => expect(api.get).toHaveBeenCalledWith("/api/communications/conversation"));
+    expect(screen.getByLabelText("Text message")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Close support chat" })).toBeNull();
+    mockUser.role = "user";
   });
 });
