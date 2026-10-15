@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "../../context/UserContext";
 import api from "../../lib/axios";
@@ -56,7 +56,65 @@ export default function Dashboard() {
   const { user, walletBalance: contextWalletBalance } = useUser();
   const [stats, setStats] = useState({ total: 0, completed: 0, pending: 0 });
   const [requestsData, setRequestsData] = useState([]);
+  const [serviceCategories, setServiceCategories] = useState([]);
+  const [verifyNinEnabled, setVerifyNinEnabled] = useState(true);
   const [filter, setFilter] = useState("All");
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAvailableServices = async () => {
+      const [categoriesResult, pricingResult] = await Promise.allSettled([
+        api.get("/api/services/categories"),
+        api.get("/api/pricing"),
+      ]);
+
+      if (categoriesResult.status === "fulfilled") {
+        const categories = Array.isArray(categoriesResult.value.data?.categories)
+          ? categoriesResult.value.data.categories.filter((category) => category?.isActive !== false && category?.slug)
+          : [];
+        if (!cancelled) setServiceCategories(categories);
+      } else {
+        console.error("Dashboard service categories fetch failed:", categoriesResult.reason);
+      }
+
+      if (pricingResult.status === "fulfilled") {
+        if (!cancelled) {
+          setVerifyNinEnabled(pricingResult.value.data?.platformServices?.verifyNin?.enabled !== false);
+        }
+      } else {
+        console.error("Dashboard platform services fetch failed:", pricingResult.reason);
+      }
+    };
+
+    void loadAvailableServices();
+    return () => { cancelled = true; };
+  }, []);
+
+  const serviceActions = [
+    ...(verifyNinEnabled ? [{
+      title: "Verify NIN",
+      icon: ShieldCheck,
+      onClick: () => navigate("/verify-nin"),
+    }] : []),
+    ...serviceCategories.map((category) => {
+      const slug = String(category.slug).toLowerCase();
+      const target = slug === "nin" || slug === "nimc"
+        ? "/nin-services"
+        : slug === "cac"
+          ? "/cac-services"
+          : `/services/${slug}`;
+      return {
+        title: `${category.label} Services`,
+        icon: FileText,
+        onClick: () => navigate(target),
+      };
+    }),
+    {
+      title: "Wallet",
+      icon: Wallet,
+      onClick: () => navigate("/wallet"),
+    },
+  ];
 
   const fetchData = useCallback(async (nextFilter = filter) => {
     if (!user?.id) return;
@@ -158,37 +216,15 @@ export default function Dashboard() {
         className="mb-10"
       >
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <ActionButton
-            title="Verify NIN"
-            icon={ShieldCheck}
-            onClick={() => navigate("/verify-nin")}
-          />
-          <ActionButton
-            title="NIMC Services"
-            icon={FileText}
-            onClick={() => navigate("/nin-services")}
-          />
-          <ActionButton
-            title="CAC Services"
-            icon={FileText}
-            onClick={() => navigate("/cac-services")}
-          />
-          <ActionButton
-            title="JAMB Services"
-            icon={FileText}
-            onClick={() => navigate("/services/jamb")}
-          />
-          <ActionButton
-            title="CSE Services"
-            icon={FileText}
-            onClick={() => navigate("/services/cse")}
-          />
-          <ActionButton
-            title="Wallet"
-            icon={Wallet}
-            onClick={() => navigate("/wallet")}
-          />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {serviceActions.map((action) => (
+            <ActionButton
+              key={action.title}
+              title={action.title}
+              icon={action.icon}
+              onClick={action.onClick}
+            />
+          ))}
         </div>
       </motion.div>
 
