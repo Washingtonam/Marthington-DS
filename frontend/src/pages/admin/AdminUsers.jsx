@@ -462,12 +462,24 @@ export default function AdminUsers() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2 text-slate-950 dark:text-white">User Management</h1>
-        <p className="text-slate-600 dark:text-slate-400">Manage users, adjust balances, and control access</p>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-6 text-slate-900 dark:text-slate-100">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-text)]">Administration</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">User Management</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+            Review account activity, manage access, and keep user wallet balances up to date.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => { fetchUsers(page, currentSearch); fetchStats(); }}
+          disabled={loading}
+          className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:self-auto"
+        >
+          <Activity size={16} aria-hidden="true" /> Refresh directory
+        </button>
+      </header>
 
       {/* Message Alert */}
       {message.text && (
@@ -488,41 +500,51 @@ export default function AdminUsers() {
       )}
 
       {/* Stats Header */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
-          <p className="text-slate-400 text-sm mb-1">Total Users</p>
-          <p className="text-3xl font-bold text-white">{stats.totalUsers}</p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total users</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{stats.totalUsers}</p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
-          <p className="text-slate-400 text-sm mb-1">Active Users</p>
-          <p className="text-3xl font-bold text-green-400">{stats.activeUsers}</p>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Active users</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">{stats.activeUsers}</p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800">
-          <p className="text-slate-400 text-sm mb-1">Total Platform Balance</p>
-          <p className="text-3xl font-bold text-blue-400">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total platform wallet balance</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-[var(--accent-text)]">
             ₦{stats.totalBalance.toLocaleString("en-NG", {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
           </p>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            Combined balance across all accounts; individual wallet balances are listed below.
+          </p>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-8 flex gap-3">
-        <div className="flex-1 flex gap-3">
+      <section aria-label="Search and filter users" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-900 dark:text-white">Directory</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Search, filter, and manage platform accounts.</p>
+          </div>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{totalUserCount.toLocaleString()} accounts</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           <input
             type="text"
-            placeholder="Search by email or name..."
+            aria-label="Search users by email or name"
+            placeholder="Search name or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleSearch()}
-            className="flex-1 px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            className="min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[rgba(var(--accent-rgb),0.18)] dark:border-slate-700 dark:bg-slate-950 dark:text-white sm:col-span-2 xl:col-span-2"
           />
           <button
             onClick={handleSearch}
             disabled={loading}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 rounded-lg text-white font-medium flex items-center gap-2 transition"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Search size={18} />
             Search
@@ -530,7 +552,8 @@ export default function AdminUsers() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="ml-3 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white text-sm"
+            aria-label="Sort users"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-[var(--accent)] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           >
             <option value="newest">Newest Registration</option>
             <option value="balance">Highest Balance</option>
@@ -539,7 +562,8 @@ export default function AdminUsers() {
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
-            className="ml-3 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white text-sm"
+            aria-label="Filter users by role"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-[var(--accent)] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           >
             <option value="">All roles</option>
             <option value="super_admin">Super Admin</option>
@@ -549,7 +573,8 @@ export default function AdminUsers() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="ml-3 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white text-sm"
+            aria-label="Filter users by status"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-[var(--accent)] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           >
             <option value="">All status</option>
             <option value="active">Active</option>
@@ -558,29 +583,34 @@ export default function AdminUsers() {
           <select
             value={approvalFilter}
             onChange={(e) => setApprovalFilter(e.target.value)}
-            className="ml-3 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white text-sm"
+            aria-label="Filter users by approval"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-[var(--accent)] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           >
             <option value="">All approvals</option>
             <option value="pending">Pending approval</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
           </select>
-          <div className="ml-3 flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-950">
             <button
+              type="button"
               onClick={() => setViewMode("grid")}
-              className={`px-3 py-2 rounded-lg text-sm ${viewMode === "grid" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-300"}`}
+              aria-pressed={viewMode === "grid"}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${viewMode === "grid" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
             >
               Grid
             </button>
             <button
+              type="button"
               onClick={() => setViewMode("list")}
-              className={`px-3 py-2 rounded-lg text-sm ${viewMode === "list" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-300"}`}
+              aria-pressed={viewMode === "list"}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${viewMode === "list" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
             >
               List
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Users Grid */}
       {loading ? (
@@ -594,19 +624,19 @@ export default function AdminUsers() {
       ) : (
         <>
           {viewMode === "grid" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-1 gap-4 pb-2 md:grid-cols-2 xl:grid-cols-3">
               {sortedAndFilteredUsers.map((u) => (
                 <div
                   key={u._id}
-                  className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition"
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-[var(--accent)] hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
                 >
                   {/* User Header */}
                   <div className="mb-4 flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-semibold">{(u.firstName || u.firstname || u.email || "").charAt(0).toUpperCase()}</div>
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[rgba(var(--accent-rgb),0.12)] font-semibold text-[var(--accent-text)]">{(u.firstName || u.firstname || u.email || "").charAt(0).toUpperCase()}</div>
                       <div>
-                        <p className="text-sm text-slate-400 mb-1">Email</p>
-                        <p className="text-white font-semibold break-words">{u.email}</p>
+                        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Email</p>
+                        <p className="break-words text-sm font-semibold text-slate-900 dark:text-white">{u.email}</p>
                       </div>
                     </div>
                     <div className="ml-4">
@@ -652,15 +682,15 @@ export default function AdminUsers() {
                     </span>
                   </div>
 
-                  <div className="text-xs text-slate-400 mt-3">
+                  <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
                     <div>Registered: {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</div>
                     <div>Last login: { (u.lastLoginAt || u.lastLogin || u.lastSeen) ? new Date(u.lastLoginAt || u.lastLogin || u.lastSeen).toLocaleString() : '—' }</div>
                   </div>
 
                   {/* Balance */}
-                  <div className="mb-6 p-3 bg-slate-900/50 rounded-lg">
-                    <p className="text-xs text-slate-400 mb-1">Wallet Balance</p>
-                    <p className="text-xl font-bold text-green-400">
+                  <div className="mb-5 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+                    <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">Wallet balance</p>
+                    <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
                       ₦{(u.walletBalanceKobo / 100 || 0).toLocaleString("en-NG", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
@@ -669,7 +699,7 @@ export default function AdminUsers() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {isSuperAdmin && (u.approvalStatus || "approved") === "pending" && (
                       <div className="grid grid-cols-2 gap-2">
                         <button onClick={() => handleApproval(u._id, "approve")} className="px-3 py-2 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 rounded-lg text-sm font-medium transition">Approve</button>
@@ -741,9 +771,9 @@ export default function AdminUsers() {
               ))}
             </div>
           ) : (
-            <div className="mb-8 overflow-x-auto bg-slate-900/40 rounded-lg p-4">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <table className="min-w-full text-left text-sm">
-                <thead className="text-slate-400">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-950 dark:text-slate-400">
                   <tr>
                     <th className="px-4 py-3">
                       <input
@@ -762,23 +792,23 @@ export default function AdminUsers() {
                     <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {sortedAndFilteredUsers.map((u) => (
-                    <tr key={u._id} className="hover:bg-slate-800/30">
-                      <td className="px-4 py-3 align-top text-slate-200">
+                    <tr key={u._id} className="transition hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="px-4 py-3 align-top text-slate-700 dark:text-slate-200">
                         <input type="checkbox" checked={selectedIds.has(u._id)} onChange={() => toggleSelect(u._id)} className="w-4 h-4" />
                       </td>
-                      <td className="px-4 py-3 align-top text-slate-200">{u.email}</td>
-                      <td className="px-4 py-3 align-top text-slate-300">
+                      <td className="px-4 py-3 align-top text-slate-700 dark:text-slate-200">{u.email}</td>
+                      <td className="px-4 py-3 align-top text-slate-700 dark:text-slate-300">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white font-medium">{(u.firstName || u.firstname || u.email || "").charAt(0).toUpperCase()}</div>
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[rgba(var(--accent-rgb),0.12)] font-medium text-[var(--accent-text)]">{(u.firstName || u.firstname || u.email || "").charAt(0).toUpperCase()}</div>
                           <div>{`${u.firstName || u.firstname || ""} ${u.lastName || ""}`}</div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 align-top text-slate-200">{u.role || "user"}</td>
-                      <td className="px-4 py-3 align-top text-slate-200">{u.status || "active"}</td>
-                      <td className="px-4 py-3 align-top capitalize text-slate-200">{u.approvalStatus || "approved"}</td>
-                      <td className="px-4 py-3 align-top text-right font-semibold text-green-400">₦{(u.walletBalanceKobo / 100 || 0).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-3 align-top text-slate-700 dark:text-slate-200">{u.role || "user"}</td>
+                      <td className="px-4 py-3 align-top text-slate-700 dark:text-slate-200">{u.status || "active"}</td>
+                      <td className="px-4 py-3 align-top capitalize text-slate-700 dark:text-slate-200">{u.approvalStatus || "approved"}</td>
+                      <td className="px-4 py-3 align-top text-right font-semibold text-emerald-600 dark:text-emerald-400">₦{(u.walletBalanceKobo / 100 || 0).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 align-top">
                         <div className="flex gap-2">
                           {isSuperAdmin && (u.approvalStatus || "approved") === "pending" && <>
@@ -854,31 +884,31 @@ export default function AdminUsers() {
           )}
 
           {/* Pagination */}
-          <div className="flex items-center justify-between">
-            <div className="text-slate-400 text-sm">Showing {users.length} of {totalUserCount} users (Page {page} of {totalPages})</div>
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 xl:flex-row xl:items-center xl:justify-between">
+            <div className="text-sm text-slate-500 dark:text-slate-400">Showing {users.length} of {totalUserCount} users · Page {page} of {totalPages}</div>
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <button onClick={() => selectAllVisible()} className="px-3 py-1 bg-slate-700 rounded text-sm text-white">Select All</button>
-                <button onClick={() => clearSelection()} className="px-3 py-1 bg-slate-700 rounded text-sm text-white">Clear</button>
+                <button onClick={() => selectAllVisible()} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Select All</button>
+                <button onClick={() => clearSelection()} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Clear</button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button onClick={() => performBulkAction('suspend')} className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-200">Suspend Selected</button>
+                <button onClick={() => performBulkAction('activate')} className="rounded-lg bg-emerald-100 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200">Activate Selected</button>
+                <button onClick={() => performBulkAction('delete')} className="rounded-lg bg-rose-100 px-3 py-2 text-sm font-medium text-rose-800 hover:bg-rose-200 dark:bg-rose-950/50 dark:text-rose-200">Delete Selected</button>
+                <button onClick={exportSelectedCsv} className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-[var(--accent-foreground)] hover:opacity-90">Export CSV</button>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => performBulkAction('suspend')} className="px-3 py-1 bg-orange-600 rounded text-sm text-white">Suspend Selected</button>
-                <button onClick={() => performBulkAction('activate')} className="px-3 py-1 bg-green-600 rounded text-sm text-white">Activate Selected</button>
-                <button onClick={() => performBulkAction('delete')} className="px-3 py-1 bg-red-600 rounded text-sm text-white">Delete Selected</button>
-                <button onClick={exportSelectedCsv} className="px-3 py-1 bg-blue-600 rounded text-sm text-white">Export CSV</button>
-              </div>
-              <div>
                 <button
                   onClick={() => fetchUsers(page - 1, currentSearch)}
                   disabled={page <= 1 || loading}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg transition"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => fetchUsers(page + 1, currentSearch)}
                   disabled={page >= totalPages || loading}
-                  className="ml-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg transition"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   Next
                 </button>

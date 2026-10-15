@@ -15,6 +15,7 @@ import {
   Wallet,
   X,
   MessageCircle,
+  PanelLeftClose,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../lib/axios";
@@ -84,7 +85,7 @@ const adminGroups = [
     title: "Management",
     icon: Settings,
     links: [
-      { to: "/admin/users", label: "Manage users", icon: Users, superAdminOnly: true },
+      { to: "/admin/users", label: "User management", icon: Users, superAdminOnly: true },
       { to: "/admin/services-engine", label: "Services & pricing", icon: SlidersHorizontal, superAdminOnly: true },
       { to: "/admin/communications", label: "Communications", icon: MessageCircle },
       { to: "/admin/articles", label: "Guides & updates", icon: BookOpenText, superAdminOnly: true },
@@ -95,27 +96,7 @@ const adminGroups = [
   },
 ];
 
-function activeGroupForPath(pathname, isAdminWorkspace) {
-  if (isAdminWorkspace && (
-    pathname.startsWith("/admin/pricing")
-    || pathname.startsWith("/admin/services-engine")
-    || pathname.startsWith("/admin/user/")
-    || pathname.startsWith("/admin/agents")
-    || pathname.startsWith("/admin/communications")
-    || pathname.startsWith("/admin/settings")
-  )) {
-    return "management";
-  }
-  if (!isAdminWorkspace && (pathname.startsWith("/services/") || pathname.startsWith("/nin-services/") || pathname.startsWith("/cac-services/") || pathname.startsWith("/verify-result"))) {
-    return "services";
-  }
-  const groups = isAdminWorkspace ? adminGroups : userGroups;
-  return groups.find((group) => group.links.some(({ to }) => (
-    pathname === to || (to !== "/dashboard" && to !== "/admin" && pathname.startsWith(`${to}/`))
-  )))?.id || groups[0].id;
-}
-
-export default function Sidebar({ open, isMobile, collapsed = false, onClose }) {
+export default function Sidebar({ open, isMobile, collapsed = false, onClose, onToggleCollapse }) {
   const { user, clearUser } = useUser();
   const { businessName, businessTagline, businessLogoUrl } = useBranding();
   const location = useLocation();
@@ -126,8 +107,9 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose }) 
   const [serviceCategories, setServiceCategories] = useState([]);
   const [verifyNinEnabled, setVerifyNinEnabled] = useState(true);
   const [pendingPayments, setPendingPayments] = useState(0);
-  const [openGroups, setOpenGroups] = useState(() => new Set());
-  const activeGroup = activeGroupForPath(location.pathname, isAdminWorkspace);
+  const [openGroups, setOpenGroups] = useState(() => new Set(
+    [...userGroups, ...adminGroups].map((group) => group.id),
+  ));
   const showLabels = !collapsed || isMobile;
   const visible = !isMobile || open;
 
@@ -224,17 +206,46 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose }) 
       <div className={`flex h-20 shrink-0 items-center border-b border-slate-200 dark:border-slate-800 ${
         collapsed && !isMobile ? "justify-center px-0" : "gap-3 px-5"
       }`}>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[rgba(var(--accent-rgb),0.10)] text-[var(--accent-text)]">
-          {businessLogoUrl
-            ? <img src={businessLogoUrl} alt="" className="h-full w-full object-contain p-1" />
-            : <Activity size={21} aria-hidden="true" />}
-        </div>
+        {collapsed && !isMobile ? (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label="Expand sidebar"
+            aria-expanded={false}
+            aria-controls="app-sidebar"
+            title="Expand sidebar"
+            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[rgba(var(--accent-rgb),0.10)] text-[var(--accent-text)] transition hover:ring-2 hover:ring-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            {businessLogoUrl
+              ? <img src={businessLogoUrl} alt="" className="h-full w-full object-contain p-1" />
+              : <Activity size={21} aria-hidden="true" />}
+          </button>
+        ) : (
+          <>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[rgba(var(--accent-rgb),0.10)] text-[var(--accent-text)]">
+              {businessLogoUrl
+                ? <img src={businessLogoUrl} alt="" className="h-full w-full object-contain p-1" />
+                : <Activity size={21} aria-hidden="true" />}
+            </div>
         {showLabels && (
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white">{businessName}</p>
             <p className="truncate text-xs text-slate-500 dark:text-slate-400">{businessTagline}</p>
           </div>
         )}
+            {!isMobile && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                aria-label="Collapse sidebar"
+                aria-expanded={true}
+                aria-controls="app-sidebar"
+                title="Collapse sidebar"
+                className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                <PanelLeftClose size={18} aria-hidden="true" />
+              </button>
+            )}
         {isMobile && (
           <button
             type="button"
@@ -246,12 +257,14 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose }) 
             <X size={19} aria-hidden="true" />
           </button>
         )}
+          </>
+        )}
       </div>
 
-      <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-5" aria-label="Dashboard">
+      <nav hidden={!showLabels} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-5" aria-label="Dashboard">
         {groups.map((group) => {
           const GroupIcon = group.icon;
-          const expanded = activeGroup === group.id || openGroups.has(group.id);
+          const expanded = openGroups.has(group.id);
           return (
             <SidebarNavSection
               key={group.id}
@@ -260,7 +273,6 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose }) 
               icon={<GroupIcon size={18} aria-hidden="true" />}
               open={showLabels}
               expanded={expanded}
-              canToggle={activeGroup !== group.id}
               onToggle={() => setOpenGroups((current) => {
                 const next = new Set(current);
                 if (next.has(group.id)) next.delete(group.id);
@@ -284,7 +296,7 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose }) 
         })}
       </nav>
 
-      <div className="border-t border-slate-200 p-3 dark:border-slate-800">
+      <div hidden={!showLabels} className="border-t border-slate-200 p-3 dark:border-slate-800">
         <button
           type="button"
           onClick={handleLogout}

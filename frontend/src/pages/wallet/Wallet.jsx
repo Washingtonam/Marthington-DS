@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useUser } from "../../context/UserContext";
 import { useBranding } from "../../context/BrandingContext";
 import api from "../../lib/axios";
@@ -7,10 +7,11 @@ import { Wallet2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Wallet() {
-  const { user, setBalance, refreshBalance } = useUser();
+  const { user, walletBalance, setBalance, refreshBalance } = useUser();
   const { businessName, businessLogoUrl } = useBranding();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const AnimatedDiv = motion.div;
   const gatewayMode = useMemo(() => {
     const configuredGateway = import.meta.env.VITE_PAYMENT_GATEWAY_MODE || "flutterwave";
     return configuredGateway.toLowerCase();
@@ -130,7 +131,7 @@ export default function Wallet() {
 
             <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl p-8 text-white mb-8">
               <p className="text-sm opacity-80 mb-2">Current Balance</p>
-              <h2 className="text-4xl font-bold">{formatNaira(user?.walletBalance || 0)}</h2>
+              <h2 className="text-4xl font-bold">{formatNaira(walletBalance ?? user?.walletBalance ?? 0)}</h2>
             </div>
 
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-700 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-300 mb-8">
@@ -198,20 +199,20 @@ export default function Wallet() {
           </div>
 
           <div className="space-y-6">
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
+            <AnimatedDiv initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
               <h3 className="font-bold">💡 Automated Funding</h3>
               <p className="text-gray-500">All Flutterwave payments are processed securely and credited to your wallet instantly after confirmation.</p>
-            </motion.div>
+            </AnimatedDiv>
 
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
+            <AnimatedDiv initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
               <h3 className="font-bold">🔒 Secure Transactions</h3>
               <p className="text-gray-500">Your payment information is processed securely by Flutterwave with a verified checkout experience.</p>
-            </motion.div>
+            </AnimatedDiv>
 
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
+            <AnimatedDiv initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-xl border text-sm space-y-4">
               <h3 className="font-bold">⚡ Instant Credits</h3>
               <p className="text-gray-500">Payments are verified and your wallet is credited within seconds. Use your balance immediately for services.</p>
-            </motion.div>
+            </AnimatedDiv>
           </div>
         </div>
       </div>

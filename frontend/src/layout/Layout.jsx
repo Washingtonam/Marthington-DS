@@ -4,7 +4,6 @@ import {
   ChevronDown,
   LogOut,
   Menu,
-  PanelLeftClose,
   Moon,
   Sun,
   UserRound,
@@ -36,7 +35,7 @@ const pageTitles = [
   ["/cac-services", "CAC services"],
   ["/services", "Services"],
   ["/admin", "Admin dashboard"],
-  ["/admin/users", "Manage users"],
+  ["/admin/users", "User management"],
   ["/admin/payments", "Payment requests"],
   ["/admin/requests", "Service requests"],
   ["/admin/verification-requests", "Verification requests"],
@@ -163,6 +162,7 @@ export default function Layout({ children }) {
         isMobile={isMobile}
         collapsed={collapsed}
         onClose={closeMobileDrawer}
+        onToggleCollapse={() => setCollapsed((value) => !value)}
       />
 
       <main className={`flex min-h-screen min-w-0 flex-col transition-[padding] duration-200 ${
@@ -170,23 +170,19 @@ export default function Layout({ children }) {
       }`}>
         <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
           <div className="flex min-h-[4.5rem] items-center gap-3 px-4 sm:px-6">
-            <button
-              type="button"
-              ref={menuButtonRef}
-              onClick={() => isMobile
-                ? mobileOpen ? closeMobileDrawer() : setMobileDrawerPath(location.pathname)
-                : setCollapsed((value) => !value)}
-              aria-label={isMobile
-                ? (mobileOpen ? "Close navigation menu" : "Open navigation menu")
-                : (collapsed ? "Open navigation menu" : "Collapse sidebar")}
-              aria-expanded={isMobile ? mobileOpen : !collapsed}
-              aria-controls="app-sidebar"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-slate-300 dark:hover:bg-slate-900"
-            >
-              {isMobile
-                ? mobileOpen ? <X size={20} /> : <Menu size={20} />
-                : collapsed ? <Menu size={20} /> : <PanelLeftClose size={20} />}
-            </button>
+            {isMobile && (
+              <button
+                type="button"
+                ref={menuButtonRef}
+                onClick={() => mobileOpen ? closeMobileDrawer() : setMobileDrawerPath(location.pathname)}
+                aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+                aria-expanded={mobileOpen}
+                aria-controls="app-sidebar"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-slate-300 dark:hover:bg-slate-900"
+              >
+                {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
+            )}
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">

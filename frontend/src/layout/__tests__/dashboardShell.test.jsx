@@ -175,6 +175,7 @@ describe("dashboard shell navigation", () => {
 
     expect(screen.getByRole("link", { name: "Agents" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Log jobs" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "User management" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Notification center" })).toBeNull();
     fireEvent.click(screen.getByRole("link", { name: "Communications" }));
     expect(screen.getByLabelText("Current route").textContent).toBe("/admin/communications");

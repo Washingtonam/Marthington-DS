@@ -63,7 +63,7 @@ export default function Admin() {
       color: "from-blue-600 to-indigo-600",
     },
     {
-      title: "Total Balance",
+      title: "Total Platform Wallet Balance",
       value: `₦${stats.totalBalance?.toLocaleString() ?? 0}`,
       icon: <Wallet size={24} />,
       color: "from-green-600 to-emerald-600",
@@ -94,7 +94,7 @@ export default function Admin() {
             </div>
             <h1 className="text-3xl md:text-5xl font-bold mb-4 leading-tight">Welcome Back, Admin</h1>
             <p className="text-blue-100 max-w-2xl">
-              Manage users, monitor payments, control pricing, and oversee all platform operations from one place.
+              Manage user accounts, monitor payments, control pricing, and oversee all platform operations from one place.
             </p>
           </div>
           <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 min-w-[260px] border border-white/10">
@@ -143,7 +143,7 @@ export default function Admin() {
         </div>
         <div className="grid md:grid-cols-3 gap-6">
           <ActionCard
-            title="Manage Users"
+            title="User Management"
             desc="View, suspend, delete and manage all users"
             icon="👥"
             color="from-blue-600 to-indigo-600"

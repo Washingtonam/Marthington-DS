@@ -22,7 +22,11 @@ export function UserProvider({ children }) {
       ...userData,
       id: userData.id || userData._id,
       units: userData.units || 0,
-      walletBalance: Number(userData.walletBalance ?? userData.balance ?? 0),
+      walletBalance: Number(
+        userData.walletBalance
+          ?? userData.balance
+          ?? (userData.walletBalanceKobo != null ? Number(userData.walletBalanceKobo) / 100 : 0)
+      ),
       commissionBalance: Number(userData.commissionBalance ?? 0),
     };
 
@@ -181,7 +185,12 @@ export function UserProvider({ children }) {
     setWalletBalance(Number.isFinite(nextBalance) ? Number(nextBalance.toFixed(2)) : 0);
     setUser((prev) => {
       if (!prev) return prev;
-      const updated = { ...prev, walletBalance: Number.isFinite(nextBalance) ? Number(nextBalance.toFixed(2)) : 0 };
+      const normalizedBalance = Number.isFinite(nextBalance) ? Number(nextBalance.toFixed(2)) : 0;
+      const updated = {
+        ...prev,
+        walletBalance: normalizedBalance,
+        walletBalanceKobo: Math.round(normalizedBalance * 100),
+      };
       localStorage.setItem("user", JSON.stringify(updated));
       return updated;
     });
