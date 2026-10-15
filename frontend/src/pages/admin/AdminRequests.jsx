@@ -2,7 +2,18 @@ import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../../lib/axios";
 import {
-  Search, ChevronLeft, ChevronRight
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  BarChart3,
+  CalendarDays,
+  CheckCircle2,
+  CircleDollarSign,
+  Clock3,
+  Download,
+  Layers3,
+  SlidersHorizontal,
+  X,
 } from "lucide-react";
 import SlideOver from "../../components/ui/SlideOver";
 import RequestDetails from "./RequestDetails";
@@ -19,6 +30,77 @@ const statusColors = {
   "failed": "bg-orange-100 text-orange-800 border border-orange-300 dark:bg-orange-900/30 dark:text-orange-200 dark:border-orange-600"
 };
 
+const emptyAnalytics = {
+  totalRequests: 0,
+  totalAmount: 0,
+  pending: 0,
+  inProgress: 0,
+  completed: 0,
+  rejected: 0,
+  services: [],
+};
+
+const formatAmount = (amount) => new Intl.NumberFormat("en-NG", {
+  style: "currency",
+  currency: "NGN",
+  maximumFractionDigits: 0,
+}).format(Number(amount) || 0);
+
+function MetricCard({ icon, label, value, detail }) {
+  return (
+    <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
+          <p className="mt-2 break-words text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{value}</p>
+        </div>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[rgba(var(--accent-rgb),0.10)] text-[var(--accent-text)]">
+          {React.createElement(icon, { size: 19, "aria-hidden": true })}
+        </span>
+      </div>
+      <p className="mt-3 truncate text-xs text-slate-500 dark:text-slate-400">{detail}</p>
+    </article>
+  );
+}
+
+function ServicePerformanceCard({ title, description, services, icon, formatAmount: formatServiceAmount }) {
+  const maxCount = Math.max(...services.map((service) => Number(service.count) || 0), 1);
+
+  return (
+    <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+      <header className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[rgba(var(--accent-rgb),0.10)] text-[var(--accent-text)]">
+          {React.createElement(icon, { size: 19, "aria-hidden": true })}
+        </span>
+        <div className="min-w-0">
+          <h4 className="font-semibold text-slate-900 dark:text-white">{title}</h4>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{description}</p>
+        </div>
+      </header>
+      <ul className="mt-4 space-y-4">
+        {services.map((service) => {
+          const count = Number(service.count) || 0;
+          return (
+            <li key={service.service} className="min-w-0">
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <span className="min-w-0 break-words text-sm font-semibold text-slate-800 dark:text-slate-200">{service.service}</span>
+                <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">{count.toLocaleString()} requests</span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-label={`${service.service} request volume`} aria-valuemin={0} aria-valuemax={maxCount} aria-valuenow={count}>
+                <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(3, (count / maxCount) * 100)}%` }} />
+              </div>
+              <div className="mt-1.5 flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                <span>{formatServiceAmount(service.totalAmount)} value</span>
+                <span>{Number(service.completionRate) || 0}% completed</span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </article>
+  );
+}
+
 export default function AdminRequests() {
   const [searchParams] = useSearchParams();
   const { success, error: toastError, info } = useToast();
@@ -27,6 +109,7 @@ export default function AdminRequests() {
   const [selectedServices, setSelectedServices] = useState([]);
   const [activeStatus, setActiveStatus] = useState("all");
   const [requests, setRequests] = useState([]);
+  const [analytics, setAnalytics] = useState(emptyAnalytics);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modalStatus, setModalStatus] = useState("");
@@ -46,6 +129,7 @@ export default function AdminRequests() {
   const [toDate, setToDate] = useState('');
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
+  const [filtersVersion, setFiltersVersion] = useState(0);
 
   const serviceColors = {
     "Validation": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200",
@@ -81,12 +165,14 @@ export default function AdminRequests() {
       const res = await api.get("/api/admin/requests", { params });
       const data = res.data?.data || res.data?.requests || [];
       setRequests(data);
+      setAnalytics({ ...emptyAnalytics, ...(res.data?.analytics || {}) });
       setPages(res.data?.pagination?.pages || 1);
       setApproximate(!!res.data?.pagination?.approximate);
       setPage(pageNum);
     } catch (err) {
       console.error("Fetch Error:", err);
       setRequests([]);
+      setAnalytics(emptyAnalytics);
       if (toastError) toastError(err.response?.data?.message || "Failed to fetch requests");
     } finally {
       setLoading(false);
@@ -107,7 +193,7 @@ export default function AdminRequests() {
 
   useEffect(() => {
     fetchRequests(1);
-  }, [activeStatus, activeTab, selectedServices, requesterRole]);
+  }, [activeStatus, activeTab, selectedServices, requesterRole, filtersVersion]);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearchQuery(searchTerm.trim()), 500);
@@ -274,6 +360,10 @@ export default function AdminRequests() {
   };
 
   const displayedRequests = requests;
+  const topServices = analytics.services.slice(0, Math.min(5, Math.ceil(analytics.services.length / 2)));
+  const lowerVolumeServices = [...analytics.services]
+    .sort((a, b) => a.count - b.count)
+    .slice(0, Math.min(5, Math.floor(analytics.services.length / 2)));
 
   const formatDateShort = (iso) => iso ? new Date(iso).toLocaleDateString() : '-';
 
@@ -299,77 +389,154 @@ export default function AdminRequests() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Consolidated Action Header */}
-      <div className="mb-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            {[{ slug: "all", label: "All services" }, ...serviceCategories].map((tab) => (
-              <button
-                key={tab.slug}
-                onClick={() => handleTabChange(tab.slug)}
-                className={`px-4 py-2 font-semibold rounded-2xl transition ${activeTab === tab.slug ? "bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-950" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
-              >
-                {tab.label.toUpperCase() === "NIN" ? "NIMC" : tab.label}
-              </button>
-            ))}
-
-            {activeTab !== "all" && <div className="ml-2 w-72"><input value={selectedServices[0] || ""} onChange={(event) => setSelectedServices(event.target.value ? [event.target.value] : [])} placeholder="Filter by service code or type" className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" /></div>}
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center rounded-xl p-2 border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
-              <Search className="mr-2 text-slate-500 dark:text-slate-400" />
-              <input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }}
-                placeholder="Search name, NIN, email, job or ID"
-                className="w-64 md:w-80 outline-none bg-transparent text-slate-900 dark:text-slate-100"
-              />
-            </div>
-              <button onClick={() => { const qs = new URLSearchParams({ search: searchQuery || searchTerm, status: activeStatus === 'all' ? '' : activeStatus, category: activeTab === 'all' ? '' : (serviceCategories.find((item) => item.slug === activeTab)?.label || activeTab), serviceType: selectedServices.length ? selectedServices.join(',') : '', userRole: requesterRole, sortBy, order }); window.open(`/api/admin/requests/export?${qs.toString()}`, '_blank'); }} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-200 dark:text-slate-950">Export</button>
-              <button onClick={() => setShowJobs(true)} aria-label="Open Jobs panel" className="rounded-2xl bg-transparent px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Jobs</button>
-              <button onClick={() => { if (selectedIds.size === 0) selectAllVisible(); else clearSelection(); }} className="rounded-2xl bg-transparent px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">{selectedIds.size === 0 ? 'Select Visible' : `Selected ${selectedIds.size}`}</button>
-
-            <select value={activeStatus} onChange={(e) => handleStatusChange(e.target.value)} className="px-3 py-2 rounded-2xl border border-slate-300 bg-white text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-              <option value="all">All Statuses</option>
-              {["pending", "approved", "in-progress", "processing", "completed", "rejected", "failed"].map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-
-            <select value={requesterRole} onChange={(e) => handleRoleChange(e.target.value)} className="px-3 py-2 rounded-2xl border border-slate-300 bg-white text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-              <option value="all">All Requesters</option>
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-              <option value="super_admin">Super Admin</option>
-            </select>
-
-            <button onClick={applyFilters} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-200 dark:text-slate-950">Apply</button>
-            <button onClick={() => { setActiveStatus('all'); setSelectedServices([]); setRequesterRole('all'); setSearchTerm(''); setPage(1); fetchRequests(1); }} className="rounded-2xl bg-transparent px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Clear</button>
-          </div>
+    <div className="mx-auto w-full max-w-[1440px] min-w-0 space-y-6 px-3 py-5 sm:px-6 sm:py-7">
+      <header className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-text)]">Operations overview</p>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">Service requests</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+            Review customer work, track request progress, and compare service demand and value.
+          </p>
         </div>
-      </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => { const qs = new URLSearchParams({ search: searchQuery || searchTerm, status: activeStatus === 'all' ? '' : activeStatus, category: activeTab === 'all' ? '' : (serviceCategories.find((item) => item.slug === activeTab)?.label || activeTab), serviceType: selectedServices.length ? selectedServices.join(',') : '', userRole: requesterRole, sortBy, order }); window.open(`/api/admin/requests/export?${qs.toString()}`, '_blank'); }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <Download size={16} aria-hidden="true" /> Export
+          </button>
+          <button type="button" onClick={() => setShowJobs(true)} aria-label="Open Jobs panel" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+            <Layers3 size={16} aria-hidden="true" /> Background jobs
+          </button>
+        </div>
+      </header>
 
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <button onClick={() => setViewMode('table')} className={`px-3 py-2 rounded-xl ${viewMode === 'table' ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>Table</button>
-          <button onClick={() => setViewMode('cards')} className={`px-3 py-2 rounded-xl ${viewMode === 'cards' ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>Cards</button>
-          <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); fetchRequests(1); }} className="ml-3 p-2 rounded-xl border">
-            {[12,25,50,100].map(n => <option key={n} value={n}>{n} / page</option>)}
+      <section aria-label="Request filters" className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          {[{ slug: "all", label: "All services" }, ...serviceCategories].map((tab) => (
+            <button
+              key={tab.slug}
+              type="button"
+              aria-pressed={activeTab === tab.slug}
+              onClick={() => handleTabChange(tab.slug)}
+              className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 ${activeTab === tab.slug ? "bg-[var(--accent)] text-[var(--accent-foreground)] shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"}`}
+            >
+              {tab.label.toUpperCase() === "NIN" ? "NIMC" : tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(16rem,1.5fr)_repeat(3,minmax(9rem,0.7fr))_auto_auto]">
+          <label className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 dark:border-slate-700 dark:bg-slate-950">
+            <Search size={17} className="shrink-0 text-slate-400" aria-hidden="true" />
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
+              placeholder="Search name, NIN, email, job or ID"
+              aria-label="Search service requests"
+              className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
+            />
+          </label>
+          {activeTab !== "all" && (
+            <input
+              value={selectedServices[0] || ""}
+              onChange={(event) => setSelectedServices(event.target.value ? [event.target.value] : [])}
+              aria-label="Filter by service"
+              placeholder="Service code or type"
+              className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950"
+            />
+          )}
+          <label className="sr-only" htmlFor="request-status-filter">Status</label>
+          <select id="request-status-filter" value={activeStatus} onChange={(event) => handleStatusChange(event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+            <option value="all">All statuses</option>
+            {["pending", "approved", "in-progress", "processing", "completed", "rejected", "failed"].map((status) => <option key={status} value={status}>{status.replace("-", " ")}</option>)}
           </select>
+          <label className="sr-only" htmlFor="request-role-filter">Requester</label>
+          <select id="request-role-filter" value={requesterRole} onChange={(event) => handleRoleChange(event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+            <option value="all">All requesters</option>
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+            <option value="super_admin">Super Admin</option>
+          </select>
+          <button type="button" onClick={() => { if (selectedIds.size === 0) selectAllVisible(); else clearSelection(); }} className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">
+            {selectedIds.size === 0 ? "Select visible" : `${selectedIds.size} selected`}
+          </button>
+          <button type="button" onClick={applyFilters} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)] shadow-sm hover:opacity-90">Apply</button>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm">From</label>
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="p-2 rounded-xl border" />
-          <label className="text-sm">To</label>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="p-2 rounded-xl border" />
-          <input placeholder="Min amount" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} className="p-2 rounded-xl border w-28" />
-          <input placeholder="Max amount" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} className="p-2 rounded-xl border w-28" />
-          <button onClick={applyFilters} className="px-4 py-2 rounded-2xl bg-slate-900 text-white">Apply</button>
+
+        <div className="mt-4 grid min-w-0 gap-3 border-t border-slate-100 pt-4 dark:border-slate-800 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="min-w-0">
+            <label htmlFor="requests-from-date" className="text-xs font-semibold text-slate-500 dark:text-slate-400">From date</label>
+            <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
+              <CalendarDays size={15} className="shrink-0 text-slate-400" aria-hidden="true" />
+              <input id="requests-from-date" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none dark:text-slate-100" />
+            </span>
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="requests-to-date" className="text-xs font-semibold text-slate-500 dark:text-slate-400">To date</label>
+            <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
+              <CalendarDays size={15} className="shrink-0 text-slate-400" aria-hidden="true" />
+              <input id="requests-to-date" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none dark:text-slate-100" />
+            </span>
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="requests-min-amount" className="text-xs font-semibold text-slate-500 dark:text-slate-400">Minimum amount</label>
+            <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
+              <span className="text-sm font-normal text-slate-400">₦</span>
+              <input id="requests-min-amount" type="number" min="0" value={minAmount} onChange={(event) => setMinAmount(event.target.value)} placeholder="No minimum" className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100" />
+            </span>
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="requests-max-amount" className="text-xs font-semibold text-slate-500 dark:text-slate-400">Maximum amount</label>
+            <span className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
+              <span className="text-sm font-normal text-slate-400">₦</span>
+              <input id="requests-max-amount" type="number" min="0" value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} placeholder="No maximum" className="min-w-0 w-full bg-transparent py-2 text-sm font-normal text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100" />
+            </span>
+          </div>
         </div>
-      </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">Date and amount filters apply when you select Apply.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => { setActiveStatus("all"); setActiveTab("all"); setSelectedServices([]); setRequesterRole("all"); setSearchTerm(""); setSearchQuery(""); setFromDate(""); setToDate(""); setMinAmount(""); setMaxAmount(""); setPage(1); setFiltersVersion((version) => version + 1); }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+              <X size={15} aria-hidden="true" /> Clear filters
+            </button>
+            <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-950" role="group" aria-label="Request display">
+              <button type="button" aria-pressed={viewMode === "table"} onClick={() => setViewMode("table")} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${viewMode === "table" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white" : "text-slate-500"}`}>Table</button>
+              <button type="button" aria-pressed={viewMode === "cards"} onClick={() => setViewMode("cards")} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${viewMode === "cards" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white" : "text-slate-500"}`}>Cards</button>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+              Rows
+              <select aria-label="Rows per page" value={pageSize} onChange={(event) => { const nextSize = Number(event.target.value); setPageSize(nextSize); setPage(1); fetchRequests(1); }} className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                {[12, 25, 50, 100].map((size) => <option key={size} value={size}>{size} / page</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section aria-label="Filtered request analysis" className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Request analysis</h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Performance for the current filters, not only this page of results.</p>
+          </div>
+          <span className="text-xs text-slate-500 dark:text-slate-400">{analytics.services.length} services with requests</span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard icon={Layers3} label="Total requests" value={analytics.totalRequests.toLocaleString()} detail={`${requests.length} shown on this page`} />
+          <MetricCard icon={CircleDollarSign} label="Request value" value={formatAmount(analytics.totalAmount)} detail="Across matching requests" />
+          <MetricCard icon={Clock3} label="Awaiting / in progress" value={(analytics.pending + analytics.inProgress).toLocaleString()} detail={`${analytics.pending} pending · ${analytics.inProgress} processing`} />
+          <MetricCard icon={CheckCircle2} label="Completed" value={analytics.completed.toLocaleString()} detail={`${analytics.totalRequests ? Math.round((analytics.completed / analytics.totalRequests) * 100) : 0}% completion rate`} />
+        </div>
+        {!!topServices.length && (
+          <div className={`grid min-w-0 gap-4 ${lowerVolumeServices.length ? "lg:grid-cols-2" : ""}`}>
+            <ServicePerformanceCard title="Highest request volume" description="Services with the most matching requests" services={topServices} icon={BarChart3} formatAmount={formatAmount} />
+            {!!lowerVolumeServices.length && <ServicePerformanceCard title="Lower request volume" description="Services with fewer matching requests" services={lowerVolumeServices} icon={SlidersHorizontal} formatAmount={formatAmount} />}
+          </div>
+        )}
+      </section>
 
       {loading ? (
         <div className="flex items-center justify-center rounded-3xl border border-dashed border-slate-300 p-10 text-slate-500 dark:border-slate-700 dark:text-slate-400">
@@ -396,7 +563,7 @@ export default function AdminRequests() {
                 </div>
               </div>
             )}
-            <table className="min-w-full text-sm text-slate-900 dark:text-slate-100">
+            <table className="w-full min-w-[680px] text-sm text-slate-900 dark:text-slate-100">
               <thead className="text-xs text-slate-500 uppercase bg-slate-100 dark:bg-slate-800 dark:text-slate-300">
                 <tr>
                   <th className="p-3"><input aria-label="Select eligible requests" type="checkbox" onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }} checked={displayedRequests.some((r) => r.pipelineSource !== "agent-job") && displayedRequests.filter((r) => r.pipelineSource !== "agent-job").every((r) => selectedIds.has(r._id))} /></th>
@@ -425,7 +592,7 @@ export default function AdminRequests() {
             </table>
           </div>
         ) : (
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {displayedRequests.map(r => (
               <div key={r._id} className={`bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition ${r.status === 'pending' ? 'ring-1 ring-yellow-300 dark:ring-yellow-600' : ''} h-full flex flex-col`}>
                 <div className="flex items-start justify-between mb-3">

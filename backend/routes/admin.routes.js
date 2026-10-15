@@ -766,16 +766,77 @@ router.get("/requests", isAdmin, async (req, res) => {
       { $project: { __v: 0 } },
       { $unionWith: { coll: cacColl, pipeline: [ { $match: cacMatch }, { $addFields: { pipelineSource: 'cac' } }, { $project: { __v: 0 } } ] } },
       { $unionWith: { coll: agentJobsColl, pipeline: [ { $match: agentJobQuery }, { $addFields: { pipelineSource: 'agent-job', serviceCategory: 'Agent', userId: null, amountCharged: '$amount' } }, { $project: { __v: 0, createdBy: 0 } } ] } },
-      { $sort: { [sortField]: sortOrder } },
       { $facet: {
-        data: [ { $skip: startIndex }, { $limit: limit } ],
-        meta: [ { $count: 'total' } ]
+        data: [ { $sort: { [sortField]: sortOrder } }, { $skip: startIndex }, { $limit: limit } ],
+        meta: [ { $count: 'total' } ],
+        analytics: [
+          {
+            $group: {
+              _id: null,
+              totalRequests: { $sum: 1 },
+              totalAmount: {
+                $sum: {
+                  $convert: {
+                    input: { $ifNull: ["$amountCharged", "$amount"] },
+                    to: "double",
+                    onError: 0,
+                    onNull: 0,
+                  },
+                },
+              },
+              pending: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
+              inProgress: { $sum: { $cond: [{ $in: ["$status", ["in-progress", "processing"]] }, 1, 0] } },
+              completed: { $sum: { $cond: [{ $in: ["$status", ["completed", "approved"]] }, 1, 0] } },
+              rejected: { $sum: { $cond: [{ $in: ["$status", ["rejected", "failed"]] }, 1, 0] } },
+            },
+          },
+        ],
+        services: [
+          {
+            $group: {
+              _id: {
+                $ifNull: [
+                  "$serviceName",
+                  { $ifNull: ["$serviceType", { $ifNull: ["$service", "$type"] }] },
+                ],
+              },
+              count: { $sum: 1 },
+              totalAmount: {
+                $sum: {
+                  $convert: {
+                    input: { $ifNull: ["$amountCharged", "$amount"] },
+                    to: "double",
+                    onError: 0,
+                    onNull: 0,
+                  },
+                },
+              },
+              completed: { $sum: { $cond: [{ $in: ["$status", ["completed", "approved"]] }, 1, 0] } },
+            },
+          },
+          { $sort: { count: -1, totalAmount: -1 } },
+        ],
       } }
     ];
 
     const aggResult = await ServiceRequest.aggregate(agg).allowDiskUse(true);
     const pageData = (aggResult[0] && aggResult[0].data) || [];
     const exactTotal = aggResult[0]?.meta?.[0]?.total ?? null;
+    const analytics = aggResult[0]?.analytics?.[0] || {
+      totalRequests: 0,
+      totalAmount: 0,
+      pending: 0,
+      inProgress: 0,
+      completed: 0,
+      rejected: 0,
+    };
+    const services = (aggResult[0]?.services || []).map((service) => ({
+      service: String(service._id || "Other"),
+      count: service.count,
+      totalAmount: service.totalAmount,
+      completed: service.completed,
+      completionRate: service.count ? Math.round((service.completed / service.count) * 100) : 0,
+    }));
     const agentJobsOnPage = pageData.filter((item) => item.pipelineSource === "agent-job");
     const pricing = agentJobsOnPage.length ? await Pricing.getPricing() : null;
     const serviceCatalog = Array.isArray(pricing?.serviceCatalog) && pricing.serviceCatalog.length
@@ -826,7 +887,20 @@ router.get("/requests", isAdmin, async (req, res) => {
 
     const totalPages = Math.max(1, Math.ceil((totalRecords || populated.length) / limit));
 
-    res.json({ success: true, data: populated, pagination: { total: totalRecords, page, pages: totalPages, limit, approximate: exactTotal === null } });
+    res.json({
+      success: true,
+      data: populated,
+      pagination: { total: totalRecords, page, pages: totalPages, limit, approximate: exactTotal === null },
+      analytics: {
+        totalRequests: analytics.totalRequests,
+        totalAmount: analytics.totalAmount,
+        pending: analytics.pending,
+        inProgress: analytics.inProgress,
+        completed: analytics.completed,
+        rejected: analytics.rejected,
+        services,
+      },
+    });
   } catch (error) {
     console.error("🔥 CENTRAL PIPELINE REQUEST STREAM ERROR:", error);
     res.status(500).json({ success: false, message: "Failed to assemble systemic registration requests pipeline." });
