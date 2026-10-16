@@ -7,23 +7,39 @@ import api from "../lib/axios";
 
 export default function SupportChatWidget({ inline = false }) {
   const { user } = useUser();
-  const { error: toastError } = useToast();
+  const { error: toastError, info: toastInfo } = useToast();
   const location = useLocation();
   const [open, setOpen] = useState(() => inline || location.pathname === "/support-chat");
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef(null);
+  const knownSupportMessages = useRef(null);
 
   const loadConversation = useCallback(async () => {
     try {
       const response = await api.get("/api/communications/conversation");
-      setMessages(response.data?.messages || []);
+      const nextMessages = response.data?.messages || [];
+      const knownIds = knownSupportMessages.current;
+      const incomingMessages = nextMessages.filter((message) => (
+        ["admin", "super_admin"].includes(message.senderRole)
+        && !knownIds?.has(String(message._id))
+      ));
+      knownSupportMessages.current = new Set([
+        ...(knownIds || []),
+        ...nextMessages.map((message) => String(message._id)),
+      ]);
+      setMessages(nextMessages);
+      if (knownIds) {
+        incomingMessages.forEach(() => {
+          toastInfo("New message from support. Open Chat with support to read it.", 7000);
+        });
+      }
     } catch (loadError) {
       console.error("Support chat load failed:", loadError);
       toastError(loadError.response?.data?.message || "Could not load your support messages.");
     }
-  }, [toastError]);
+  }, [toastError, toastInfo]);
 
   useEffect(() => {
     if (!open) return undefined;
