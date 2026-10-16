@@ -1,5 +1,6 @@
 jest.mock("../models/User.model", () => ({ findById: jest.fn(), find: jest.fn() }));
 jest.mock("../models/Agent.model", () => ({ find: jest.fn() }));
+jest.mock("../models/NimcFep.model", () => ({ find: jest.fn() }));
 jest.mock("resend", () => ({
   Resend: jest.fn().mockImplementation(() => ({ emails: { send: jest.fn() } })),
 }));
@@ -26,6 +27,7 @@ const jwt = require("jsonwebtoken");
 const request = require("supertest");
 const User = require("../models/User.model");
 const Agent = require("../models/Agent.model");
+const NimcFep = require("../models/NimcFep.model");
 const { Resend } = require("resend");
 const CommunicationTemplate = require("../models/CommunicationTemplate.model");
 const SupportConversation = require("../models/SupportConversation.model");
@@ -298,6 +300,41 @@ describe("communications routes", () => {
       to: "ayo@example.com",
       subject: "Hello Ayo Agent",
       text: "Welcome, Ayo Agent!",
+    }));
+  });
+
+  it("sends a saved email template to an active FEP in the super admin's directory", async () => {
+    const fepId = "507f1f77bcf86cd799439021";
+    const templateId = "507f1f77bcf86cd799439022";
+    CommunicationTemplate.findById.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({
+        name: "Welcome",
+        channel: "email",
+        subject: "Hello {{name}}",
+        message: "Welcome to {{company}} in {{city}}, {{name}}!",
+      }),
+    });
+    NimcFep.find.mockReturnValue({
+      lean: jest.fn().mockResolvedValue([{ _id: fepId, name: "Grace FEP", email: "grace@example.com" }]),
+    });
+    sendEmail.mockResolvedValue({ data: { id: "email-fep" } });
+
+    const response = await request(app)
+      .post(`/api/admin/communications/templates/${templateId}/send`)
+      .set("Authorization", authHeader("super-admin"))
+      .send({ recipients: [{ id: fepId, type: "fep" }] });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ success: true, sent: 1, failed: 0 });
+    expect(NimcFep.find).toHaveBeenCalledWith({
+      _id: { $in: [fepId] },
+      createdBy: "super-admin",
+      active: { $ne: false },
+    });
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      to: "grace@example.com",
+      subject: "Hello Grace FEP",
+      text: "Welcome to VOLSUS Energy Limited in Benin City, Grace FEP!",
     }));
   });
 });

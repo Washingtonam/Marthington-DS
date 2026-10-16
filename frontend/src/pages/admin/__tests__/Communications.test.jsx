@@ -56,8 +56,44 @@ describe("Communications", () => {
         ? { conversations: [] }
         : path.endsWith("/templates")
           ? { templates: [template] }
-          : { manualAgents: [], registeredUsers: [agent] },
+          : path.endsWith("/nimc-feps")
+            ? { feps: [] }
+            : { manualAgents: [], registeredUsers: [agent] },
     }));
+  });
+
+  test("includes saved Benin City FEPs as selectable communication recipients", async () => {
+    const fep = {
+      _id: "fep-1",
+      name: "Grace FEP",
+      email: "grace@example.com",
+      whatsapp: "+2348012345678",
+      active: true,
+    };
+    api.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/conversations")
+        ? { conversations: [] }
+        : path.endsWith("/templates")
+          ? { templates: [template] }
+          : path.endsWith("/nimc-feps")
+            ? { feps: [fep] }
+            : { manualAgents: [], registeredUsers: [] },
+    }));
+    api.post.mockResolvedValue({ data: { success: true, sent: 1, failed: 0 } });
+    render(<MemoryRouter><Communications /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Dispatch & recipients" }));
+    fireEvent.change(screen.getByLabelText("Audience"), { target: { value: "fep" } });
+    expect(await screen.findByText("Grace FEP")).toBeTruthy();
+    expect(screen.getByText("NIMC FEP · Benin City")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Message template"), { target: { value: "template-1" } });
+    fireEvent.click(screen.getByLabelText("Select Grace FEP"));
+    fireEvent.click(await screen.findByRole("button", { name: "Send email to 1 selected recipient" }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      "/api/admin/communications/templates/template-1/send",
+      { recipients: [{ id: "fep-1", type: "fep" }] },
+    ));
   });
 
   test("sends a saved email template to the selected agent", async () => {
@@ -68,7 +104,7 @@ describe("Communications", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Dispatch & recipients" }));
     fireEvent.change(screen.getByLabelText("Message template"), { target: { value: "template-1" } });
     fireEvent.click(screen.getByLabelText(/Ayo Agent/));
-    fireEvent.click(await screen.findByRole("button", { name: "Send email to 1 selected agent" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Send email to 1 selected recipient" }));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(
       "/api/admin/communications/templates/template-1/send",
       { recipients: [{ id: "agent-1", type: "registered" }] },
@@ -177,7 +213,9 @@ describe("Communications", () => {
       }
       return Promise.resolve(path.endsWith("/templates")
         ? { data: { templates: [template] } }
-        : { data: { manualAgents: [], registeredUsers: [agent] } });
+        : path.endsWith("/nimc-feps")
+          ? { data: { feps: [] } }
+          : { data: { manualAgents: [], registeredUsers: [agent] } });
     });
     render(<MemoryRouter><Communications /></MemoryRouter>);
 

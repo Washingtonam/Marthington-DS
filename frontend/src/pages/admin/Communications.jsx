@@ -10,7 +10,9 @@ const emptyTemplate = { name: "", category: "", channel: "email", subject: "", m
 
 const personalize = (value, contact) => value
   .replaceAll("{{name}}", contact.name || "there")
-  .replaceAll("{{email}}", contact.email || "");
+  .replaceAll("{{email}}", contact.email || "")
+  .replaceAll("{{company}}", contact.company || "")
+  .replaceAll("{{city}}", contact.city || "");
 
 const whatsappUrl = (phone, message) => {
   let number = String(phone || "").replace(/\D/g, "");
@@ -98,9 +100,13 @@ export default function Communications() {
       try {
         const requests = [api.get("/api/admin/communications/conversations")];
         if (isSuperAdmin) {
-          requests.push(api.get("/api/admin/communications/templates"), api.get("/api/admin/agents"));
+          requests.push(
+            api.get("/api/admin/communications/templates"),
+            api.get("/api/admin/agents"),
+            api.get("/api/admin/nimc-feps"),
+          );
         }
-        const [conversationResponse, templateResponse, contactsResponse] = await Promise.all(requests);
+        const [conversationResponse, templateResponse, contactsResponse, fepResponse] = await Promise.all(requests);
         if (cancelled) return;
         setConversations(conversationResponse.data?.conversations || []);
         if (isSuperAdmin) {
@@ -108,6 +114,13 @@ export default function Communications() {
           setContacts([
             ...(contactsResponse.data?.manualAgents || []).map((contact) => ({ ...contact, contactType: "manual", source: "Offline agent" })),
             ...(contactsResponse.data?.registeredUsers || []).map((contact) => ({ ...contact, contactType: "registered", source: "Platform agent" })),
+            ...(fepResponse.data?.feps || []).map((contact) => ({
+              ...contact,
+              company: contact.company || "VOLSUS Energy Limited",
+              city: contact.city || "Benin City",
+              contactType: "fep",
+              source: "NIMC FEP · Benin City",
+            })),
           ]);
         }
       } catch (loadError) {
@@ -125,9 +138,12 @@ export default function Communications() {
     const searchText = `${contact.name} ${contact.email || ""} ${contact.whatsapp || ""}`.toLowerCase();
     if (!searchText.includes(query.toLowerCase())) return false;
     if (audience === "manual") return contact.contactType === "manual";
+    if (audience === "fep") return contact.contactType === "fep" && contact.active !== false;
     if (audience === "active") return contact.status === "active" && contact.approvalStatus === "approved";
     if (audience === "wallet") return Number(contact.walletBalanceKobo || contact.walletBalance || 0) > 0;
-    if (audience === "inactive") return contact.status !== "active" || contact.approvalStatus !== "approved";
+    if (audience === "inactive") return contact.contactType === "fep"
+      ? contact.active === false
+      : contact.status !== "active" || contact.approvalStatus !== "approved";
     return true;
   }), [audience, contacts, query]);
 
@@ -400,7 +416,7 @@ export default function Communications() {
           <div className="space-y-4 border-b border-slate-100 p-4 dark:border-slate-800 sm:p-5">
             <div>
               <h3 className="font-bold">Dispatch a message</h3>
-              <p className="mt-1 text-sm text-slate-500">Choose a saved template and audience, then select agents to contact.</p>
+              <p className="mt-1 text-sm text-slate-500">Choose a saved template and audience, then select agents or FEPs to contact.</p>
             </div>
             <div className="grid gap-3 lg:grid-cols-[minmax(14rem,0.8fr)_minmax(14rem,0.8fr)_minmax(14rem,1fr)]">
               <label className="block text-sm font-medium">Message template
@@ -417,12 +433,12 @@ export default function Communications() {
               </label>
               <label className="block text-sm font-medium">Audience
                 <select value={audience} onChange={(event) => setAudience(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950">
-                  <option value="all">All contacts</option><option value="active">Active platform agents</option><option value="wallet">Accounts with wallet funds</option><option value="inactive">Inactive / pending accounts</option><option value="manual">Offline agents</option>
+                  <option value="all">All contacts</option><option value="active">Active platform agents</option><option value="wallet">Accounts with wallet funds</option><option value="inactive">Inactive / pending accounts</option><option value="manual">Offline agents</option><option value="fep">Active NIMC FEPs · Benin City</option>
                 </select>
               </label>
               <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2.5 dark:border-slate-700">
                 <Search size={16} className="shrink-0 text-slate-400" aria-hidden="true" />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search communication recipients" placeholder="Search agents…" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search communication recipients" placeholder="Search agents and FEPs…" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
                 <span className="shrink-0 text-xs text-slate-500">{selectedRecipients.length} selected</span>
               </label>
             </div>
@@ -432,7 +448,7 @@ export default function Communications() {
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-950 dark:text-slate-400">
                 <tr>
                   <th scope="col" className="w-12 px-4 py-3"><span className="sr-only">Select</span></th>
-                  <th scope="col" className="px-4 py-3">Agent</th>
+                  <th scope="col" className="px-4 py-3">Recipient</th>
                   <th scope="col" className="px-4 py-3">Contact details</th>
                   <th scope="col" className="px-4 py-3">Status</th>
                   <th scope="col" className="px-4 py-3">Channel</th>
@@ -441,11 +457,12 @@ export default function Communications() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredContacts.map((contact) => {
                 const key = `${contact.contactType}:${contact._id}`;
-                const usable = !selectedTemplate || selectedTemplate.channel === "both"
+                const channelAvailable = !selectedTemplate || selectedTemplate.channel === "both"
                   ? Boolean(contact.email || contact.whatsapp)
                   : selectedTemplate.channel === "email"
                     ? Boolean(contact.email)
                     : Boolean(contact.whatsapp);
+                const usable = channelAvailable && !(contact.contactType === "fep" && contact.active === false);
                 return (
                   <tr key={key} className={`${selectedRecipients.includes(key) ? "bg-[rgba(var(--accent-rgb),0.04)]" : ""} ${!usable ? "opacity-50" : ""}`}>
                     <td className="px-4 py-3">
@@ -460,8 +477,8 @@ export default function Communications() {
                       <span className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><MessageCircle size={13} aria-hidden="true" />{contact.whatsapp || "No WhatsApp"}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${contact.contactType === "manual" ? contact.active === false ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : contact.status === "active" && contact.approvalStatus === "approved" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>
-                        {contact.contactType === "manual" ? contact.active === false ? "Archived" : "Offline" : contact.approvalStatus === "approved" ? contact.status : "Pending"}
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${contact.contactType === "fep" ? contact.active === false ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" : "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300" : contact.contactType === "manual" ? contact.active === false ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : contact.status === "active" && contact.approvalStatus === "approved" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>
+                        {contact.contactType === "fep" ? contact.active === false ? "Archived" : "NIMC FEP" : contact.contactType === "manual" ? contact.active === false ? "Archived" : "Offline" : contact.approvalStatus === "approved" ? contact.status : "Pending"}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -484,7 +501,7 @@ export default function Communications() {
                 <div><h4 className="text-sm font-bold">Ready to send</h4><p className="mt-1 text-xs text-slate-500">{recipientRecords.length} recipients selected · {selectedTemplate.name}</p></div>
                 {(selectedTemplate.channel === "email" || selectedTemplate.channel === "both") && emailRecipients.length > 0 && (
                   <button type="button" disabled={busy} onClick={sendEmails} className="inline-flex items-center gap-2 rounded-lg bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50">
-                    <Mail size={15} /> {busy ? "Sending…" : `Send email to ${emailRecipients.length} selected agent${emailRecipients.length === 1 ? "" : "s"}`}
+                    <Mail size={15} /> {busy ? "Sending…" : `Send email to ${emailRecipients.length} selected recipient${emailRecipients.length === 1 ? "" : "s"}`}
                   </button>
                 )}
               </div>

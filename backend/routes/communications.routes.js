@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const { Resend } = require("resend");
 const Agent = require("../models/Agent.model");
+const NimcFep = require("../models/NimcFep.model");
 const CommunicationTemplate = require("../models/CommunicationTemplate.model");
 const SupportConversation = require("../models/SupportConversation.model");
 const SupportMessage = require("../models/SupportMessage.model");
@@ -73,7 +74,9 @@ const escapeHtml = (value) => value.replace(/[&<>"']/g, (character) => ({
 
 const personalizeTemplate = (value, contact) => value
   .replaceAll("{{name}}", contact.name || "there")
-  .replaceAll("{{email}}", contact.email || "");
+  .replaceAll("{{email}}", contact.email || "")
+  .replaceAll("{{company}}", contact.company || "")
+  .replaceAll("{{city}}", contact.city || "");
 
 const saveMessage = async (conversation, user, text) => {
   const message = await SupportMessage.create({
@@ -244,7 +247,7 @@ adminRouter.post("/templates/:templateId/send", isSuperAdmin, async (req, res) =
     return res.status(400).json({ success: false, message: "Select between 1 and 50 email recipients." });
   }
   const recipients = [...new Map(req.body.recipients.map((recipient) => {
-    if (!recipient || !["manual", "registered"].includes(recipient.type)
+    if (!recipient || !["manual", "registered", "fep"].includes(recipient.type)
       || !mongoose.Types.ObjectId.isValid(String(recipient.id || ""))) return ["invalid", null];
     const normalized = { id: String(recipient.id), type: recipient.type };
     return [`${normalized.type}:${normalized.id}`, normalized];
@@ -265,11 +268,13 @@ adminRouter.post("/templates/:templateId/send", isSuperAdmin, async (req, res) =
 
     const manualIds = selectedRecipients.filter((recipient) => recipient.type === "manual").map((recipient) => recipient.id);
     const registeredIds = selectedRecipients.filter((recipient) => recipient.type === "registered").map((recipient) => recipient.id);
-    const [manualAgents, registeredUsers] = await Promise.all([
+    const fepIds = selectedRecipients.filter((recipient) => recipient.type === "fep").map((recipient) => recipient.id);
+    const [manualAgents, registeredUsers, feps] = await Promise.all([
       manualIds.length ? Agent.find({ _id: { $in: manualIds } }).lean() : [],
       registeredIds.length ? User.find({ _id: { $in: registeredIds }, role: "user" })
         .select("firstName lastName email")
         .lean() : [],
+      fepIds.length ? NimcFep.find({ _id: { $in: fepIds }, createdBy: req.user.id, active: { $ne: false } }).lean() : [],
     ]);
     const contacts = [
       ...manualAgents.map((agent) => ({ id: String(agent._id), name: agent.name, email: agent.email || "" })),
@@ -277,6 +282,13 @@ adminRouter.post("/templates/:templateId/send", isSuperAdmin, async (req, res) =
         id: String(user._id),
         name: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email,
         email: user.email,
+      })),
+      ...feps.map((fep) => ({
+        id: String(fep._id),
+        name: fep.name,
+        email: fep.email || "",
+        company: fep.company || "VOLSUS Energy Limited",
+        city: fep.city || "Benin City",
       })),
     ];
     const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));
