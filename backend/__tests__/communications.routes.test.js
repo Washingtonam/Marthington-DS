@@ -20,6 +20,8 @@ jest.mock("../models/SupportConversation.model", () => ({
 jest.mock("../models/SupportMessage.model", () => ({
   find: jest.fn(),
   create: jest.fn(),
+  aggregate: jest.fn(),
+  updateMany: jest.fn(),
 }));
 
 const express = require("express");
@@ -48,6 +50,8 @@ const authHeader = (id) => `Bearer ${jwt.sign({ id }, secret)}`;
 describe("communications routes", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    SupportMessage.aggregate.mockResolvedValue([]);
+    SupportMessage.updateMany.mockResolvedValue({ modifiedCount: 0 });
     User.findById.mockImplementation(async (id) => ({
       id,
       _id: id,
@@ -74,7 +78,6 @@ describe("communications routes", () => {
         lean: jest.fn().mockResolvedValue([{ _id: "template-1", name: "Agent onboarding" }]),
       }),
     });
-
     const response = await request(app)
       .get("/api/admin/communications/templates")
       .set("Authorization", authHeader("super-admin"));
@@ -116,6 +119,7 @@ describe("communications routes", () => {
     };
     SupportConversation.findById.mockResolvedValue(conversation);
     SupportMessage.create.mockResolvedValue({ _id: "message-2", text: "We can help", createdAt: new Date() });
+    SupportMessage.updateMany.mockResolvedValue({ modifiedCount: 2 });
 
     const response = await request(app)
       .post("/api/admin/communications/conversations/0123456789abcdef01234567/messages")
@@ -131,6 +135,10 @@ describe("communications routes", () => {
     }));
     expect(conversation.adminReadAt).toBeInstanceOf(Date);
     expect(conversation.adminReadMessageId).toBe("agent-message-1");
+    expect(SupportMessage.updateMany).toHaveBeenCalledWith(
+      { conversationId: conversation._id, senderRole: "user", readByAdminAt: null },
+      { $set: { readByAdminAt: expect.any(Date) } },
+    );
   });
 
   it("marks a conversation read when support opens the thread", async () => {
@@ -157,6 +165,10 @@ describe("communications routes", () => {
     expect(conversation.adminReadAt).toBeInstanceOf(Date);
     expect(conversation.adminReadMessageId).toBe("agent-message-1");
     expect(conversation.save).toHaveBeenCalledTimes(1);
+    expect(SupportMessage.updateMany).toHaveBeenCalledWith(
+      { conversationId: conversation._id, senderRole: "user", readByAdminAt: null },
+      { $set: { readByAdminAt: expect.any(Date) } },
+    );
   });
 
   it("does not mark a conversation read during passive inbox polling", async () => {
@@ -182,20 +194,18 @@ describe("communications routes", () => {
     expect(response.status).toBe(200);
     expect(conversation.save).not.toHaveBeenCalled();
     expect(conversation.adminReadMessageId).toBeUndefined();
+    expect(SupportMessage.updateMany).not.toHaveBeenCalled();
   });
 
   it("returns unread conversations for the Communications inbox badge", async () => {
-    const sameTimestamp = new Date("2026-10-15T10:00:00.000Z");
     SupportConversation.find.mockReturnValue({
       sort: jest.fn().mockReturnValue({
         limit: jest.fn().mockReturnValue({
           lean: jest.fn().mockResolvedValue([{
             _id: "0123456789abcdef01234567",
             userId: "agent-user",
-            lastUserMessageAt: sameTimestamp,
-            lastUserMessageId: "message-2",
-            adminReadMessageId: "message-1",
-            adminReadAt: sameTimestamp,
+            lastUserMessageAt: new Date("2026-10-15T10:00:00.000Z"),
+            lastUserMessageId: "message-3",
             lastMessage: "I need help",
           }]),
         }),
@@ -211,6 +221,7 @@ describe("communications routes", () => {
         }]),
       }),
     });
+    SupportMessage.aggregate.mockResolvedValue([{ _id: "0123456789abcdef01234567", unreadCount: 3 }]);
 
     const response = await request(app)
       .get("/api/admin/communications/conversations")
@@ -218,10 +229,20 @@ describe("communications routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.conversations[0]).toEqual(expect.objectContaining({
-      unreadCount: 1,
-      lastUserMessageId: "message-2",
+      unreadCount: 3,
+      lastUserMessageId: "message-3",
       user: expect.objectContaining({ name: "Ayo Agent" }),
     }));
+    expect(SupportMessage.aggregate).toHaveBeenCalledWith([
+      {
+        $match: {
+          conversationId: { $in: ["0123456789abcdef01234567"] },
+          senderRole: "user",
+          readByAdminAt: null,
+        },
+      },
+      { $group: { _id: "$conversationId", unreadCount: { $sum: 1 } } },
+    ]);
   });
 
   it("marks support replies as unread for the user until their inbox is opened", async () => {

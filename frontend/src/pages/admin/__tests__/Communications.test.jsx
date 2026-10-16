@@ -149,7 +149,7 @@ describe("Communications", () => {
     ));
   });
 
-  test("shows unread conversations in the inbox count and clears it after reading", async () => {
+  test("shows every unread message in the inbox and clears them after opening the chat", async () => {
     mockUseUser.mockReturnValue({ user: { id: "admin-1", role: "admin" } });
     let inboxLoads = 0;
     api.get.mockImplementation((path) => {
@@ -159,7 +159,7 @@ describe("Communications", () => {
           data: {
             conversations: [{
               _id: "conversation-1",
-              unreadCount: inboxLoads === 1 ? 1 : 0,
+              unreadCount: inboxLoads === 1 ? 3 : 0,
               user: { name: "Ayo Agent", email: "ayo@example.com" },
               lastMessage: "I need help",
             }],
@@ -176,9 +176,9 @@ describe("Communications", () => {
 
     render(<MemoryRouter><Communications /></MemoryRouter>);
 
-    const inboxTab = await screen.findByRole("tab", { name: "Support inbox 1" });
-    expect(screen.getByText("UNREAD")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain("1 agent conversation needs a reply");
+    const inboxTab = await screen.findByRole("tab", { name: "Support inbox 3" });
+    expect(screen.getByLabelText("3 unread messages")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("3 unread messages across 1 chat");
     expect(screen.getByRole("status").textContent).toContain("Ayo Agent");
     fireEvent.click(screen.getByRole("button", { name: /Ayo Agent/ }));
 
@@ -204,7 +204,7 @@ describe("Communications", () => {
           data: {
             conversations: [{
               _id: "conversation-1",
-              unreadCount: conversationsRequestCount === 1 ? 0 : 1,
+              unreadCount: conversationsRequestCount === 1 ? 0 : 3,
               user: { name: "Ayo Agent", email: "ayo@example.com" },
               lastMessage: conversationsRequestCount === 1 ? "Earlier message" : "New follow-up",
             }],
@@ -225,8 +225,8 @@ describe("Communications", () => {
       await pollInbox();
     });
 
-    const inboxTab = screen.getByRole("tab", { name: "Support inbox 1" });
-    expect(inboxTab.querySelector('[title="1 unread conversations"]')).toBeTruthy();
+    const inboxTab = screen.getByRole("tab", { name: "Support inbox 3" });
+    expect(inboxTab.querySelector('[title="3 unread messages in 1 conversation"]')).toBeTruthy();
     expect(inboxTab.querySelector(".bg-rose-600")).toBeTruthy();
     expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 5000);
   });

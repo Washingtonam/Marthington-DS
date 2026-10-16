@@ -6,6 +6,7 @@ const supportMessageSchema = new mongoose.Schema({
   senderRole: { type: String, enum: ["user", "admin", "super_admin"], required: true },
   senderName: { type: String, required: true, trim: true, maxlength: 160 },
   text: { type: String, required: true, trim: true, maxlength: 2000 },
+  readByAdminAt: { type: Date, default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.models.SupportMessage

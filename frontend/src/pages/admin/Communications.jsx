@@ -89,10 +89,11 @@ export default function Communications() {
     await loadConversations();
   }, [loadConversations]);
 
-  const unreadConversationCount = conversations.reduce(
+  const unreadMessageCount = conversations.reduce(
     (total, conversation) => total + Number(conversation.unreadCount || 0),
     0,
   );
+  const unreadConversationCount = conversations.filter((conversation) => conversation.unreadCount > 0).length;
 
   useEffect(() => {
     let cancelled = false;
@@ -319,24 +320,24 @@ export default function Communications() {
           <span>Support inbox</span>
           <span
             aria-live="polite"
-            title={`${unreadConversationCount} unread conversations`}
+            title={`${unreadMessageCount} unread messages in ${unreadConversationCount} ${unreadConversationCount === 1 ? "conversation" : "conversations"}`}
             className={`inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold tabular-nums ${
-              unreadConversationCount > 0
+              unreadMessageCount > 0
                 ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-200 dark:ring-rose-900"
                 : activeTab === "inbox"
                   ? "bg-white/20 text-[var(--accent-foreground)]"
                   : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200"
             }`}
           >
-            {unreadConversationCount > 99 ? "99+" : unreadConversationCount}
+            {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
           </span>
         </button>
       </div>
 
-      {activeTab === "inbox" && unreadConversationCount > 0 && (
+      {activeTab === "inbox" && unreadMessageCount > 0 && (
         <div role="status" aria-live="polite" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
           <p>
-            <strong>{unreadConversationCount} agent {unreadConversationCount === 1 ? "conversation needs" : "conversations need"} a reply.</strong>
+            <strong>{unreadMessageCount} unread {unreadMessageCount === 1 ? "message" : "messages"} across {unreadConversationCount} {unreadConversationCount === 1 ? "chat" : "chats"}.</strong>
             {" "}
             {conversations
               .filter((conversation) => conversation.unreadCount > 0)
@@ -540,7 +541,7 @@ export default function Communications() {
                   .sort((left, right) => Number(right.unreadCount > 0) - Number(left.unreadCount > 0))
                   .map((conversation) => (
                     <button type="button" key={conversation._id} onClick={() => loadThread(conversation).catch((loadError) => { console.error("Support thread load failed:", loadError); toastError("Could not load this conversation."); })} className={`w-full rounded-xl border p-3 text-left ${conversation.unreadCount > 0 ? "border-amber-300 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20" : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"} ${selectedConversation?._id === conversation._id ? "ring-2 ring-[var(--accent)]" : ""}`}>
-                      <span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold">{conversation.user?.name || "Former agent"}</span><span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-500">{conversation.unreadCount > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">UNREAD</span>}{formatDate(conversation.lastMessageAt)}</span></span>
+                      <span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold">{conversation.user?.name || "Former agent"}</span><span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-500">{conversation.unreadCount > 0 && <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-rose-600 px-2 py-1 font-bold leading-none text-white" aria-label={`${conversation.unreadCount} unread messages`}>{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span>}{formatDate(conversation.lastMessageAt)}</span></span>
                       <span className="mt-1 block truncate text-xs text-slate-500">{conversation.lastMessage}</span>
                     </button>
                   ))}

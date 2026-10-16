@@ -330,6 +330,19 @@ adminRouter.post("/templates/:templateId/send", isSuperAdmin, async (req, res) =
 adminRouter.get("/conversations", isAdmin, async (req, res) => {
   try {
     const conversations = await SupportConversation.find().sort({ lastMessageAt: -1 }).limit(100).lean();
+    const unreadMessages = conversations.length
+      ? await SupportMessage.aggregate([
+        {
+          $match: {
+            conversationId: { $in: conversations.map((conversation) => conversation._id) },
+            senderRole: "user",
+            readByAdminAt: null,
+          },
+        },
+        { $group: { _id: "$conversationId", unreadCount: { $sum: 1 } } },
+      ])
+      : [];
+    const unreadCounts = new Map(unreadMessages.map((item) => [String(item._id), item.unreadCount]));
     const users = await User.find({ _id: { $in: conversations.map((item) => item.userId) } })
       .select("firstName lastName email role status approvalStatus")
       .lean();
@@ -340,14 +353,7 @@ adminRouter.get("/conversations", isAdmin, async (req, res) => {
         const user = usersById.get(String(conversation.userId));
         return {
           ...conversation,
-          unreadCount: hasUnreadMessage(
-            conversation.lastUserMessageId,
-            conversation.adminReadMessageId,
-            conversation.lastUserMessageAt,
-            conversation.adminReadAt,
-          )
-            ? 1
-            : 0,
+          unreadCount: unreadCounts.get(String(conversation._id)) || 0,
           user: user ? {
             _id: user._id,
             name: getSenderName(user),
@@ -371,15 +377,17 @@ adminRouter.get("/conversations/:conversationId/messages", isAdmin, async (req, 
   try {
     const conversation = await SupportConversation.findById(req.params.conversationId);
     if (!conversation) return res.status(404).json({ success: false, message: "Conversation not found." });
-    if (req.query.markRead === "true" && hasUnreadMessage(
-      conversation.lastUserMessageId,
-      conversation.adminReadMessageId,
-      conversation.lastUserMessageAt,
-      conversation.adminReadAt,
-    )) {
-      conversation.adminReadMessageId = conversation.lastUserMessageId || null;
-      conversation.adminReadAt = new Date();
-      await conversation.save();
+    if (req.query.markRead === "true") {
+      const readAt = new Date();
+      await SupportMessage.updateMany(
+        { conversationId: conversation._id, senderRole: "user", readByAdminAt: null },
+        { $set: { readByAdminAt: readAt } },
+      );
+      if (conversation.lastUserMessageId) {
+        conversation.adminReadMessageId = conversation.lastUserMessageId;
+        conversation.adminReadAt = readAt;
+        await conversation.save();
+      }
     }
     const messages = await SupportMessage.find({ conversationId: conversation._id })
       .sort({ createdAt: -1 })
@@ -401,6 +409,10 @@ adminRouter.post("/conversations/:conversationId/messages", isAdmin, async (req,
   try {
     const conversation = await SupportConversation.findById(req.params.conversationId);
     if (!conversation) return res.status(404).json({ success: false, message: "Conversation not found." });
+    await SupportMessage.updateMany(
+      { conversationId: conversation._id, senderRole: "user", readByAdminAt: null },
+      { $set: { readByAdminAt: new Date() } },
+    );
     const message = await saveMessage(conversation, req.user, text);
     return res.status(201).json({ success: true, conversation, message });
   } catch (error) {
