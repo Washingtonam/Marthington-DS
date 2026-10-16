@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { login } from "../../services/api";
 import { useUser } from "../../context/UserContext";
@@ -7,6 +7,7 @@ import { useBranding } from "../../context/BrandingContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setUser } = useUser();
   const { businessName, businessTagline, businessLogoUrl } = useBranding();
   const [email, setEmail] = useState("");
@@ -35,7 +36,13 @@ export default function Login() {
       localStorage.setItem("lastActivity", String(Date.now()));
       setUser(data.user);
 
-      navigate(data.user.role === "admin" || data.user.role === "super_admin" ? "/admin" : "/dashboard");
+      const requestedPath = location.state?.from?.pathname;
+      navigate(
+        requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
+          ? requestedPath
+          : data.user.role === "admin" || data.user.role === "super_admin" ? "/admin" : "/dashboard",
+        { replace: true },
+      );
     } catch (error) {
       console.error("LOGIN SUBMISSION ERROR:", error);
       setLoginMessage(

@@ -157,6 +157,7 @@ describe("dashboard shell navigation", () => {
     expect(screen.queryByRole("link", { name: "Verify BVN" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Verify NIN" })).toBeNull();
     expect(screen.getByRole("link", { name: "Chat with support" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Guides & updates" })).toBeTruthy();
     fireEvent.click(screen.getByRole("link", { name: "Chat with support" }));
     expect(screen.getByLabelText("Current route").textContent).toBe("/support-chat");
   });

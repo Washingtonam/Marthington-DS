@@ -16,12 +16,13 @@ const Article = require("../models/Article.model");
 const { uploadToCloudinary } = require("../shared/cloudinary");
 const { JWT_SECRET_FALLBACK } = require("../config/constants");
 const { verifyToken } = require("../shared/authGuard");
-const { publicRouter, adminRouter } = require("../routes/articles.routes");
+const { publicRouter, customerRouter, adminRouter } = require("../routes/articles.routes");
 
 const secret = process.env.JWT_SECRET || JWT_SECRET_FALLBACK;
 const app = express();
 app.use(express.json());
 app.use("/api/articles", publicRouter);
+app.use("/api/agent/articles", verifyToken, customerRouter);
 app.use("/api/admin/articles", verifyToken, adminRouter);
 
 const makeQuery = (result) => {
@@ -55,7 +56,109 @@ describe("article routes", () => {
     expect(Article.find).toHaveBeenCalledWith({
       status: "published",
       publishedAt: { $lte: expect.any(Date) },
+      $or: [{ audience: "public" }, { audience: { $exists: false } }],
     });
+  });
+
+  it("lists public and agent-only published guides for authenticated agents", async () => {
+    User.findById.mockResolvedValue({
+      id: "agent-1",
+      _id: "agent-1",
+      email: "agent@example.com",
+      role: "user",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    Article.find.mockReturnValue(makeQuery([]));
+    Article.countDocuments.mockResolvedValue(2);
+
+    const response = await request(app)
+      .get("/api/agent/articles")
+      .set("Authorization", `Bearer ${makeToken("user")}`);
+
+    expect(response.status).toBe(200);
+    expect(Article.find).toHaveBeenCalledWith({
+      status: "published",
+      publishedAt: { $lte: expect.any(Date) },
+      $or: [
+        { audience: { $in: ["public", "agents"] } },
+        { audience: { $exists: false } },
+      ],
+    });
+  });
+
+  it("lets authenticated agents open agent-only guides by slug", async () => {
+    User.findById.mockResolvedValue({
+      id: "agent-1",
+      _id: "agent-1",
+      email: "agent@example.com",
+      role: "user",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    Article.findOne.mockReturnValue(makeQuery({
+      title: "Commission guide",
+      slug: "commission-guide",
+      audience: "agents",
+    }));
+
+    const response = await request(app)
+      .get("/api/agent/articles/commission-guide")
+      .set("Authorization", `Bearer ${makeToken("user")}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.article.audience).toBe("agents");
+    expect(Article.findOne).toHaveBeenCalledWith({
+      slug: "commission-guide",
+      status: "published",
+      publishedAt: { $lte: expect.any(Date) },
+      $or: [
+        { audience: { $in: ["public", "agents"] } },
+        { audience: { $exists: false } },
+      ],
+    });
+  });
+
+  it("does not allow an admin account to use the agent guide API", async () => {
+    User.findById.mockResolvedValue({
+      id: "admin-1",
+      _id: "admin-1",
+      email: "admin@example.com",
+      role: "admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+
+    const response = await request(app)
+      .get("/api/agent/articles")
+      .set("Authorization", `Bearer ${makeToken("admin")}`);
+
+    expect(response.status).toBe(403);
+    expect(Article.find).not.toHaveBeenCalled();
+  });
+
+  it("does not allow public requests to load agent-only articles", async () => {
+    Article.findOne.mockReturnValue(makeQuery(null));
+
+    const response = await request(app).get("/api/articles/agent-guide");
+
+    expect(response.status).toBe(404);
+    expect(Article.findOne).toHaveBeenCalledWith({
+      slug: "agent-guide",
+      status: "published",
+      publishedAt: { $lte: expect.any(Date) },
+      $or: [{ audience: "public" }, { audience: { $exists: false } }],
+      $or: [{ audience: "public" }, { audience: { $exists: false } }],
+    });
+  });
+
+  it("requires an agent login for agent guides", async () => {
+    Article.find.mockReturnValue(makeQuery([]));
+
+    const response = await request(app).get("/api/agent/articles");
+
+    expect(response.status).toBe(401);
+    expect(Article.find).not.toHaveBeenCalled();
   });
 
   it("does not resolve draft articles through their public slug", async () => {
@@ -68,6 +171,7 @@ describe("article routes", () => {
       slug: "private-draft",
       status: "published",
       publishedAt: { $lte: expect.any(Date) },
+      $or: [{ audience: "public" }, { audience: { $exists: false } }],
     });
   });
 

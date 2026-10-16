@@ -5,7 +5,15 @@ const Article = require("../models/Article.model");
 const { uploadToCloudinary } = require("../shared/cloudinary");
 
 const publicRouter = express.Router();
+const customerRouter = express.Router();
 const adminRouter = express.Router();
+
+const isAgent = (req, res, next) => {
+  if (req.user?.role !== "user") {
+    return res.status(403).json({ success: false, message: "Agent access required." });
+  }
+  next();
+};
 
 const isSuperAdmin = (req, res, next) => {
   if (req.user?.role !== "super_admin") {
@@ -22,8 +30,8 @@ const slugify = (value) => String(value || "")
   .slice(0, 160)
   .replace(/-+$/g, "");
 
-const publicFields = "title slug summary category body sourceName sourceUrl publishedAt createdAt updatedAt";
-const editableFields = ["title", "slug", "summary", "category", "body", "sourceName", "sourceUrl", "status"];
+const publicFields = "title slug summary category audience body sourceName sourceUrl publishedAt createdAt updatedAt";
+const editableFields = ["title", "slug", "summary", "category", "audience", "body", "sourceName", "sourceUrl", "status"];
 const articleBodyOptions = {
   allowedTags: ["p", "br", "strong", "b", "em", "i", "u", "s", "h2", "h3", "ul", "ol", "li", "blockquote", "pre", "code", "a", "img"],
   allowedAttributes: {
@@ -64,6 +72,7 @@ const validatePayload = (payload, { partial = false } = {}) => {
   if (payload.slug !== undefined && (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(payload.slug) || payload.slug.length > 160)) return "Slug may contain lowercase letters, numbers, and hyphens only.";
   if (payload.summary !== undefined && String(payload.summary).length > 500) return "Summary must be 500 characters or fewer.";
   if (payload.category !== undefined && String(payload.category).length > 80) return "Category must be 80 characters or fewer.";
+  if (payload.audience !== undefined && !["public", "agents"].includes(payload.audience)) return "Audience must be public or agents.";
   if (payload.body !== undefined) {
     const bodyText = sanitizeHtml(String(payload.body), { allowedTags: [] }).replace(/&nbsp;|&#160;/gi, " ").trim();
     const hasImage = /<img\b[^>]*\bsrc=["']https?:\/\//i.test(String(payload.body));
@@ -86,7 +95,11 @@ publicRouter.get("/", async (req, res) => {
   try {
     const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 12, 1), 50);
-    const query = { status: "published", publishedAt: { $lte: new Date() } };
+    const query = {
+      status: "published",
+      publishedAt: { $lte: new Date() },
+      $or: [{ audience: "public" }, { audience: { $exists: false } }],
+    };
     if (req.query.category) query.category = String(req.query.category).slice(0, 80);
 
     const [articles, total] = await Promise.all([
@@ -107,11 +120,57 @@ publicRouter.get("/:slug", async (req, res) => {
       slug: req.params.slug,
       status: "published",
       publishedAt: { $lte: new Date() },
+      $or: [{ audience: "public" }, { audience: { $exists: false } }],
     }).select(publicFields).lean();
     if (!article) return res.status(404).json({ success: false, message: "Article not found." });
     return res.json({ success: true, article });
   } catch (error) {
     console.error("PUBLIC ARTICLE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Unable to load this article." });
+  }
+});
+
+customerRouter.use(isAgent);
+
+customerRouter.get("/", async (req, res) => {
+  try {
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 12, 1), 50);
+    const query = {
+      status: "published",
+      publishedAt: { $lte: new Date() },
+      $or: [
+        { audience: { $in: ["public", "agents"] } },
+        { audience: { $exists: false } },
+      ],
+    };
+    if (req.query.category) query.category = String(req.query.category).slice(0, 80);
+    const [articles, total] = await Promise.all([
+      Article.find(query).select(publicFields).sort({ publishedAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      Article.countDocuments(query),
+    ]);
+    return res.json({ success: true, articles, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+  } catch (error) {
+    console.error("AGENT ARTICLES ERROR:", error);
+    return res.status(500).json({ success: false, message: "Unable to load agent guides and updates." });
+  }
+});
+
+customerRouter.get("/:slug", async (req, res) => {
+  try {
+    const article = await Article.findOne({
+      slug: req.params.slug,
+      status: "published",
+      publishedAt: { $lte: new Date() },
+      $or: [
+        { audience: { $in: ["public", "agents"] } },
+        { audience: { $exists: false } },
+      ],
+    }).select(publicFields).lean();
+    if (!article) return res.status(404).json({ success: false, message: "Article not found." });
+    return res.json({ success: true, article });
+  } catch (error) {
+    console.error("AGENT ARTICLE ERROR:", error);
     return res.status(500).json({ success: false, message: "Unable to load this article." });
   }
 });
@@ -200,4 +259,4 @@ adminRouter.delete("/:id", async (req, res) => {
   }
 });
 
-module.exports = { publicRouter, adminRouter };
+module.exports = { publicRouter, customerRouter, adminRouter };

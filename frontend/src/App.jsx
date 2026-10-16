@@ -3,6 +3,7 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
 } from "react-router-dom";
 
 // Public Pages
@@ -94,7 +95,10 @@ const isSuperAdmin = () => getUser()?.role === "super_admin";
 // ==============================
 // PROTECTED ROUTES MIDDLEWARES
 // ==============================
-const ProtectedRoute = ({ children }) => (!isAuthenticated() ? <Navigate to="/login" /> : children);
+const ProtectedRoute = ({ children }) => {
+  const location = useLocation();
+  return !isAuthenticated() ? <Navigate to="/login" state={{ from: location }} replace /> : children;
+};
 
 const AdminRoute = ({ children }) => {
   if (!isAuthenticated()) return <Navigate to="/login" />;
@@ -122,6 +126,8 @@ function AppRoutes() {
       <Route path="/" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Home />} />
       <Route path="/guides" element={<Guides />} />
       <Route path="/guides/:slug" element={<GuideArticle />} />
+      <Route path="/agent/guides" element={<ProtectedRoute><Layout><Guides agentView /></Layout></ProtectedRoute>} />
+      <Route path="/agent/guides/:slug" element={<ProtectedRoute><Layout><GuideArticle agentView /></Layout></ProtectedRoute>} />
       <Route path="/login" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Login />} />
       <Route path="/register" element={loggedIn ? <Navigate to={isAdmin() ? "/admin" : "/dashboard"} /> : <Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />

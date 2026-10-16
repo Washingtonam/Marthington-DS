@@ -53,6 +53,7 @@ app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/branding", require("./routes/branding.routes"));
 const articleRoutes = require("./routes/articles.routes");
 app.use("/api/articles", articleRoutes.publicRouter);
+app.use("/api/agent/articles", verifyToken, articleRoutes.customerRouter);
 app.use("/api/admin/articles", verifyToken, articleRoutes.adminRouter);
 app.use("/api/finance", require("./routes/finance.routes"));
 app.use("/api/payments", require("./routes/payment.routes"));

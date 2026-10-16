@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, BookOpenText, Search } from "lucide-react";
 import api from "../../lib/axios";
 import { useBranding } from "../../context/BrandingContext";
+import CopyGuideLinkButton from "../../components/CopyGuideLinkButton";
+import { getGuidePath } from "../../lib/guideLinks";
 
-export default function Guides() {
+export default function Guides({ agentView = false }) {
   const { businessName } = useBranding();
   const [articles, setArticles] = useState([]);
   const [search, setSearch] = useState("");
@@ -13,11 +15,11 @@ export default function Guides() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api.get("/api/articles", { params: { limit: 50 } })
+    api.get(agentView ? "/api/agent/articles" : "/api/articles", { params: { limit: 50 } })
       .then(({ data }) => setArticles(data.articles || []))
       .catch((requestError) => setError(requestError.response?.data?.message || "Unable to load guides right now."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [agentView]);
 
   const categories = [...new Set(articles.map((article) => article.category).filter(Boolean))];
   const filteredArticles = articles.filter((article) => {
@@ -27,8 +29,8 @@ export default function Guides() {
   });
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
+    <main className={agentView ? "text-slate-900 dark:text-slate-100" : "min-h-screen bg-slate-50 text-slate-900"}>
+      {!agentView && <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
           <Link to="/" className="font-bold text-slate-900">{businessName} <span className="font-normal text-slate-500">/ Guides</span></Link>
           <nav className="flex items-center gap-4 text-sm font-semibold">
@@ -36,13 +38,13 @@ export default function Guides() {
             <Link to="/register" className="rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-blue-700">Apply for access</Link>
           </nav>
         </div>
-      </header>
+      </header>}
 
       <section className="border-b border-slate-200 bg-white px-5 py-14">
         <div className="mx-auto max-w-6xl">
-          <p className="flex items-center gap-2 text-sm font-bold uppercase text-blue-700"><BookOpenText size={17} /> NIMC resource desk</p>
+          <p className="flex items-center gap-2 text-sm font-bold uppercase text-blue-700"><BookOpenText size={17} /> {agentView ? "Agent resource desk" : "NIMC resource desk"}</p>
           <h1 className="mt-3 text-4xl font-black sm:text-5xl">Guides &amp; updates</h1>
-          <p className="mt-4 max-w-2xl leading-7 text-slate-600">Practical information about identity record services, preparation, and next steps.</p>
+          <p className="mt-4 max-w-2xl leading-7 text-slate-600">{agentView ? "Practical guidance for using the platform, understanding commissions, and completing agent workflows." : "Practical information about identity record services, preparation, and next steps."}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <label className="flex min-w-0 flex-1 items-center gap-3 rounded-md border border-slate-300 bg-slate-50 px-4 py-3">
               <Search size={18} className="shrink-0 text-slate-400" />
@@ -74,17 +76,21 @@ export default function Guides() {
                         <span>{article.category || "NIMC Guide"}</span>
                         <time className="font-normal normal-case text-slate-500" dateTime={article.publishedAt}>{article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : ""}</time>
                       </div>
-                      <h3 className="mt-2 text-xl font-bold"><Link to={`/guides/${article.slug}`} className="hover:text-blue-700">{article.title}</Link></h3>
+                      <h3 className="mt-2 text-xl font-bold"><Link to={agentView ? `/agent/guides/${encodeURIComponent(article.slug)}` : `/guides/${encodeURIComponent(article.slug)}`} className="hover:text-blue-700">{article.title}</Link></h3>
                       <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{article.summary}</p>
+                      {agentView && article.audience === "agents" && <span className="mt-2 inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">Agent guide</span>}
                     </div>
-                    <Link to={`/guides/${article.slug}`} aria-label={`Read ${article.title}`} className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 text-slate-700 hover:border-blue-600 hover:text-blue-700"><ArrowRight size={18} /></Link>
+                    <div className="flex items-center gap-2">
+                      <CopyGuideLinkButton path={getGuidePath(article)} className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-600 hover:text-blue-700" />
+                      <Link to={agentView ? `/agent/guides/${encodeURIComponent(article.slug)}` : `/guides/${encodeURIComponent(article.slug)}`} aria-label={`Read ${article.title}`} className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 text-slate-700 hover:border-blue-600 hover:text-blue-700"><ArrowRight size={18} /></Link>
+                    </div>
                   </article>
                 ))}
               </div>}
-        <aside className="mt-10 flex flex-col justify-between gap-4 border-l-4 border-emerald-600 bg-emerald-50 px-5 py-4 sm:flex-row sm:items-center">
+        {!agentView && <aside className="mt-10 flex flex-col justify-between gap-4 border-l-4 border-emerald-600 bg-emerald-50 px-5 py-4 sm:flex-row sm:items-center">
           <div><h2 className="font-bold">Need help with a process?</h2><p className="mt-1 text-sm text-slate-600">Talk with our team about available assistance.</p></div>
           <a href="https://wa.me/2348073200555" target="_blank" rel="noreferrer" className="shrink-0 text-sm font-bold text-emerald-800 underline">WhatsApp Support</a>
-        </aside>
+        </aside>}
         <p className="mt-6 text-xs leading-5 text-slate-500">These resources are general guidance from {businessName} and are not official NIMC notices or a guarantee of service outcomes. Check the linked source for current requirements.</p>
       </section>
     </main>

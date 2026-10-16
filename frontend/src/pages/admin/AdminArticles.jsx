@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { BookOpenText, Eye, FilePlus2, Loader2, Save, Trash2, X } from "lucide-react";
 import ArticleBodyEditor from "../../components/admin/ArticleBodyEditor";
+import CopyGuideLinkButton from "../../components/CopyGuideLinkButton";
 import api from "../../lib/axios";
+import { getGuidePath } from "../../lib/guideLinks";
 
 const emptyArticle = {
   title: "",
   slug: "",
   summary: "",
   category: "NIMC Guide",
+  audience: "public",
   body: "",
   sourceName: "",
   sourceUrl: "",
@@ -99,7 +102,7 @@ export default function AdminArticles() {
   return (
     <main className="mx-auto max-w-6xl space-y-8 px-5 pb-16">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-6 dark:border-slate-800">
-        <div><p className="flex items-center gap-2 text-sm font-bold uppercase text-blue-700"><BookOpenText size={17} /> Public resources</p><h1 className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">Guides &amp; updates</h1><p className="mt-2 text-sm text-slate-500">Write practical guidance and control what visitors can read.</p></div>
+        <div><p className="flex items-center gap-2 text-sm font-bold uppercase text-blue-700"><BookOpenText size={17} /> Resource publishing</p><h1 className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">Guides &amp; updates</h1><p className="mt-2 text-sm text-slate-500">Publish public resources or guides reserved for signed-in agents.</p></div>
         {editingId && <button onClick={resetForm} className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold dark:border-slate-700"><X size={16} /> Cancel edit</button>}
       </header>
 
@@ -112,6 +115,7 @@ export default function AdminArticles() {
           <label><span className="mb-1 block text-sm font-semibold">Title</span><input required maxLength={120} value={form.title} onChange={(event) => updateField("title", event.target.value)} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" /></label>
           <label><span className="mb-1 block text-sm font-semibold">URL slug</span><input value={form.slug} onChange={(event) => updateField("slug", event.target.value)} placeholder="Generated from title if blank" className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" /></label>
           <label><span className="mb-1 block text-sm font-semibold">Category</span><input maxLength={80} value={form.category} onChange={(event) => updateField("category", event.target.value)} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" /></label>
+          <label><span className="mb-1 block text-sm font-semibold">Who can view this guide?</span><select value={form.audience} onChange={(event) => updateField("audience", event.target.value)} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"><option value="public">Everyone (public)</option><option value="agents">Signed-in agents only</option></select></label>
           <label><span className="mb-1 block text-sm font-semibold">Publication</span><select value={form.status} onChange={(event) => updateField("status", event.target.value)} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"><option value="draft">Save as draft</option><option value="published">Publish</option></select></label>
           <label className="md:col-span-2"><span className="mb-1 block text-sm font-semibold">Short summary</span><textarea maxLength={500} rows={2} value={form.summary} onChange={(event) => updateField("summary", event.target.value)} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" /></label>
           <label className="md:col-span-2"><span className="mb-1 block text-sm font-semibold">Article body</span><ArticleBodyEditor value={form.body} onChange={(value) => updateField("body", value)} /></label>
@@ -127,8 +131,8 @@ export default function AdminArticles() {
           : articles.length === 0 ? <p className="border-y border-dashed border-slate-300 py-8 text-center text-slate-500">No articles yet.</p>
             : <div className="divide-y divide-slate-200 border-y border-slate-200 dark:divide-slate-800 dark:border-slate-800">{articles.map((article) => (
               <article key={article._id} className="flex flex-col justify-between gap-4 py-5 sm:flex-row sm:items-center">
-                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase"><span className={article.status === "published" ? "text-emerald-700" : "text-amber-700"}>{article.status}</span><span className="text-slate-400">{article.category}</span><span className="font-normal normal-case text-slate-500">{formatDate(article.publishedAt)}</span></div><h3 className="mt-1 truncate font-bold dark:text-white">{article.title}</h3><p className="mt-1 line-clamp-2 text-sm text-slate-500">{article.summary}</p></div>
-                <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => togglePublished(article)} title={article.status === "published" ? "Unpublish" : "Publish"} aria-label={article.status === "published" ? "Unpublish article" : "Publish article"} className="rounded-md border border-slate-300 p-2 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200"><Eye size={17} /></button><button type="button" onClick={() => editArticle(article)} className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold dark:border-slate-700">Edit</button><button type="button" onClick={() => deleteArticle(article)} aria-label={`Delete ${article.title}`} className="rounded-md border border-red-200 p-2 text-red-700 hover:bg-red-50"><Trash2 size={17} /></button></div>
+                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase"><span className={article.status === "published" ? "text-emerald-700" : "text-amber-700"}>{article.status}</span><span className="text-slate-400">{article.audience === "agents" ? "Agents only" : "Public"}</span><span className="text-slate-400">{article.category}</span><span className="font-normal normal-case text-slate-500">{formatDate(article.publishedAt)}</span></div><h3 className="mt-1 truncate font-bold dark:text-white">{article.title}</h3><p className="mt-1 line-clamp-2 text-sm text-slate-500">{article.summary}</p></div>
+                <div className="flex shrink-0 items-center gap-2">{article.status === "published" && <CopyGuideLinkButton path={getGuidePath(article)} className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold dark:border-slate-700" />}<button type="button" onClick={() => togglePublished(article)} title={article.status === "published" ? "Unpublish" : "Publish"} aria-label={article.status === "published" ? "Unpublish article" : "Publish article"} className="rounded-md border border-slate-300 p-2 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200"><Eye size={17} /></button><button type="button" onClick={() => editArticle(article)} className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold dark:border-slate-700">Edit</button><button type="button" onClick={() => deleteArticle(article)} aria-label={`Delete ${article.title}`} className="rounded-md border border-red-200 p-2 text-red-700 hover:bg-red-50"><Trash2 size={17} /></button></div>
               </article>
             ))}</div>}
       </section>

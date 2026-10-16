@@ -56,6 +56,7 @@ const userGroups = [
       { to: "/wallet", label: "Wallet", icon: Wallet },
       { to: "/commissions", label: "Commissions", icon: BadgeDollarSign },
       { to: "/support-chat", label: "Chat with support", icon: MessageCircle },
+      { to: "/agent/guides", label: "Guides & updates", icon: BookOpenText },
       { to: "/profile", label: "Profile & settings", icon: Settings },
     ],
   },
