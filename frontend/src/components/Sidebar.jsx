@@ -77,6 +77,7 @@ const adminGroups = [
       { to: "/admin/financial-reports", label: "Financial reports", icon: BadgeDollarSign, superAdminOnly: true },
       { to: "/admin/requests", label: "Service requests", icon: BriefcaseBusiness },
       { to: "/admin/verification-requests", label: "Verification requests", icon: ShieldCheck },
+      { to: "/admin/nimc-feps", label: "NIMC FEPs", icon: Users, superAdminOnly: true },
     ],
   },
   {

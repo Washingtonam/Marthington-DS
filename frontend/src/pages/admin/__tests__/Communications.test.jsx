@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -142,7 +142,7 @@ describe("Communications", () => {
 
     const inboxTab = await screen.findByRole("tab", { name: "Support inbox 1" });
     expect(screen.getByText("UNREAD")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain("1 unanswered agent message");
+    expect(screen.getByRole("status").textContent).toContain("1 agent conversation needs a reply");
     expect(screen.getByRole("status").textContent).toContain("Ayo Agent");
     fireEvent.click(screen.getByRole("button", { name: /Ayo Agent/ }));
 
@@ -151,6 +151,46 @@ describe("Communications", () => {
       "/api/admin/communications/conversations/conversation-1/messages?markRead=true",
     ));
     expect(inboxTab).toBeTruthy();
+  });
+
+  test("updates the unread badge for a new message while viewing another communications tab", async () => {
+    let pollInbox;
+    const setIntervalSpy = vi.spyOn(window, "setInterval").mockImplementation((callback) => {
+      pollInbox = callback;
+      return 1;
+    });
+    vi.spyOn(window, "clearInterval").mockImplementation(() => {});
+    let conversationsRequestCount = 0;
+    api.get.mockImplementation((path) => {
+      if (path.endsWith("/conversations")) {
+        conversationsRequestCount += 1;
+        return Promise.resolve({
+          data: {
+            conversations: [{
+              _id: "conversation-1",
+              unreadCount: conversationsRequestCount === 1 ? 0 : 1,
+              user: { name: "Ayo Agent", email: "ayo@example.com" },
+              lastMessage: conversationsRequestCount === 1 ? "Earlier message" : "New follow-up",
+            }],
+          },
+        });
+      }
+      return Promise.resolve(path.endsWith("/templates")
+        ? { data: { templates: [template] } }
+        : { data: { manualAgents: [], registeredUsers: [agent] } });
+    });
+    render(<MemoryRouter><Communications /></MemoryRouter>);
+
+    expect(await screen.findByRole("tab", { name: "Support inbox 0" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Dispatch & recipients" }));
+    await act(async () => {
+      await pollInbox();
+    });
+
+    const inboxTab = screen.getByRole("tab", { name: "Support inbox 1" });
+    expect(inboxTab.querySelector('[title="1 unread conversations"]')).toBeTruthy();
+    expect(inboxTab.querySelector(".bg-rose-600")).toBeTruthy();
+    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 5000);
   });
 
   test("shows the notification center inside Communications", async () => {

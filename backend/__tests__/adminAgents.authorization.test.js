@@ -10,6 +10,11 @@ jest.mock("../models/AgentJob.model", () => ({
   aggregate: jest.fn(),
   findByIdAndUpdate: jest.fn(),
 }));
+jest.mock("../models/NimcFep.model", () => ({
+  find: jest.fn(),
+  create: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+}));
 jest.mock("../models/Pricing.model", () => ({
   getPricing: jest.fn(),
   getDefaultServiceCatalog: jest.fn(),
@@ -22,6 +27,7 @@ const request = require("supertest");
 const User = require("../models/User.model");
 const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
+const NimcFep = require("../models/NimcFep.model");
 const Pricing = require("../models/Pricing.model");
 const AuditLog = require("../models/AuditLog.model");
 const Transaction = require("../models/transaction.model");
@@ -61,6 +67,8 @@ describe("agent management authorization", () => {
     ["get", "/api/admin/agents/jobs"],
     ["post", "/api/admin/agents/jobs"],
     ["patch", "/api/admin/agents/jobs/507f1f77bcf86cd799439011/status"],
+    ["get", "/api/admin/nimc-feps"],
+    ["post", "/api/admin/nimc-feps"],
   ])("denies ordinary admins access to CRM endpoint %s %s", async (method, path) => {
     const response = await request(app)[method](path)
       .set("Authorization", `Bearer ${token}`)
@@ -73,6 +81,52 @@ describe("agent management authorization", () => {
     expect(AgentJob.find).not.toHaveBeenCalled();
     expect(AgentJob.create).not.toHaveBeenCalled();
     expect(AgentJob.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(NimcFep.find).not.toHaveBeenCalled();
+    expect(NimcFep.create).not.toHaveBeenCalled();
+  });
+
+  it("lists and creates NIMC FEPs within the signed-in super admin's directory", async () => {
+    User.findById.mockResolvedValue({
+      id: "super-admin",
+      _id: "super-admin",
+      email: "root@example.test",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    NimcFep.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([{ _id: "fep-1", name: "Benin FEP" }]),
+      }),
+    });
+    NimcFep.create.mockResolvedValue({
+      _id: "fep-2",
+      name: "New FEP",
+      whatsapp: "+2348000000000",
+      createdBy: "super-admin",
+    });
+    const adminToken = jwt.sign({ id: "super-admin" }, secret);
+
+    const listResponse = await request(app)
+      .get("/api/admin/nimc-feps")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(listResponse.status).toBe(200);
+    expect(NimcFep.find).toHaveBeenCalledWith({ createdBy: "super-admin" });
+
+    const createResponse = await request(app)
+      .post("/api/admin/nimc-feps")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: " New FEP ", whatsapp: "+234 800 000 0000", email: " FEP@Example.com " });
+
+    expect(createResponse.status).toBe(201);
+    expect(NimcFep.create).toHaveBeenCalledWith({
+      name: "New FEP",
+      whatsapp: "+2348000000000",
+      email: "fep@example.com",
+      notes: "",
+      createdBy: "super-admin",
+    });
   });
 
   it("includes user account update audit records in the audit profile history", async () => {

@@ -13,6 +13,7 @@ const SystemSettings = require("../models/SystemSettings.model");
 const { uploadToCloudinary } = require("../shared/cloudinary");
 const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
+const NimcFep = require("../models/NimcFep.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
 const { normalizeServiceType } = require("../config/serviceTypes");
 const { SUPER_ADMIN_EMAIL } = require("../config/constants");
@@ -124,6 +125,93 @@ const normalizeAgentEmail = (value) => {
   if (!email) return "";
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
 };
+
+router.get("/nimc-feps", isSuperAdmin, async (req, res) => {
+  try {
+    const feps = await NimcFep.find({ createdBy: req.user.id }).sort({ active: -1, name: 1 }).lean();
+    return res.json({ success: true, feps });
+  } catch (error) {
+    console.error("ADMIN NIMC FEP LIST ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to load NIMC FEPs." });
+  }
+});
+
+router.post("/nimc-feps", isSuperAdmin, async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const whatsapp = normalizeWhatsapp(req.body?.whatsapp);
+    const email = normalizeAgentEmail(req.body?.email);
+    const notes = String(req.body?.notes || "").trim();
+    if (!name || name.length > 120) {
+      return res.status(400).json({ success: false, message: "Enter an FEP name (up to 120 characters)." });
+    }
+    if (!whatsapp) {
+      return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
+    }
+    if (email === null) {
+      return res.status(400).json({ success: false, message: "Enter a valid email address." });
+    }
+    if (notes.length > 500) {
+      return res.status(400).json({ success: false, message: "Notes must be 500 characters or fewer." });
+    }
+    const fep = await NimcFep.create({
+      name,
+      whatsapp,
+      ...(email ? { email } : {}),
+      notes,
+      createdBy: req.user.id,
+    });
+    return res.status(201).json({ success: true, fep });
+  } catch (error) {
+    console.error("ADMIN NIMC FEP CREATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to add this NIMC FEP." });
+  }
+});
+
+router.put("/nimc-feps/:fepId", isSuperAdmin, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.fepId)) {
+      return res.status(400).json({ success: false, message: "Invalid NIMC FEP ID." });
+    }
+    const updates = {};
+    if (req.body?.name !== undefined) {
+      const name = String(req.body.name).trim();
+      if (!name || name.length > 120) {
+        return res.status(400).json({ success: false, message: "Enter an FEP name (up to 120 characters)." });
+      }
+      updates.name = name;
+    }
+    if (req.body?.whatsapp !== undefined) {
+      const whatsapp = normalizeWhatsapp(req.body.whatsapp);
+      if (!whatsapp) return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
+      updates.whatsapp = whatsapp;
+    }
+    if (req.body?.email !== undefined) {
+      const email = normalizeAgentEmail(req.body.email);
+      if (email === null) return res.status(400).json({ success: false, message: "Enter a valid email address." });
+      updates.email = email;
+    }
+    if (req.body?.notes !== undefined) {
+      const notes = String(req.body.notes).trim();
+      if (notes.length > 500) return res.status(400).json({ success: false, message: "Notes must be 500 characters or fewer." });
+      updates.notes = notes;
+    }
+    if (req.body?.active !== undefined) {
+      if (typeof req.body.active !== "boolean") return res.status(400).json({ success: false, message: "Invalid FEP status." });
+      updates.active = req.body.active;
+    }
+    const fep = await NimcFep.findOneAndUpdate(
+      { _id: req.params.fepId, createdBy: req.user.id },
+      updates,
+      { new: true, runValidators: true },
+    ).lean();
+    if (!fep) return res.status(404).json({ success: false, message: "NIMC FEP not found." });
+    return res.json({ success: true, fep });
+  } catch (error) {
+    console.error("ADMIN NIMC FEP UPDATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to update this NIMC FEP." });
+  }
+});
 
 const sanitizeJobFormData = (value) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;

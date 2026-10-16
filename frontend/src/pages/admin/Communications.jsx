@@ -233,12 +233,11 @@ export default function Communications() {
   };
 
   useEffect(() => {
-    if (activeTab !== "inbox") return undefined;
     const selectedConversationId = selectedConversation?._id;
     const refreshInboxData = async () => {
       try {
         await loadConversations();
-        if (selectedConversationId) {
+        if (activeTab === "inbox" && selectedConversationId) {
           const response = await api.get(`/api/admin/communications/conversations/${selectedConversationId}/messages`);
           setSelectedConversation(response.data.conversation);
           setMessages(response.data.messages || []);
@@ -300,22 +299,35 @@ export default function Communications() {
               </button>
             </>
         )}
-        <button type="button" role="tab" aria-selected={activeTab === "inbox"} onClick={() => changeTab("inbox")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "inbox" ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
-          Support inbox <span className="ml-1 rounded-full bg-white/20 px-2 py-0.5">{unreadConversationCount}</span>
+        <button type="button" role="tab" aria-selected={activeTab === "inbox"} onClick={() => changeTab("inbox")} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "inbox" ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
+          <span>Support inbox</span>
+          <span
+            aria-live="polite"
+            title={`${unreadConversationCount} unread conversations`}
+            className={`inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold tabular-nums ${
+              unreadConversationCount > 0
+                ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-200 dark:ring-rose-900"
+                : activeTab === "inbox"
+                  ? "bg-white/20 text-[var(--accent-foreground)]"
+                  : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200"
+            }`}
+          >
+            {unreadConversationCount > 99 ? "99+" : unreadConversationCount}
+          </span>
         </button>
       </div>
 
       {activeTab === "inbox" && unreadConversationCount > 0 && (
         <div role="status" aria-live="polite" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
           <p>
-            <strong>{unreadConversationCount} unanswered agent {unreadConversationCount === 1 ? "message" : "messages"}.</strong>
+            <strong>{unreadConversationCount} agent {unreadConversationCount === 1 ? "conversation needs" : "conversations need"} a reply.</strong>
             {" "}
             {conversations
               .filter((conversation) => conversation.unreadCount > 0)
               .map((conversation) => conversation.user?.name || "An agent")
               .join(", ")}
           </p>
-          <span className="font-semibold">Open each conversation to mark it read.</span>
+          <span className="font-semibold">Unread chats are marked and listed first.</span>
         </div>
       )}
 
