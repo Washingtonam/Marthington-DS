@@ -29,7 +29,7 @@ import Communications from "../Communications";
 
 function CurrentLocation() {
   const location = useLocation();
-  return <output data-testid="location">{JSON.stringify({ pathname: location.pathname, messageText: location.state?.messageText })}</output>;
+  return <output data-testid="location">{JSON.stringify({ pathname: location.pathname, search: location.search, messageText: location.state?.messageText })}</output>;
 }
 
 const template = {
@@ -154,6 +154,120 @@ describe("Communications", () => {
     ));
   });
 
+  test("opens a fixed-height mobile conversation view with a way back to the inbox", async () => {
+    api.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/conversations")
+        ? { conversations: [{ _id: "conversation-1", user: { name: "Ayo Agent", email: "ayo@example.com" }, lastMessage: "I need help" }] }
+        : { conversation: { _id: "conversation-1" }, messages: [{ _id: "message-1", senderId: "agent-1", senderName: "Ayo Agent", text: "I need help" }] },
+    }));
+    render(<MemoryRouter><Communications /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /Support inbox/ }));
+    const conversationButton = await screen.findByRole("button", { name: /Ayo Agent/ });
+    const conversationList = conversationButton.closest("section");
+    fireEvent.click(conversationButton);
+
+    expect(await screen.findByRole("region", { name: "Conversation messages" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Inbox" })).toBeTruthy();
+    expect(conversationList.className).toContain("hidden md:block");
+    expect(screen.getByRole("region", { name: "Conversation messages" }).className).toContain("flex-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Inbox" }));
+
+    expect(screen.queryByRole("region", { name: "Conversation messages" })).toBeNull();
+    expect(screen.getByText("Select a conversation")).toBeTruthy();
+  });
+
+  test("loads older messages when the conversation history is scrolled to the top", async () => {
+    const conversationId = "0123456789abcdef01234567";
+    const oldestLoadedId = "1123456789abcdef01234567";
+    api.get.mockImplementation((path) => {
+      if (path.endsWith("/conversations")) {
+        return Promise.resolve({
+          data: { conversations: [{ _id: conversationId, user: { name: "Ayo Agent" }, lastMessage: "Latest message" }] },
+        });
+      }
+      if (path.includes("before=")) {
+        return Promise.resolve({
+          data: {
+            conversation: { _id: conversationId },
+            messages: [{ _id: "2123456789abcdef01234567", text: "Older message", createdAt: "2026-10-15T09:00:00.000Z" }],
+            hasMore: false,
+          },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          conversation: { _id: conversationId },
+          messages: [
+            { _id: oldestLoadedId, text: "First loaded message", createdAt: "2026-10-15T10:00:00.000Z" },
+            { _id: "3123456789abcdef01234567", text: "Latest message", createdAt: "2026-10-15T11:00:00.000Z" },
+          ],
+          hasMore: true,
+        },
+      });
+    });
+    render(<MemoryRouter><Communications /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("tab", { name: /Support inbox/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Ayo Agent/ }));
+    const messageRegion = await screen.findByRole("region", { name: "Conversation messages" });
+    expect(await within(messageRegion).findByText("First loaded message")).toBeTruthy();
+    expect(within(messageRegion).getByRole("button", { name: "Load older messages" })).toBeTruthy();
+
+    fireEvent.scroll(messageRegion, { target: { scrollTop: 0 } });
+
+    expect(await within(messageRegion).findByText("Older message")).toBeTruthy();
+    expect(api.get).toHaveBeenCalledWith(
+      `/api/admin/communications/conversations/${conversationId}/messages?before=${oldestLoadedId}`,
+    );
+    expect(messageRegion.textContent.indexOf("Older message")).toBeLessThan(messageRegion.textContent.indexOf("First loaded message"));
+  });
+
+  test("keeps the reader's position when new messages arrive during inbox polling", async () => {
+    let pollInbox;
+    vi.spyOn(window, "setInterval").mockImplementation((callback) => {
+      pollInbox = callback;
+      return 1;
+    });
+    vi.spyOn(window, "clearInterval").mockImplementation(() => {});
+    let threadLoads = 0;
+    api.get.mockImplementation((path) => {
+      if (path.endsWith("/conversations")) {
+        return Promise.resolve({
+          data: { conversations: [{ _id: "conversation-1", user: { name: "Ayo Agent" }, lastMessage: "Latest message" }] },
+        });
+      }
+      threadLoads += 1;
+      const messages = [
+        { _id: "message-1", text: "Earlier message", createdAt: "2026-10-15T10:00:00.000Z" },
+        { _id: "message-2", text: "Latest message", createdAt: "2026-10-15T11:00:00.000Z" },
+      ];
+      if (threadLoads > 1) {
+        messages.push({ _id: "message-3", text: "New reply", createdAt: "2026-10-15T12:00:00.000Z" });
+      }
+      return Promise.resolve({
+        data: { conversation: { _id: "conversation-1" }, messages, hasMore: false },
+      });
+    });
+    render(<MemoryRouter><Communications /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("tab", { name: /Support inbox/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Ayo Agent/ }));
+    const messageRegion = await screen.findByRole("region", { name: "Conversation messages" });
+    await within(messageRegion).findByText("Latest message");
+    Object.defineProperty(messageRegion, "scrollHeight", { configurable: true, value: 1200 });
+    Object.defineProperty(messageRegion, "clientHeight", { configurable: true, value: 400 });
+    messageRegion.scrollTop = 250;
+    fireEvent.scroll(messageRegion);
+
+    await act(async () => {
+      await pollInbox();
+    });
+
+    expect(await within(messageRegion).findByText("New reply")).toBeTruthy();
+    expect(messageRegion.scrollTop).toBe(250);
+    vi.restoreAllMocks();
+  });
+
   test("lets a superadmin copy a message or start a job from it", async () => {
     mockUseUser.mockReturnValue({ user: { id: "super-admin-1", role: "super_admin" } });
     const messageText = "Please help with my CAC registration";
@@ -162,14 +276,14 @@ describe("Communications", () => {
         ? {
           conversations: [{
             _id: "conversation-1",
-            user: { _id: "registered-agent-1", name: "Ayo Agent", email: "ayo@example.com" },
+            user: { name: "Ayo Agent", email: "ayo@example.com" },
             lastMessage: messageText,
           }],
         }
         : {
           conversation: {
             _id: "conversation-1",
-            user: { _id: "registered-agent-1", name: "Ayo Agent", email: "ayo@example.com" },
+            userId: "registered-agent-1",
           },
           messages: [
             {
@@ -218,6 +332,7 @@ describe("Communications", () => {
     expect(await screen.findByText("Log jobs page")).toBeTruthy();
     expect(JSON.parse(screen.getByTestId("location").textContent)).toEqual({
       pathname: "/admin/agents/jobs",
+      search: "?customerType=registered&customerId=registered-agent-1",
       messageText: "NIN number: 12345678901",
     });
   });

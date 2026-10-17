@@ -11,6 +11,7 @@ const { isAdmin } = require("../shared/authGuard");
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const emailSender = process.env.RESEND_FROM_EMAIL || "Marthington <onboarding@resend.dev>";
+const SUPPORT_MESSAGE_PAGE_SIZE = 50;
 
 const DEFAULT_TEMPLATES = [
   {
@@ -377,6 +378,23 @@ adminRouter.get("/conversations/:conversationId/messages", isAdmin, async (req, 
   try {
     const conversation = await SupportConversation.findById(req.params.conversationId);
     if (!conversation) return res.status(404).json({ success: false, message: "Conversation not found." });
+    const messageQuery = { conversationId: conversation._id };
+    if (req.query.before) {
+      if (!mongoose.Types.ObjectId.isValid(req.query.before)) {
+        return res.status(400).json({ success: false, message: "Invalid message cursor." });
+      }
+      const cursorMessage = await SupportMessage.findOne({
+        _id: req.query.before,
+        conversationId: conversation._id,
+      }).lean();
+      if (!cursorMessage) {
+        return res.status(400).json({ success: false, message: "Invalid message cursor." });
+      }
+      messageQuery.$or = [
+        { createdAt: { $lt: cursorMessage.createdAt } },
+        { createdAt: cursorMessage.createdAt, _id: { $lt: cursorMessage._id } },
+      ];
+    }
     if (req.query.markRead === "true") {
       const readAt = new Date();
       await SupportMessage.updateMany(
@@ -389,11 +407,13 @@ adminRouter.get("/conversations/:conversationId/messages", isAdmin, async (req, 
         await conversation.save();
       }
     }
-    const messages = await SupportMessage.find({ conversationId: conversation._id })
-      .sort({ createdAt: -1 })
-      .limit(100)
+    const messages = await SupportMessage.find(messageQuery)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(SUPPORT_MESSAGE_PAGE_SIZE + 1)
       .lean();
-    return res.json({ success: true, conversation, messages: messages.reverse() });
+    const hasMore = messages.length > SUPPORT_MESSAGE_PAGE_SIZE;
+    if (hasMore) messages.pop();
+    return res.json({ success: true, conversation, messages: messages.reverse(), hasMore });
   } catch (error) {
     console.error("SUPPORT THREAD LOAD ERROR:", error);
     return res.status(500).json({ success: false, message: "Could not load this conversation." });

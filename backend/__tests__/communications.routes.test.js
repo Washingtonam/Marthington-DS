@@ -19,6 +19,7 @@ jest.mock("../models/SupportConversation.model", () => ({
 }));
 jest.mock("../models/SupportMessage.model", () => ({
   find: jest.fn(),
+  findOne: jest.fn(),
   create: jest.fn(),
   aggregate: jest.fn(),
   updateMany: jest.fn(),
@@ -195,6 +196,57 @@ describe("communications routes", () => {
     expect(conversation.save).not.toHaveBeenCalled();
     expect(conversation.adminReadMessageId).toBeUndefined();
     expect(SupportMessage.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("loads older support messages using a validated message cursor", async () => {
+    const conversationId = "0123456789abcdef01234567";
+    const cursorId = "1123456789abcdef01234567";
+    const cursorCreatedAt = new Date("2026-10-15T10:00:00.000Z");
+    SupportConversation.findById.mockResolvedValue({ _id: conversationId });
+    SupportMessage.findOne.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({ _id: cursorId, createdAt: cursorCreatedAt }),
+    });
+    const olderMessages = Array.from({ length: 51 }, (_, index) => ({
+      _id: `message-${index}`,
+      text: `Message ${index}`,
+    }));
+    SupportMessage.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue(olderMessages),
+        }),
+      }),
+    });
+
+    const response = await request(app)
+      .get(`/api/admin/communications/conversations/${conversationId}/messages?before=${cursorId}`)
+      .set("Authorization", authHeader("support-admin"));
+
+    expect(response.status).toBe(200);
+    expect(response.body.messages).toHaveLength(50);
+    expect(response.body.messages[0].text).toBe("Message 49");
+    expect(response.body.messages[49].text).toBe("Message 0");
+    expect(response.body.hasMore).toBe(true);
+    expect(SupportMessage.find).toHaveBeenCalledWith({
+      conversationId,
+      $or: [
+        { createdAt: { $lt: cursorCreatedAt } },
+        { createdAt: cursorCreatedAt, _id: { $lt: cursorId } },
+      ],
+    });
+  });
+
+  it("rejects an invalid message cursor", async () => {
+    const conversationId = "0123456789abcdef01234567";
+    SupportConversation.findById.mockResolvedValue({ _id: conversationId });
+
+    const response = await request(app)
+      .get(`/api/admin/communications/conversations/${conversationId}/messages?before=not-an-object-id`)
+      .set("Authorization", authHeader("support-admin"));
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("Invalid message cursor.");
+    expect(SupportMessage.find).not.toHaveBeenCalled();
   });
 
   it("returns unread conversations for the Communications inbox badge", async () => {

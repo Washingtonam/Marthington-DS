@@ -16,6 +16,7 @@ const AgentJob = require("../models/AgentJob.model");
 const OutsourcedAgent = require("../models/OutsourcedAgent.model");
 const OutsourcedJob = require("../models/OutsourcedJob.model");
 const NimcFep = require("../models/NimcFep.model");
+const WildThought = require("../models/WildThought.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
 const { normalizeServiceType } = require("../config/serviceTypes");
 const { SUPER_ADMIN_EMAIL } = require("../config/constants");
@@ -71,6 +72,124 @@ const publicBranding = (settings) => ({
   businessName: settings?.businessName || "Marthington",
   businessTagline: settings?.businessTagline || "Digital Services",
   businessLogoUrl: settings?.businessLogoUrl || "",
+});
+
+const wildThoughtCategories = [
+  "Business improvement",
+  "Client lead",
+  "Marketing partnership",
+  "Other",
+];
+
+const validateWildThought = (body, partial = false) => {
+  const updates = {};
+  for (const [field, maxLength] of Object.entries({
+    title: 120,
+    venture: 100,
+    category: 50,
+    body: 5000,
+    followUp: 500,
+  })) {
+    if (body?.[field] === undefined) {
+      if (!partial && ["title", "category", "body"].includes(field)) {
+        return { error: `${field} is required.` };
+      }
+      continue;
+    }
+    if (typeof body[field] !== "string") return { error: `${field} must be text.` };
+    const value = body[field].trim();
+    if (value.length > maxLength) return { error: `${field} must be ${maxLength} characters or fewer.` };
+    if (!value && ["title", "category", "body"].includes(field)) {
+      return { error: `${field} is required.` };
+    }
+    updates[field] = value;
+  }
+
+  if (updates.category !== undefined && !wildThoughtCategories.includes(updates.category)) {
+    return { error: "Choose a valid thought category." };
+  }
+  return { updates };
+};
+
+router.get("/wild-thoughts", isSuperAdmin, async (req, res) => {
+  try {
+    const thoughts = await WildThought.find({ createdBy: req.user.id }).sort({ updatedAt: -1 }).lean();
+    return res.json({ success: true, thoughts });
+  } catch (error) {
+    console.error("ADMIN WILD THOUGHT LIST ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to load Wild Thoughts." });
+  }
+});
+
+router.post("/wild-thoughts", isSuperAdmin, async (req, res) => {
+  const { updates, error } = validateWildThought(req.body);
+  if (error) return res.status(400).json({ success: false, message: error });
+
+  const clientId = req.body?.id;
+  if (clientId !== undefined && (
+    typeof clientId !== "string"
+    || !clientId.trim()
+    || clientId.length > 100
+    || !/^[\w-]+$/.test(clientId)
+  )) {
+    return res.status(400).json({ success: false, message: "Invalid thought ID." });
+  }
+
+  try {
+    const thought = await WildThought.create({
+      ...updates,
+      ...(clientId ? { _id: clientId } : {}),
+      createdBy: req.user.id,
+    });
+    return res.status(201).json({ success: true, thought });
+  } catch (createError) {
+    if (createError.code === 11000) {
+      return res.status(409).json({ success: false, message: "This thought already exists." });
+    }
+    console.error("ADMIN WILD THOUGHT CREATE ERROR:", createError);
+    return res.status(500).json({ success: false, message: "Failed to save this thought." });
+  }
+});
+
+router.put("/wild-thoughts/:thoughtId", isSuperAdmin, async (req, res) => {
+  if (!/^[\w-]{1,100}$/.test(req.params.thoughtId)) {
+    return res.status(400).json({ success: false, message: "Invalid thought ID." });
+  }
+  const { updates, error } = validateWildThought(req.body, true);
+  if (error) return res.status(400).json({ success: false, message: error });
+  if (!Object.keys(updates).length) {
+    return res.status(400).json({ success: false, message: "Provide at least one field to update." });
+  }
+
+  try {
+    const thought = await WildThought.findOneAndUpdate(
+      { _id: req.params.thoughtId, createdBy: req.user.id },
+      { $set: updates },
+      { new: true, runValidators: true },
+    );
+    if (!thought) return res.status(404).json({ success: false, message: "Thought not found." });
+    return res.json({ success: true, thought });
+  } catch (updateError) {
+    console.error("ADMIN WILD THOUGHT UPDATE ERROR:", updateError);
+    return res.status(500).json({ success: false, message: "Failed to update this thought." });
+  }
+});
+
+router.delete("/wild-thoughts/:thoughtId", isSuperAdmin, async (req, res) => {
+  if (!/^[\w-]{1,100}$/.test(req.params.thoughtId)) {
+    return res.status(400).json({ success: false, message: "Invalid thought ID." });
+  }
+  try {
+    const thought = await WildThought.findOneAndDelete({
+      _id: req.params.thoughtId,
+      createdBy: req.user.id,
+    });
+    if (!thought) return res.status(404).json({ success: false, message: "Thought not found." });
+    return res.json({ success: true, message: "Thought deleted." });
+  } catch (deleteError) {
+    console.error("ADMIN WILD THOUGHT DELETE ERROR:", deleteError);
+    return res.status(500).json({ success: false, message: "Failed to delete this thought." });
+  }
 });
 
 router.put("/settings/branding", isSuperAdmin, handleBrandingImageUpload, async (req, res) => {

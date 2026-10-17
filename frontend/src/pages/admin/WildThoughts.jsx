@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import api from "../../lib/axios";
 
 const categories = [
   "Business improvement",
@@ -50,43 +51,97 @@ function formatDate(value) {
 
 export default function WildThoughts() {
   const storageKey = getStorageKey();
-  const [initialStorage] = useState(() => {
-    try {
-      const savedThoughts = JSON.parse(localStorage.getItem(storageKey) || "[]");
-      if (!Array.isArray(savedThoughts)) {
-        throw new Error("Saved Wild Thoughts data is not a list.");
-      }
-      return { thoughts: savedThoughts, error: null };
-    } catch (error) {
-      console.error("Could not load Wild Thoughts:", error);
-      return { thoughts: [], error };
-    }
-  });
-  const [thoughts, setThoughts] = useState(initialStorage.thoughts);
+  const [thoughts, setThoughts] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [isListening, setIsListening] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const speechRecognition = useRef(null);
 
   useEffect(() => {
-    if (initialStorage.error) {
-      toast.error("Your saved thoughts could not be loaded from this browser.");
-    }
-  }, [initialStorage.error]);
+    let cancelled = false;
+    const loadThoughts = async () => {
+      setIsLoading(true);
+      setLoadError(false);
+      try {
+        let legacyThoughts = [];
+        try {
+          const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
+          if (!Array.isArray(saved)) throw new Error("Saved browser thoughts are not a list.");
+          legacyThoughts = saved;
+        } catch (error) {
+          console.error("Could not read previous browser-saved thoughts:", error);
+          toast.error("Previous browser-saved thoughts could not be read.");
+        }
+
+        const response = await api.get("/api/admin/wild-thoughts");
+        let loadedThoughts = (response.data?.thoughts || []).map(normalizeThought);
+        if (legacyThoughts.length) {
+          const existingIds = new Set(loadedThoughts.map((thought) => thought.id));
+          const pendingMigration = legacyThoughts.filter((thought) => !existingIds.has(
+            String(thought.id || "").replace(/[^\w-]/g, "-").slice(0, 100),
+          ));
+          const migratedThoughts = [];
+          for (const legacyThought of pendingMigration) {
+            const migrationId = String(legacyThought.id || `${legacyThought.title}-${legacyThought.createdAt}`)
+              .replace(/[^\w-]/g, "-")
+              .slice(0, 100);
+            const migrated = await api.post("/api/admin/wild-thoughts", {
+              id: migrationId || `legacy-${Date.now()}`,
+              title: legacyThought.title,
+              venture: legacyThought.venture || "",
+              category: legacyThought.category || categories[0],
+              body: legacyThought.body,
+              followUp: legacyThought.followUp || "",
+            });
+            migratedThoughts.push(normalizeThought(migrated.data.thought));
+          }
+          if (migratedThoughts.length) {
+            loadedThoughts = [...migratedThoughts, ...loadedThoughts];
+            toast.success("Previous browser-saved thoughts were imported to your account.");
+          }
+          if (loadedThoughts.length >= legacyThoughts.length) localStorage.removeItem(storageKey);
+        }
+        if (!cancelled) setThoughts(loadedThoughts);
+      } catch (error) {
+        console.error("Could not load Wild Thoughts:", error);
+        if (!cancelled) {
+          setLoadError(true);
+          toast.error(error.response?.data?.message || "Could not load Wild Thoughts. Please try again.");
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    void loadThoughts();
+    return () => {
+      cancelled = true;
+    };
+  }, [storageKey]);
 
   useEffect(() => () => speechRecognition.current?.stop(), []);
 
-  const persistThoughts = (nextThoughts) => {
+  const persistThought = async (thoughtId, thought) => {
+    setIsSaving(true);
     try {
-      localStorage.setItem(storageKey, JSON.stringify(nextThoughts));
-      setThoughts(nextThoughts);
+      const response = thoughtId
+        ? await api.put(`/api/admin/wild-thoughts/${encodeURIComponent(thoughtId)}`, thought)
+        : await api.post("/api/admin/wild-thoughts", thought);
+      const savedThought = normalizeThought(response.data.thought);
+      setThoughts((current) => thoughtId
+        ? current.map((item) => (item.id === thoughtId ? savedThought : item))
+        : [savedThought, ...current]);
       return true;
     } catch (error) {
-      console.error("Could not save Wild Thoughts:", error);
-      toast.error("Could not save your thought. Check browser storage and try again.");
+      console.error("Could not save Wild Thought:", error);
+      toast.error(error.response?.data?.message || "Could not save your thought. Please try again.");
       return false;
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -95,7 +150,7 @@ export default function WildThoughts() {
     setEditingId(null);
   };
 
-  const saveThought = (event) => {
+  const saveThought = async (event) => {
     event.preventDefault();
     const title = form.title.trim();
     const body = form.body.trim();
@@ -104,24 +159,15 @@ export default function WildThoughts() {
       return;
     }
 
-    const now = new Date().toISOString();
     const nextThought = {
-      id: editingId || (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`),
       title,
       venture: form.venture.trim(),
       category: form.category,
       body,
       followUp: form.followUp.trim(),
-      createdAt: editingId
-        ? thoughts.find((thought) => thought.id === editingId)?.createdAt || now
-        : now,
-      updatedAt: now,
     };
-    const nextThoughts = editingId
-      ? thoughts.map((thought) => (thought.id === editingId ? nextThought : thought))
-      : [nextThought, ...thoughts];
 
-    if (persistThoughts(nextThoughts)) {
+    if (await persistThought(editingId, nextThought)) {
       resetForm();
       toast.success(editingId ? "Thought updated." : "Thought saved.");
     }
@@ -139,12 +185,16 @@ export default function WildThoughts() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const deleteThought = (thought) => {
+  const deleteThought = async (thought) => {
     if (!window.confirm(`Delete "${thought.title}"? This cannot be undone.`)) return;
-    const nextThoughts = thoughts.filter((item) => item.id !== thought.id);
-    if (persistThoughts(nextThoughts)) {
+    try {
+      await api.delete(`/api/admin/wild-thoughts/${encodeURIComponent(thought.id)}`);
+      setThoughts((current) => current.filter((item) => item.id !== thought.id));
       if (editingId === thought.id) resetForm();
       toast.success("Thought deleted.");
+    } catch (error) {
+      console.error("Could not delete Wild Thought:", error);
+      toast.error(error.response?.data?.message || "Could not delete this thought. Please try again.");
     }
   };
 
@@ -237,6 +287,19 @@ export default function WildThoughts() {
         </div>
       </section>
 
+      {loadError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+          <span>Thoughts could not be loaded. Your saved data has not been changed.</span>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="font-semibold underline underline-offset-2"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
@@ -320,10 +383,11 @@ export default function WildThoughts() {
           <div className="flex flex-wrap items-center gap-3 md:col-span-2">
             <button
               type="submit"
+              disabled={isSaving || isLoading}
               className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {editingId ? <Pencil size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
-              {editingId ? "Update thought" : "Save thought"}
+              {isSaving ? "Saving..." : editingId ? "Update thought" : "Save thought"}
             </button>
             <button
               type="button"
@@ -369,7 +433,11 @@ export default function WildThoughts() {
           </select>
         </div>
 
-        {visibleThoughts.length ? (
+        {isLoading ? (
+          <p role="status" className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+            Loading your saved thoughts...
+          </p>
+        ) : visibleThoughts.length ? (
           <div className="grid gap-4 lg:grid-cols-2">
             {visibleThoughts.map((thought) => (
               <article
@@ -433,8 +501,12 @@ export default function WildThoughts() {
         )}
       </section>
       <p className="text-xs text-slate-500 dark:text-slate-400">
-        Thoughts are currently saved in this browser for your super-admin account.
+        Thoughts are saved securely to your super-admin account and available across devices.
       </p>
     </main>
   );
+}
+
+function normalizeThought(thought) {
+  return { ...thought, id: thought._id || thought.id };
 }

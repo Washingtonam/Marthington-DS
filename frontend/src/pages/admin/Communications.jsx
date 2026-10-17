@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Bell, BriefcaseBusiness, Copy, Mail, MessageCircle, Plus, RefreshCw, Search, Send } from "lucide-react";
 import { useUser } from "../../context/UserContext";
@@ -22,10 +22,32 @@ const whatsappUrl = (phone, message) => {
 };
 
 const formatDate = (date) => date ? new Date(date).toLocaleString() : "";
+const mergeMessages = (current, incoming) => {
+  const messagesById = new Map(current.map((message) => [String(message._id), message]));
+  incoming.forEach((message) => messagesById.set(String(message._id), message));
+  return [...messagesById.values()].sort((left, right) => {
+    const dateDifference = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+    return dateDifference || String(left._id).localeCompare(String(right._id));
+  });
+};
 
-function MessageThread({ messages, currentUserId, isSuperAdmin, onCopyMessage, onLogJob }) {
+function MessageThread({
+  messages,
+  currentUserId,
+  isSuperAdmin,
+  hasOlderMessages,
+  loadingOlderMessages,
+  onLoadOlderMessages,
+  onCopyMessage,
+  onLogJob,
+}) {
   const [contextMenu, setContextMenu] = useState(null);
   const contextMenuRef = useRef(null);
+  const messagesRef = useRef(null);
+  const previousLengthRef = useRef(0);
+  const scrollAnchorRef = useRef(null);
+  const loadingOlderRef = useRef(false);
+  const wasAtBottomRef = useRef(true);
 
   useEffect(() => {
     if (!contextMenu) return undefined;
@@ -43,30 +65,84 @@ function MessageThread({ messages, currentUserId, isSuperAdmin, onCopyMessage, o
     };
   }, [contextMenu]);
 
+  useLayoutEffect(() => {
+    const container = messagesRef.current;
+    if (!container) return;
+    if (scrollAnchorRef.current) {
+      const { scrollHeight, scrollTop } = scrollAnchorRef.current;
+      container.scrollTop = container.scrollHeight - scrollHeight + scrollTop;
+      scrollAnchorRef.current = null;
+    } else if (messages.length > previousLengthRef.current && wasAtBottomRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
+    wasAtBottomRef.current = container.scrollHeight - container.scrollTop - container.clientHeight < 48;
+    previousLengthRef.current = messages.length;
+  }, [messages.length]);
+
+  useEffect(() => {
+    if (!loadingOlderMessages) {
+      loadingOlderRef.current = false;
+      scrollAnchorRef.current = null;
+    }
+  }, [loadingOlderMessages]);
+
+  const requestOlderMessages = (container = messagesRef.current) => {
+    if (!container || !hasOlderMessages || loadingOlderRef.current) return;
+    loadingOlderRef.current = true;
+    scrollAnchorRef.current = {
+      scrollHeight: container.scrollHeight,
+      scrollTop: container.scrollTop,
+    };
+    onLoadOlderMessages();
+  };
+
   return (
-    <div role="region" aria-label="Conversation messages" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-xl bg-slate-50 p-4 dark:bg-slate-950">
-      {messages.map((message) => {
-        const outgoing = String(message.senderId) === String(currentUserId);
-        return (
-          <div
-            key={message._id}
-            onContextMenu={isSuperAdmin ? (event) => {
-              event.preventDefault();
-              setContextMenu({
-                message,
-                x: Math.min(event.clientX, window.innerWidth - 190),
-                y: Math.min(event.clientY, window.innerHeight - 100),
-              });
-            } : undefined}
-            className={`max-w-[85%] rounded-2xl px-4 py-3 ${outgoing ? "self-end bg-[var(--accent)] text-[var(--accent-foreground)]" : "self-start bg-white shadow-sm dark:bg-slate-800"}`}
+    <div
+      ref={messagesRef}
+      role="region"
+      aria-label="Conversation messages"
+      onScroll={(event) => {
+        wasAtBottomRef.current = event.currentTarget.scrollHeight
+          - event.currentTarget.scrollTop
+          - event.currentTarget.clientHeight < 48;
+        if (event.currentTarget.scrollTop <= 48) requestOlderMessages(event.currentTarget);
+      }}
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl bg-slate-50 p-4 dark:bg-slate-950"
+    >
+      <div className="flex min-h-full flex-col gap-3">
+        {hasOlderMessages && (
+          <button
+            type="button"
+            disabled={loadingOlderMessages}
+            onClick={() => requestOlderMessages()}
+            className="self-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
           >
-            <p className="mb-1 text-xs font-semibold opacity-70">{message.senderName}</p>
-            <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.text}</p>
-            <p className="mt-2 text-right text-[10px] opacity-60">{formatDate(message.createdAt)}</p>
-          </div>
-        );
-      })}
-      {!messages.length && <p className="m-auto text-sm text-slate-500">No messages in this conversation yet.</p>}
+            {loadingOlderMessages ? "Loading older messages…" : "Load older messages"}
+          </button>
+        )}
+        {messages.map((message) => {
+          const outgoing = String(message.senderId) === String(currentUserId);
+          return (
+            <div
+              key={message._id}
+              onContextMenu={isSuperAdmin ? (event) => {
+                event.preventDefault();
+                setContextMenu({
+                  message,
+                  x: Math.min(event.clientX, window.innerWidth - 190),
+                  y: Math.min(event.clientY, window.innerHeight - 100),
+                });
+              } : undefined}
+              className={`max-w-[85%] rounded-2xl px-4 py-3 ${outgoing ? "self-end bg-[var(--accent)] text-[var(--accent-foreground)]" : "self-start bg-white shadow-sm dark:bg-slate-800"}`}
+            >
+              <p className="mb-1 text-xs font-semibold opacity-70">{message.senderName}</p>
+              <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.text}</p>
+              <p className="mt-2 text-right text-[10px] opacity-60">{formatDate(message.createdAt)}</p>
+            </div>
+          );
+        })}
+        {!messages.length && <p className="m-auto text-sm text-slate-500">No messages in this conversation yet.</p>}
+      </div>
       {contextMenu && (
         <div
           ref={contextMenuRef}
@@ -110,6 +186,8 @@ export default function Communications() {
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [reply, setReply] = useState("");
   const [query, setQuery] = useState("");
   const [audience, setAudience] = useState("all");
@@ -129,8 +207,13 @@ export default function Communications() {
   const loadThread = useCallback(async (conversation) => {
     const response = await api.get(`/api/admin/communications/conversations/${conversation._id}/messages?markRead=true`);
     window.dispatchEvent(new Event("support-conversation-read"));
-    setSelectedConversation(response.data.conversation);
+    setSelectedConversation({
+      ...conversation,
+      ...response.data.conversation,
+      user: response.data.conversation?.user || conversation.user,
+    });
     setMessages(response.data.messages || []);
+    setHasOlderMessages(Boolean(response.data.hasMore));
     setConversations((current) => current.map((item) => (
       String(item._id) === String(conversation._id) ? { ...item, unreadCount: 0 } : item
     )));
@@ -299,7 +382,7 @@ export default function Communications() {
   };
 
   const logJobFromMessage = (message) => {
-    const agentId = selectedConversation?.user?._id;
+    const agentId = selectedConversation?.user?._id || selectedConversation?.userId;
     if (!agentId) {
       toastError("This conversation is not linked to a registered agent account.");
       return;
@@ -322,7 +405,26 @@ export default function Communications() {
   const returnToConversationList = () => {
     setSelectedConversation(null);
     setMessages([]);
+    setHasOlderMessages(false);
     setReply("");
+  };
+
+  const loadOlderMessages = async () => {
+    const oldestMessageId = messages[0]?._id;
+    if (!selectedConversation?._id || !oldestMessageId || !hasOlderMessages) return;
+    setLoadingOlderMessages(true);
+    try {
+      const response = await api.get(
+        `/api/admin/communications/conversations/${selectedConversation._id}/messages?before=${encodeURIComponent(oldestMessageId)}`,
+      );
+      setMessages((current) => mergeMessages(current, response.data.messages || []));
+      setHasOlderMessages(Boolean(response.data.hasMore));
+    } catch (loadError) {
+      console.error("Older support messages load failed:", loadError);
+      toastError(loadError.response?.data?.message || "Could not load older messages.");
+    } finally {
+      setLoadingOlderMessages(false);
+    }
   };
 
   useEffect(() => {
@@ -332,8 +434,13 @@ export default function Communications() {
         await loadConversations();
         if (activeTab === "inbox" && selectedConversationId) {
           const response = await api.get(`/api/admin/communications/conversations/${selectedConversationId}/messages`);
-          setSelectedConversation(response.data.conversation);
-          setMessages(response.data.messages || []);
+          setSelectedConversation((current) => ({
+            ...current,
+            ...response.data.conversation,
+            user: response.data.conversation?.user || current?.user,
+          }));
+          setMessages((current) => mergeMessages(current, response.data.messages || []));
+          setHasOlderMessages(Boolean(response.data.hasMore));
         }
       } catch (refreshError) {
         console.error("Support inbox polling failed:", refreshError);
@@ -624,7 +731,7 @@ export default function Communications() {
                 {!conversations.length && <p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500 dark:bg-slate-950">No agent messages yet. Messages sent through the platform chatbot will appear here.</p>}
               </div>
           </section>
-          <section className={`${selectedConversation ? "block" : "hidden md:flex"} h-[min(68dvh,42rem)] min-h-[22rem] flex-col gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5`}>
+          <section className={`${selectedConversation ? "flex" : "hidden md:flex"} h-[min(68dvh,42rem)] min-h-[22rem] flex-col gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5`}>
             <div className="flex shrink-0 items-center gap-3">
               {selectedConversation && (
                 <button type="button" onClick={returnToConversationList} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 md:hidden">
@@ -635,7 +742,17 @@ export default function Communications() {
             </div>
             {selectedConversation && (
               <>
-                <MessageThread messages={messages} currentUserId={userId} isSuperAdmin={isSuperAdmin} onCopyMessage={copyMessage} onLogJob={logJobFromMessage} />
+                <MessageThread
+                  key={selectedConversation._id}
+                  messages={messages}
+                  currentUserId={userId}
+                  isSuperAdmin={isSuperAdmin}
+                  hasOlderMessages={hasOlderMessages}
+                  loadingOlderMessages={loadingOlderMessages}
+                  onLoadOlderMessages={loadOlderMessages}
+                  onCopyMessage={copyMessage}
+                  onLogJob={logJobFromMessage}
+                />
                 <form onSubmit={sendReply} className="flex shrink-0 items-end gap-2">
                   <label className="sr-only" htmlFor="support-reply">Text reply</label>
                   <textarea id="support-reply" required maxLength={2000} rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a text reply…" className="min-h-12 flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950" />
