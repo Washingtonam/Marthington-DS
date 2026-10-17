@@ -93,6 +93,7 @@ const adminGroups = [
       { to: "/admin/settings", label: "General settings", icon: Settings, superAdminOnly: true },
       { to: "/admin/agents", label: "Agents", icon: Users, superAdminOnly: true },
       { to: "/admin/agents/jobs", label: "Log jobs", icon: BriefcaseBusiness, superAdminOnly: true },
+      { to: "/admin/outsourced-jobs", label: "Outsourced jobs", icon: BriefcaseBusiness, superAdminOnly: true },
     ],
   },
 ];

@@ -160,6 +160,13 @@ describe("AdminPricing", () => {
     });
   });
 
+  test("opens the requested service editor from a deep link", async () => {
+    renderAdminPricing("/admin/services-engine/cac?serviceCode=cac-1");
+
+    expect(await screen.findByRole("dialog", { name: "Edit Service" })).toBeTruthy();
+    expect(screen.getByText("Service Code").closest("label").querySelector("input").value).toBe("cac-1");
+  });
+
   test("saves a service commission and shows the saved rate after reloading the catalog", async () => {
     renderAdminPricing();
 

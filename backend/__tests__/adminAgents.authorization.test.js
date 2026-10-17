@@ -10,6 +10,11 @@ jest.mock("../models/AgentJob.model", () => ({
   aggregate: jest.fn(),
   findByIdAndUpdate: jest.fn(),
 }));
+jest.mock("../models/OutsourcedJob.model", () => ({
+  find: jest.fn(),
+  create: jest.fn(),
+  findByIdAndUpdate: jest.fn(),
+}));
 jest.mock("../models/NimcFep.model", () => ({
   find: jest.fn(),
   create: jest.fn(),
@@ -27,6 +32,7 @@ const request = require("supertest");
 const User = require("../models/User.model");
 const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
+const OutsourcedJob = require("../models/OutsourcedJob.model");
 const NimcFep = require("../models/NimcFep.model");
 const Pricing = require("../models/Pricing.model");
 const AuditLog = require("../models/AuditLog.model");
@@ -67,6 +73,9 @@ describe("agent management authorization", () => {
     ["get", "/api/admin/agents/jobs"],
     ["post", "/api/admin/agents/jobs"],
     ["patch", "/api/admin/agents/jobs/507f1f77bcf86cd799439011/status"],
+    ["get", "/api/admin/outsourced-jobs"],
+    ["post", "/api/admin/outsourced-jobs"],
+    ["put", "/api/admin/outsourced-jobs/507f1f77bcf86cd799439011"],
     ["get", "/api/admin/nimc-feps"],
     ["post", "/api/admin/nimc-feps"],
   ])("denies ordinary admins access to CRM endpoint %s %s", async (method, path) => {
@@ -81,8 +90,70 @@ describe("agent management authorization", () => {
     expect(AgentJob.find).not.toHaveBeenCalled();
     expect(AgentJob.create).not.toHaveBeenCalled();
     expect(AgentJob.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(OutsourcedJob.find).not.toHaveBeenCalled();
+    expect(OutsourcedJob.create).not.toHaveBeenCalled();
+    expect(OutsourcedJob.findByIdAndUpdate).not.toHaveBeenCalled();
     expect(NimcFep.find).not.toHaveBeenCalled();
     expect(NimcFep.create).not.toHaveBeenCalled();
+  });
+
+  it("lets super admins list, create, and update outsourced jobs", async () => {
+    User.findById.mockResolvedValue({
+      id: "super-admin",
+      _id: "super-admin",
+      email: "root@example.test",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    const job = {
+      _id: "507f1f77bcf86cd799439011",
+      title: "Prepare customer documents",
+      agentName: "Abdul",
+      status: "assigned",
+      notes: "",
+      createdBy: "super-admin",
+    };
+    OutsourcedJob.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([job]),
+      }),
+    });
+    OutsourcedJob.create.mockResolvedValue(job);
+    OutsourcedJob.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({ ...job, status: "in-progress" }),
+    });
+    const adminToken = jwt.sign({ id: "super-admin" }, secret);
+
+    const listResponse = await request(app)
+      .get("/api/admin/outsourced-jobs")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.jobs).toEqual([job]);
+
+    const createResponse = await request(app)
+      .post("/api/admin/outsourced-jobs")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: " Prepare customer documents ", agentName: " Abdul " });
+    expect(createResponse.status).toBe(201);
+    expect(OutsourcedJob.create).toHaveBeenCalledWith({
+      title: "Prepare customer documents",
+      agentName: "Abdul",
+      status: "assigned",
+      notes: "",
+      createdBy: "super-admin",
+    });
+
+    const updateResponse = await request(app)
+      .put("/api/admin/outsourced-jobs/507f1f77bcf86cd799439011")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ status: "in-progress" });
+    expect(updateResponse.status).toBe(200);
+    expect(OutsourcedJob.findByIdAndUpdate).toHaveBeenCalledWith(
+      "507f1f77bcf86cd799439011",
+      { status: "in-progress" },
+      { new: true, runValidators: true },
+    );
   });
 
   it("lists and creates NIMC FEPs within the signed-in super admin's directory", async () => {

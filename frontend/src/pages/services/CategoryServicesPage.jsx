@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../lib/axios";
 import { ArrowRight, BriefcaseBusiness, Building2, FileText, Fingerprint, Loader2, Search, Sparkles } from "lucide-react";
+import { useUser } from "../../context/UserContext";
 
 const normalizeCategory = (value = "") => {
   const raw = String(value || "").trim().toLowerCase();
@@ -24,10 +25,14 @@ const categoryDetails = {
 export default function CategoryServicesPage({ defaultCategory }) {
   const { category: routeCategory } = useParams();
   const navigate = useNavigate();
+  const { user } = useUser();
+  const isSuperAdmin = user?.role === "super_admin";
   const category = normalizeCategory(routeCategory || defaultCategory);
   const [services, setServices] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [serviceMenu, setServiceMenu] = useState(null);
+  const serviceMenuRef = useRef(null);
 
   useEffect(() => {
     const nextCategory = normalizeCategory(routeCategory || defaultCategory);
@@ -59,6 +64,39 @@ export default function CategoryServicesPage({ defaultCategory }) {
   const trendingServices = useMemo(() => services.filter((service) => service.metadata?.trending || TRENDING_CODES.includes(service.serviceCode)).slice(0, 4), [services]);
   const displayServices = search.trim() ? filteredServices : filteredServices.filter((service) => !trendingServices.some((trending) => trending.serviceCode === service.serviceCode));
 
+  useEffect(() => {
+    if (!serviceMenu) return undefined;
+    const dismissMenu = (event) => {
+      if (!serviceMenuRef.current?.contains(event.target)) setServiceMenu(null);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setServiceMenu(null);
+    };
+    document.addEventListener("pointerdown", dismissMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [serviceMenu]);
+
+  const openServiceMenu = (event, service) => {
+    if (!isSuperAdmin) return;
+    event.preventDefault();
+    setServiceMenu({
+      service,
+      x: Math.min(event.clientX, window.innerWidth - 190),
+      y: Math.min(event.clientY, window.innerHeight - 60),
+    });
+  };
+
+  const manageService = () => {
+    const serviceCategory = normalizeCategory(serviceMenu.service.category);
+    const categorySlug = serviceCategory.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    navigate(`/admin/services-engine/${encodeURIComponent(categorySlug)}?serviceCode=${encodeURIComponent(serviceMenu.service.serviceCode)}`);
+    setServiceMenu(null);
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -68,6 +106,7 @@ export default function CategoryServicesPage({ defaultCategory }) {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-[#f5f7fb] px-4 py-8 text-slate-950 dark:bg-slate-950 dark:text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
       <div className={`relative mb-8 overflow-hidden rounded-[2rem] bg-gradient-to-br ${details.accent} p-7 text-white shadow-2xl sm:p-10`}>
@@ -83,9 +122,9 @@ export default function CategoryServicesPage({ defaultCategory }) {
         <Icon className="absolute -bottom-12 -right-8 h-64 w-64 text-white/10" strokeWidth={1} />
       </div>
 
-      {trendingServices.length > 0 && !search.trim() && <section className="mb-10"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">Popular right now</p><h2 className="mt-1 text-2xl font-black">Trending services</h2></div><Sparkles className="text-amber-500" size={22} /></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{trendingServices.map((service) => <ServiceCard key={service.serviceCode} service={service} trending onOpen={() => navigate(`/services/${category.toLowerCase()}/${encodeURIComponent(service.serviceCode)}`)} />)}</div></section>}
+      {trendingServices.length > 0 && !search.trim() && <section className="mb-10"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">Popular right now</p><h2 className="mt-1 text-2xl font-black">Trending services</h2></div><Sparkles className="text-amber-500" size={22} /></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{trendingServices.map((service) => <ServiceCard key={service.serviceCode} service={service} trending isSuperAdmin={isSuperAdmin} onContextMenu={openServiceMenu} onOpen={() => navigate(`/services/${category.toLowerCase()}/${encodeURIComponent(service.serviceCode)}`)} />)}</div></section>}
 
-      <section><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Browse the catalog</p><h2 className="mt-1 text-2xl font-black">{search.trim() ? `${filteredServices.length} matching services` : "All services"}</h2></div></div><div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">{displayServices.map((service) => <ServiceCard key={service.serviceCode} service={service} onOpen={() => navigate(`/services/${category.toLowerCase()}/${encodeURIComponent(service.serviceCode)}`)} />)}</div></section>
+      <section><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Browse the catalog</p><h2 className="mt-1 text-2xl font-black">{search.trim() ? `${filteredServices.length} matching services` : "All services"}</h2></div></div><div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">{displayServices.map((service) => <ServiceCard key={service.serviceCode} service={service} isSuperAdmin={isSuperAdmin} onContextMenu={openServiceMenu} onOpen={() => navigate(`/services/${category.toLowerCase()}/${encodeURIComponent(service.serviceCode)}`)} />)}</div></section>
 
       {(!services.length || (search.trim() && !filteredServices.length)) && (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">
@@ -94,11 +133,26 @@ export default function CategoryServicesPage({ defaultCategory }) {
       )}
     </div>
     </div>
+    {serviceMenu && (
+      <div
+        role="menu"
+        aria-label={`Actions for ${serviceMenu.service.name}`}
+        ref={serviceMenuRef}
+        className="fixed z-50 min-w-44 rounded-lg border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+        style={{ left: serviceMenu.x, top: serviceMenu.y }}
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        <button type="button" role="menuitem" onClick={manageService} className="w-full rounded-md px-3 py-2 text-left text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800">
+          Manage service
+        </button>
+      </div>
+    )}
+    </>
   );
 }
 
-function ServiceCard({ service, trending, onOpen }) {
-  return <article className="group flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
+function ServiceCard({ service, trending, isSuperAdmin, onContextMenu, onOpen }) {
+  return <article onContextMenu={(event) => isSuperAdmin && onContextMenu(event, service)} className="group flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
     <div className="mb-5 flex items-start justify-between"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"><FileText size={22} /></div>{trending && <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-700">Trending</span>}</div>
     <h3 className="text-xl font-bold tracking-tight">{service.name}</h3><p className="mt-2 min-h-12 text-sm leading-6 text-slate-500 dark:text-slate-400">{service.metadata?.description || "A guided service request from our catalog."}</p>
     <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5 dark:border-slate-800"><span className="font-bold">₦{Number(service.price || 0).toLocaleString()}</span><button type="button" onClick={onOpen} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition group-hover:bg-blue-700">Start service <ArrowRight size={16} /></button></div>

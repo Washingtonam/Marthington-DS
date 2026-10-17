@@ -13,6 +13,7 @@ const SystemSettings = require("../models/SystemSettings.model");
 const { uploadToCloudinary } = require("../shared/cloudinary");
 const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
+const OutsourcedJob = require("../models/OutsourcedJob.model");
 const NimcFep = require("../models/NimcFep.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
 const { normalizeServiceType } = require("../config/serviceTypes");
@@ -439,6 +440,102 @@ router.patch("/agents/jobs/:jobId/status", isSuperAdmin, async (req, res) => {
   } catch (error) {
     console.error("ADMIN AGENT JOB STATUS ERROR:", error);
     return res.status(500).json({ success: false, message: "Failed to update agent job." });
+  }
+});
+
+router.get("/outsourced-jobs", isSuperAdmin, async (req, res) => {
+  try {
+    const jobs = await OutsourcedJob.find().sort({ createdAt: -1 }).lean();
+    return res.json({ success: true, jobs });
+  } catch (error) {
+    console.error("ADMIN OUTSOURCED JOB LIST ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to load outsourced jobs." });
+  }
+});
+
+router.post("/outsourced-jobs", isSuperAdmin, async (req, res) => {
+  try {
+    const title = String(req.body?.title || "").trim();
+    const agentName = String(req.body?.agentName || "Abdul").trim();
+    const status = String(req.body?.status || "assigned");
+    const notes = String(req.body?.notes || "").trim();
+
+    if (!title || title.length > 160) {
+      return res.status(400).json({ success: false, message: "Enter a job name (up to 160 characters)." });
+    }
+    if (!agentName || agentName.length > 120) {
+      return res.status(400).json({ success: false, message: "Enter an outsourced agent name (up to 120 characters)." });
+    }
+    if (!["assigned", "in-progress", "completed", "cancelled"].includes(status)) {
+      return res.status(400).json({ success: false, message: "Select a valid job status." });
+    }
+    if (notes.length > 1000) {
+      return res.status(400).json({ success: false, message: "Notes must be 1,000 characters or fewer." });
+    }
+
+    const job = await OutsourcedJob.create({
+      title,
+      agentName,
+      status,
+      notes,
+      createdBy: req.user.id,
+    });
+    return res.status(201).json({ success: true, job });
+  } catch (error) {
+    console.error("ADMIN OUTSOURCED JOB CREATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to create outsourced job." });
+  }
+});
+
+router.put("/outsourced-jobs/:jobId", isSuperAdmin, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.jobId)) {
+      return res.status(400).json({ success: false, message: "Invalid outsourced job ID." });
+    }
+
+    const updates = {};
+    if (req.body?.title !== undefined) {
+      const title = String(req.body.title).trim();
+      if (!title || title.length > 160) {
+        return res.status(400).json({ success: false, message: "Enter a job name (up to 160 characters)." });
+      }
+      updates.title = title;
+    }
+    if (req.body?.agentName !== undefined) {
+      const agentName = String(req.body.agentName).trim();
+      if (!agentName || agentName.length > 120) {
+        return res.status(400).json({ success: false, message: "Enter an outsourced agent name (up to 120 characters)." });
+      }
+      updates.agentName = agentName;
+    }
+    if (req.body?.status !== undefined) {
+      const status = String(req.body.status);
+      if (!["assigned", "in-progress", "completed", "cancelled"].includes(status)) {
+        return res.status(400).json({ success: false, message: "Select a valid job status." });
+      }
+      updates.status = status;
+    }
+    if (req.body?.notes !== undefined) {
+      const notes = String(req.body.notes).trim();
+      if (notes.length > 1000) {
+        return res.status(400).json({ success: false, message: "Notes must be 1,000 characters or fewer." });
+      }
+      updates.notes = notes;
+    }
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ success: false, message: "Provide at least one job field to update." });
+    }
+
+    const job = await OutsourcedJob.findByIdAndUpdate(
+      req.params.jobId,
+      updates,
+      { new: true, runValidators: true },
+    ).lean();
+    if (!job) return res.status(404).json({ success: false, message: "Outsourced job not found." });
+    return res.json({ success: true, job });
+  } catch (error) {
+    console.error("ADMIN OUTSOURCED JOB UPDATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to update outsourced job." });
   }
 });
 

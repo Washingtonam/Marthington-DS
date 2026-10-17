@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const { mockUseUser, mockSuccess, mockError } = vi.hoisted(() => ({
@@ -26,6 +26,11 @@ vi.mock("../../../lib/axios", () => ({
 
 import api from "../../../lib/axios";
 import Communications from "../Communications";
+
+function CurrentLocation() {
+  const location = useLocation();
+  return <output data-testid="location">{JSON.stringify({ pathname: location.pathname, messageText: location.state?.messageText })}</output>;
+}
 
 const template = {
   _id: "template-1",
@@ -147,6 +152,63 @@ describe("Communications", () => {
       "/api/admin/communications/conversations/conversation-1/messages",
       { text: "How can I help?" },
     ));
+  });
+
+  test("lets a superadmin copy a message or start a job from it", async () => {
+    mockUseUser.mockReturnValue({ user: { id: "super-admin-1", role: "super_admin" } });
+    const messageText = "Please help with my CAC registration";
+    api.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/conversations")
+        ? {
+          conversations: [{
+            _id: "conversation-1",
+            user: { _id: "registered-agent-1", name: "Ayo Agent", email: "ayo@example.com" },
+            lastMessage: messageText,
+          }],
+        }
+        : {
+          conversation: {
+            _id: "conversation-1",
+            user: { _id: "registered-agent-1", name: "Ayo Agent", email: "ayo@example.com" },
+          },
+          messages: [{
+            _id: "message-1",
+            senderId: "registered-agent-1",
+            senderName: "Ayo Agent",
+            senderRole: "user",
+            text: messageText,
+          }],
+        },
+    }));
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/admin/communications?tab=inbox"]}>
+        <Routes>
+          <Route path="/admin/communications" element={<Communications />} />
+          <Route path="/admin/agents/jobs" element={<p>Log jobs page</p>} />
+        </Routes>
+        <CurrentLocation />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /Ayo Agent/ }));
+    const message = await within(await screen.findByRole("region", { name: "Conversation messages" }))
+      .findByText(messageText);
+    fireEvent.contextMenu(message.parentElement, { clientX: 100, clientY: 100 });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Copy message" }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(messageText));
+    expect(mockSuccess).toHaveBeenCalledWith("Message copied.");
+
+    fireEvent.contextMenu(message.parentElement, { clientX: 100, clientY: 100 });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Log a job" }));
+    expect(await screen.findByText("Log jobs page")).toBeTruthy();
+    expect(JSON.parse(screen.getByTestId("location").textContent)).toEqual({
+      pathname: "/admin/agents/jobs",
+      messageText,
+    });
   });
 
   test("shows every unread message in the inbox and clears them after opening the chat", async () => {

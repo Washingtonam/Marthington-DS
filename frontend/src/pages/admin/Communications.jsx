@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Bell, Mail, MessageCircle, Plus, RefreshCw, Search, Send } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Bell, BriefcaseBusiness, Copy, Mail, MessageCircle, Plus, RefreshCw, Search, Send } from "lucide-react";
 import { useUser } from "../../context/UserContext";
 import { useToast } from "../../context/ToastContext";
 import api from "../../lib/axios";
@@ -23,13 +23,43 @@ const whatsappUrl = (phone, message) => {
 
 const formatDate = (date) => date ? new Date(date).toLocaleString() : "";
 
-function MessageThread({ messages, currentUserId }) {
+function MessageThread({ messages, currentUserId, isSuperAdmin, onCopyMessage, onLogJob }) {
+  const [contextMenu, setContextMenu] = useState(null);
+  const contextMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!contextMenu) return undefined;
+    const dismissMenu = (event) => {
+      if (!contextMenuRef.current?.contains(event.target)) setContextMenu(null);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    document.addEventListener("pointerdown", dismissMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [contextMenu]);
+
   return (
-    <div className="flex min-h-64 flex-col gap-3 overflow-y-auto rounded-xl bg-slate-50 p-4 dark:bg-slate-950">
+    <div role="region" aria-label="Conversation messages" className="flex min-h-64 flex-col gap-3 overflow-y-auto rounded-xl bg-slate-50 p-4 dark:bg-slate-950">
       {messages.map((message) => {
         const outgoing = String(message.senderId) === String(currentUserId);
         return (
-          <div key={message._id} className={`max-w-[85%] rounded-2xl px-4 py-3 ${outgoing ? "self-end bg-[var(--accent)] text-[var(--accent-foreground)]" : "self-start bg-white shadow-sm dark:bg-slate-800"}`}>
+          <div
+            key={message._id}
+            onContextMenu={isSuperAdmin ? (event) => {
+              event.preventDefault();
+              setContextMenu({
+                message,
+                x: Math.min(event.clientX, window.innerWidth - 190),
+                y: Math.min(event.clientY, window.innerHeight - 100),
+              });
+            } : undefined}
+            className={`max-w-[85%] rounded-2xl px-4 py-3 ${outgoing ? "self-end bg-[var(--accent)] text-[var(--accent-foreground)]" : "self-start bg-white shadow-sm dark:bg-slate-800"}`}
+          >
             <p className="mb-1 text-xs font-semibold opacity-70">{message.senderName}</p>
             <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.text}</p>
             <p className="mt-2 text-right text-[10px] opacity-60">{formatDate(message.createdAt)}</p>
@@ -37,6 +67,23 @@ function MessageThread({ messages, currentUserId }) {
         );
       })}
       {!messages.length && <p className="m-auto text-sm text-slate-500">No messages in this conversation yet.</p>}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          role="menu"
+          aria-label="Message actions"
+          className="fixed z-50 min-w-44 rounded-lg border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button type="button" role="menuitem" onClick={() => { void onCopyMessage(contextMenu.message); setContextMenu(null); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800">
+            <Copy size={15} aria-hidden="true" /> Copy message
+          </button>
+          <button type="button" role="menuitem" onClick={() => { onLogJob(contextMenu.message); setContextMenu(null); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800">
+            <BriefcaseBusiness size={15} aria-hidden="true" /> Log a job
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -44,6 +91,7 @@ function MessageThread({ messages, currentUserId }) {
 export default function Communications() {
   const { user } = useUser();
   const { success, error: toastError } = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isSuperAdmin = user?.role === "super_admin";
   const userId = user?.id || user?._id;
@@ -237,6 +285,28 @@ export default function Communications() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const copyMessage = async (message) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable.");
+      await navigator.clipboard.writeText(message.text);
+      success("Message copied.");
+    } catch (copyError) {
+      console.error("Support message copy failed:", copyError);
+      toastError("Could not copy this message.");
+    }
+  };
+
+  const logJobFromMessage = (message) => {
+    const agentId = selectedConversation?.user?._id;
+    if (!agentId) {
+      toastError("This conversation is not linked to a registered agent account.");
+      return;
+    }
+    navigate(`/admin/agents/jobs?customerType=registered&customerId=${encodeURIComponent(agentId)}`, {
+      state: { messageText: message.text },
+    });
   };
 
   const refreshInbox = async () => {
@@ -552,7 +622,7 @@ export default function Communications() {
             <div><h3 className="font-bold">{selectedConversation?.user?.name || "Select a conversation"}</h3><p className="mt-1 text-sm text-slate-500">{selectedConversation?.user?.email || "Choose an agent on the left to read and reply."}</p></div>
             {selectedConversation && (
               <>
-                <MessageThread messages={messages} currentUserId={userId} />
+                <MessageThread messages={messages} currentUserId={userId} isSuperAdmin={isSuperAdmin} onCopyMessage={copyMessage} onLogJob={logJobFromMessage} />
                 <form onSubmit={sendReply} className="flex items-end gap-2">
                   <label className="sr-only" htmlFor="support-reply">Text reply</label>
                   <textarea id="support-reply" required maxLength={2000} rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a text reply…" className="min-h-12 flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950" />

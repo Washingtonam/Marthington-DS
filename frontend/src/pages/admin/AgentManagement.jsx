@@ -70,6 +70,9 @@ export default function AgentManagement({ view }) {
   const initialCustomerType = new URLSearchParams(location.search).get("customerType");
   const initialCustomerId = new URLSearchParams(location.search).get("customerId");
   const hasRequestedCustomer = ["manual", "registered"].includes(initialCustomerType) && Boolean(initialCustomerId);
+  const initialMessage = typeof location.state?.messageText === "string"
+    ? location.state.messageText.slice(0, 2000)
+    : "";
   const tab = view || (location.pathname === "/admin/communications"
     ? "messages"
     : location.pathname.endsWith("/jobs") || requestedTab === "jobs" ? "jobs" : "agents");
@@ -98,7 +101,7 @@ export default function AgentManagement({ view }) {
   const [serviceCategory, setServiceCategory] = useState("");
   const [serviceCode, setServiceCode] = useState("");
   const [amount, setAmount] = useState("");
-  const [pastedForm, setPastedForm] = useState("");
+  const [pastedForm, setPastedForm] = useState(() => initialMessage);
   const [jobFormData, setJobFormData] = useState({});
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedRecipients, setSelectedRecipients] = useState([]);
@@ -642,6 +645,7 @@ export default function AgentManagement({ view }) {
             </label>
           </div>
           <label className="block text-sm font-semibold">Paste the customer’s form
+            {initialMessage && <span className="mt-1 block text-xs font-normal text-slate-500">Message from the support inbox is prefilled below. Choose the service and review or parse these details before saving.</span>}
             <textarea rows={7} value={pastedForm} onChange={(event) => setPastedForm(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 font-mono text-xs leading-5 dark:border-slate-700 dark:bg-slate-950" placeholder={"Paste the customer form here using the service field labels.\nExample: NIN: ..."} />
           </label>
           {selectedService && selectedServiceFields.length > 0 && (

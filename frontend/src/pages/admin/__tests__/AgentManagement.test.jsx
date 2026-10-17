@@ -130,6 +130,39 @@ describe("AgentManagement", () => {
     expect(await screen.findByRole("heading", { name: "Communications" })).toBeTruthy();
   });
 
+  test("prefills a job from a support message and selects its registered agent", async () => {
+    const registeredAgent = {
+      _id: "registered-agent-1",
+      name: "Ayo Agent",
+      email: "ayo@example.com",
+      role: "user",
+      status: "active",
+      approvalStatus: "approved",
+    };
+    const messageText = "Please help with my CAC registration";
+    api.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/jobs")
+        ? { jobs: [] }
+        : path.endsWith("/catalog")
+          ? { services: [] }
+          : { manualAgents: [], registeredUsers: [registeredAgent] },
+    }));
+
+    render(
+      <MemoryRouter initialEntries={[{
+        pathname: "/admin/agents/jobs",
+        search: "?customerType=registered&customerId=registered-agent-1",
+        state: { messageText },
+      }]}>
+        <AgentManagement view="jobs" />
+      </MemoryRouter>,
+    );
+
+    expect((await screen.findByRole("textbox", { name: /Paste the customer’s form/ })).value).toBe(messageText);
+    expect(screen.getByRole("combobox", { name: "Marthington agent" }).value).toBe("registered-agent-1");
+    expect(screen.getByText(/Message from the support inbox is prefilled below/)).toBeTruthy();
+  });
+
   test("loads selected catalog service fields, parses a pasted form, and logs the job", async () => {
     const services = [{
       serviceCode: "modification-name",

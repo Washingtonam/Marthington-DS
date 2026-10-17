@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../../lib/axios";
 import { parseImportedFormText } from "../../lib/formTextParser";
 import CoreServicePricing from "../../components/admin/CoreServicePricing";
@@ -68,6 +68,8 @@ export default function AdminPricing() {
   const headers = useMemo(() => ({ email: user?.email || "" }), [user?.email]);
   const navigate = useNavigate();
   const { category: routeCategory } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedServiceCode = searchParams.get("serviceCode");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -150,6 +152,34 @@ export default function AdminPricing() {
     }
   };
 
+  const openEditService = useCallback((service, fallbackCategory = "NIMC") => {
+    setIsCreating(false);
+    setSelectedService(service);
+    setIsServiceEditorOpen(true);
+    setIsFormEditorOpen(false);
+    setServiceForm({
+      serviceCode: service.serviceCode || "",
+      category: service.category || fallbackCategory,
+      name: service.name || "",
+      status: service.status || "active",
+      price: service.price || 0,
+      cost: service.cost ?? "",
+      commissionType: service.commissionType || "FLAT",
+      commissionValue: service.commissionValue ?? 0,
+      metadata: {
+        description: service.metadata?.description || "",
+        formFields: Array.isArray(service.metadata?.formFields) && service.metadata.formFields.length
+          ? service.metadata.formFields.map((field) => ({
+              ...field,
+              required: field.type === "title" || field.type === "subtitle" ? false : Boolean(field.required),
+              options: Array.isArray(field.options) ? field.options.join(", ") : field.options || "",
+              id: field.id || crypto.randomUUID(),
+            }))
+          : [emptyFormField()],
+      },
+    });
+  }, []);
+
   useEffect(() => {
     let isCurrent = true;
 
@@ -174,8 +204,33 @@ export default function AdminPricing() {
       }
 
       if (serviceResult.status === "fulfilled") {
-        setAllServices(Array.isArray(serviceResult.value.data?.services) ? serviceResult.value.data.services : []);
-        setCurrentPage(1);
+        const nextServices = Array.isArray(serviceResult.value.data?.services) ? serviceResult.value.data.services : [];
+        setAllServices(nextServices);
+        if (requestedServiceCode) {
+          const requestedService = nextServices.find((service) => service.serviceCode === requestedServiceCode);
+          if (requestedService) {
+            const normalizeCategory = (value) => {
+              const normalized = normalizeServiceCode(value);
+              return normalized === "nin" ? "nimc" : normalized;
+            };
+            const requestedCategory = requestedService.category || "NIMC";
+            const categoryServices = nextServices.filter((service) => (
+              normalizeCategory(service.category) === normalizeCategory(requestedCategory)
+            ));
+            setCategory(requestedCategory);
+            setCurrentPage(Math.floor(categoryServices.findIndex((service) => service.serviceCode === requestedServiceCode) / SERVICE_PAGE_SIZE) + 1);
+            openEditService(requestedService, requestedCategory);
+            setSearchParams((current) => {
+              const next = new URLSearchParams(current);
+              next.delete("serviceCode");
+              return next;
+            }, { replace: true });
+          } else {
+            setCurrentPage(1);
+          }
+        } else {
+          setCurrentPage(1);
+        }
       } else {
         console.error("FETCH SERVICES ERROR:", serviceResult.reason);
         setAllServices([]);
@@ -187,7 +242,7 @@ export default function AdminPricing() {
     return () => {
       isCurrent = false;
     };
-  }, [routeCategory, headers]);
+  }, [routeCategory, headers, requestedServiceCode, setSearchParams, openEditService]);
 
   const selectCategory = (item) => {
     setCategory(item.label);
@@ -251,34 +306,6 @@ export default function AdminPricing() {
       metadata: {
         description: "",
         formFields: [emptyFormField()],
-      },
-    });
-  };
-
-  const openEditService = (service) => {
-    setIsCreating(false);
-    setSelectedService(service);
-    setIsServiceEditorOpen(true);
-    setIsFormEditorOpen(false);
-    setServiceForm({
-      serviceCode: service.serviceCode || "",
-      category: service.category || category,
-      name: service.name || "",
-      status: service.status || "active",
-      price: service.price || 0,
-      cost: service.cost ?? "",
-      commissionType: service.commissionType || "FLAT",
-      commissionValue: service.commissionValue ?? 0,
-      metadata: {
-        description: service.metadata?.description || "",
-        formFields: Array.isArray(service.metadata?.formFields) && service.metadata.formFields.length
-          ? service.metadata.formFields.map((field) => ({
-              ...field,
-              required: field.type === "title" || field.type === "subtitle" ? false : Boolean(field.required),
-              options: Array.isArray(field.options) ? field.options.join(", ") : field.options || "",
-              id: field.id || crypto.randomUUID(),
-            }))
-          : [emptyFormField()],
       },
     });
   };
