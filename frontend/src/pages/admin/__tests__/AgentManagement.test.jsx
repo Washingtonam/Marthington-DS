@@ -177,7 +177,6 @@ describe("AgentManagement", () => {
 
     fireEvent.change(await screen.findByLabelText("Service category"), { target: { value: "NIMC" } });
     fireEvent.change(screen.getByLabelText("Service"), { target: { value: "modification-name" } });
-    fireEvent.click(screen.getByRole("button", { name: "Parse message into job fields" }));
 
     expect(screen.getByLabelText("NIN number *").value).toBe("12345678901");
     expect(screen.getByLabelText("Previous modification? *").value).toBe("No");

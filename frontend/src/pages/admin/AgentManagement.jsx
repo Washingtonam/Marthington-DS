@@ -369,9 +369,16 @@ export default function AgentManagement({ view }) {
 
   const changeServiceCode = (value) => {
     setServiceCode(value);
-    setJobFormData({});
     const service = catalog.find((item) => item.serviceCode === value);
     setAmount(service ? String(service.price || 0) : "");
+    if (initialMessage && service) {
+      const formFields = Array.isArray(service.metadata?.formFields)
+        ? service.metadata.formFields
+        : [];
+      setJobFormData(parseCatalogServiceForm(pastedForm, formFields));
+      return;
+    }
+    setJobFormData({});
   };
 
   return (
@@ -645,7 +652,7 @@ export default function AgentManagement({ view }) {
             </label>
           </div>
           <label className="block text-sm font-semibold">Paste the customer’s form
-            {initialMessage && <span className="mt-1 block text-xs font-normal text-slate-500">The selected support message is prefilled below. Choose the service, then parse the message to map recognized answers into the job fields. Review all values before saving.</span>}
+            {initialMessage && <span className="mt-1 block text-xs font-normal text-slate-500">The selected support message is prefilled below. Choose the service to parse recognized answers into its job fields, then review all values before saving.</span>}
             <textarea rows={7} value={pastedForm} onChange={(event) => setPastedForm(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 font-mono text-xs leading-5 dark:border-slate-700 dark:bg-slate-950" placeholder={"Paste the customer form here using the service field labels.\nExample: NIN: ..."} />
           </label>
           {selectedService && selectedServiceFields.length > 0 && (
