@@ -645,7 +645,7 @@ export default function AgentManagement({ view }) {
             </label>
           </div>
           <label className="block text-sm font-semibold">Paste the customer’s form
-            {initialMessage && <span className="mt-1 block text-xs font-normal text-slate-500">Message from the support inbox is prefilled below. Choose the service and review or parse these details before saving.</span>}
+            {initialMessage && <span className="mt-1 block text-xs font-normal text-slate-500">The selected support message is prefilled below. Choose the service, then parse the message to map recognized answers into the job fields. Review all values before saving.</span>}
             <textarea rows={7} value={pastedForm} onChange={(event) => setPastedForm(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 font-mono text-xs leading-5 dark:border-slate-700 dark:bg-slate-950" placeholder={"Paste the customer form here using the service field labels.\nExample: NIN: ..."} />
           </label>
           {selectedService && selectedServiceFields.length > 0 && (
@@ -660,7 +660,7 @@ export default function AgentManagement({ view }) {
               <textarea readOnly rows={Math.min(10, selectedServiceFields.length)} value={generateCatalogServiceForm(selectedServiceFields)} aria-label="Generated customer form" onFocus={(event) => event.currentTarget.select()} className="mt-3 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs leading-5 dark:border-slate-700 dark:bg-slate-950" />
             </div>
           )}
-          <button type="button" disabled={!selectedService} onClick={handleParseForm} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">Parse pasted form</button>
+          <button type="button" disabled={!selectedService} onClick={handleParseForm} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">{initialMessage ? "Parse message into job fields" : "Parse pasted form"}</button>
           <div className="grid gap-4 sm:grid-cols-2">
             {selectedServiceFields.map((field) => (
               <label key={field.key} className={`block text-sm font-semibold ${field.type === "textarea" ? "sm:col-span-2" : ""}`}>

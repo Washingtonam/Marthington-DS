@@ -171,13 +171,22 @@ describe("Communications", () => {
             _id: "conversation-1",
             user: { _id: "registered-agent-1", name: "Ayo Agent", email: "ayo@example.com" },
           },
-          messages: [{
-            _id: "message-1",
-            senderId: "registered-agent-1",
-            senderName: "Ayo Agent",
-            senderRole: "user",
-            text: messageText,
-          }],
+          messages: [
+            {
+              _id: "message-1",
+              senderId: "registered-agent-1",
+              senderName: "Ayo Agent",
+              senderRole: "user",
+              text: messageText,
+            },
+            {
+              _id: "message-2",
+              senderId: "super-admin-1",
+              senderName: "Support",
+              senderRole: "super_admin",
+              text: "NIN number: 12345678901",
+            },
+          ],
         },
     }));
     Object.defineProperty(navigator, "clipboard", {
@@ -202,12 +211,14 @@ describe("Communications", () => {
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(messageText));
     expect(mockSuccess).toHaveBeenCalledWith("Message copied.");
 
-    fireEvent.contextMenu(message.parentElement, { clientX: 100, clientY: 100 });
+    const adminMessage = await within(screen.getByRole("region", { name: "Conversation messages" }))
+      .findByText("NIN number: 12345678901");
+    fireEvent.contextMenu(adminMessage.parentElement, { clientX: 100, clientY: 100 });
     fireEvent.click(await screen.findByRole("menuitem", { name: "Log a job" }));
     expect(await screen.findByText("Log jobs page")).toBeTruthy();
     expect(JSON.parse(screen.getByTestId("location").textContent)).toEqual({
       pathname: "/admin/agents/jobs",
-      messageText,
+      messageText: "NIN number: 12345678901",
     });
   });
 

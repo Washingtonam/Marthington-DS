@@ -13,6 +13,7 @@ const SystemSettings = require("../models/SystemSettings.model");
 const { uploadToCloudinary } = require("../shared/cloudinary");
 const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
+const OutsourcedAgent = require("../models/OutsourcedAgent.model");
 const OutsourcedJob = require("../models/OutsourcedJob.model");
 const NimcFep = require("../models/NimcFep.model");
 const { verifyToken, isAdmin } = require("../shared/authGuard");
@@ -443,6 +444,104 @@ router.patch("/agents/jobs/:jobId/status", isSuperAdmin, async (req, res) => {
   }
 });
 
+router.get("/outsourced-agents", isSuperAdmin, async (req, res) => {
+  try {
+    const agents = await OutsourcedAgent.find().sort({ active: -1, name: 1 }).lean();
+    return res.json({ success: true, agents });
+  } catch (error) {
+    console.error("ADMIN OUTSOURCED AGENT LIST ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to load outsourced agents." });
+  }
+});
+
+router.post("/outsourced-agents", isSuperAdmin, async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const whatsapp = req.body?.whatsapp ? normalizeWhatsapp(req.body.whatsapp) : "";
+    const email = normalizeAgentEmail(req.body?.email);
+    const notes = String(req.body?.notes || "").trim();
+    if (!name || name.length > 120) {
+      return res.status(400).json({ success: false, message: "Enter an agent name (up to 120 characters)." });
+    }
+    if (whatsapp === null) {
+      return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
+    }
+    if (email === null) {
+      return res.status(400).json({ success: false, message: "Enter a valid email address." });
+    }
+    if (notes.length > 500) {
+      return res.status(400).json({ success: false, message: "Notes must be 500 characters or fewer." });
+    }
+    const agent = await OutsourcedAgent.create({
+      name,
+      whatsapp,
+      email,
+      notes,
+      createdBy: req.user.id,
+    });
+    return res.status(201).json({ success: true, agent });
+  } catch (error) {
+    console.error("ADMIN OUTSOURCED AGENT CREATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to add outsourced agent." });
+  }
+});
+
+router.put("/outsourced-agents/:agentId", isSuperAdmin, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.agentId)) {
+      return res.status(400).json({ success: false, message: "Invalid outsourced agent ID." });
+    }
+    const updates = {};
+    if (req.body?.name !== undefined) {
+      const name = String(req.body.name).trim();
+      if (!name || name.length > 120) {
+        return res.status(400).json({ success: false, message: "Enter an agent name (up to 120 characters)." });
+      }
+      updates.name = name;
+    }
+    if (req.body?.whatsapp !== undefined) {
+      const whatsapp = req.body.whatsapp ? normalizeWhatsapp(req.body.whatsapp) : "";
+      if (whatsapp === null) {
+        return res.status(400).json({ success: false, message: "Enter a valid WhatsApp number." });
+      }
+      updates.whatsapp = whatsapp;
+    }
+    if (req.body?.email !== undefined) {
+      const email = normalizeAgentEmail(req.body.email);
+      if (email === null) {
+        return res.status(400).json({ success: false, message: "Enter a valid email address." });
+      }
+      updates.email = email;
+    }
+    if (req.body?.notes !== undefined) {
+      const notes = String(req.body.notes).trim();
+      if (notes.length > 500) {
+        return res.status(400).json({ success: false, message: "Notes must be 500 characters or fewer." });
+      }
+      updates.notes = notes;
+    }
+    if (req.body?.active !== undefined) {
+      if (typeof req.body.active !== "boolean") {
+        return res.status(400).json({ success: false, message: "Invalid outsourced agent status." });
+      }
+      updates.active = req.body.active;
+    }
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ success: false, message: "Provide at least one agent field to update." });
+    }
+    const agent = await OutsourcedAgent.findByIdAndUpdate(
+      req.params.agentId,
+      updates,
+      { new: true, runValidators: true },
+    ).lean();
+    if (!agent) return res.status(404).json({ success: false, message: "Outsourced agent not found." });
+    return res.json({ success: true, agent });
+  } catch (error) {
+    console.error("ADMIN OUTSOURCED AGENT UPDATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to update outsourced agent." });
+  }
+});
+
 router.get("/outsourced-jobs", isSuperAdmin, async (req, res) => {
   try {
     const jobs = await OutsourcedJob.find().sort({ createdAt: -1 }).lean();
@@ -456,15 +555,26 @@ router.get("/outsourced-jobs", isSuperAdmin, async (req, res) => {
 router.post("/outsourced-jobs", isSuperAdmin, async (req, res) => {
   try {
     const title = String(req.body?.title || "").trim();
-    const agentName = String(req.body?.agentName || "Abdul").trim();
+    const outsourcedAgentId = String(req.body?.outsourcedAgentId || "").trim();
     const status = String(req.body?.status || "assigned");
     const notes = String(req.body?.notes || "").trim();
 
     if (!title || title.length > 160) {
       return res.status(400).json({ success: false, message: "Enter a job name (up to 160 characters)." });
     }
-    if (!agentName || agentName.length > 120) {
-      return res.status(400).json({ success: false, message: "Enter an outsourced agent name (up to 120 characters)." });
+    let agent;
+    if (outsourcedAgentId) {
+      if (!mongoose.Types.ObjectId.isValid(outsourcedAgentId)) {
+        return res.status(400).json({ success: false, message: "Select a valid outsourced agent." });
+      }
+      agent = await OutsourcedAgent.findOne({ _id: outsourcedAgentId, active: true }).lean();
+      if (!agent) return res.status(404).json({ success: false, message: "Active outsourced agent not found." });
+    } else {
+      const agentName = String(req.body?.agentName || "").trim();
+      if (!agentName || agentName.length > 120) {
+        return res.status(400).json({ success: false, message: "Select an outsourced agent." });
+      }
+      agent = { name: agentName, _id: null };
     }
     if (!["assigned", "in-progress", "completed", "cancelled"].includes(status)) {
       return res.status(400).json({ success: false, message: "Select a valid job status." });
@@ -475,7 +585,8 @@ router.post("/outsourced-jobs", isSuperAdmin, async (req, res) => {
 
     const job = await OutsourcedJob.create({
       title,
-      agentName,
+      outsourcedAgentId: agent._id,
+      agentName: agent.name,
       status,
       notes,
       createdBy: req.user.id,
@@ -507,6 +618,16 @@ router.put("/outsourced-jobs/:jobId", isSuperAdmin, async (req, res) => {
         return res.status(400).json({ success: false, message: "Enter an outsourced agent name (up to 120 characters)." });
       }
       updates.agentName = agentName;
+    }
+    if (req.body?.outsourcedAgentId !== undefined) {
+      const outsourcedAgentId = String(req.body.outsourcedAgentId || "").trim();
+      if (!mongoose.Types.ObjectId.isValid(outsourcedAgentId)) {
+        return res.status(400).json({ success: false, message: "Select a valid outsourced agent." });
+      }
+      const agent = await OutsourcedAgent.findOne({ _id: outsourcedAgentId, active: true }).lean();
+      if (!agent) return res.status(404).json({ success: false, message: "Active outsourced agent not found." });
+      updates.outsourcedAgentId = agent._id;
+      updates.agentName = agent.name;
     }
     if (req.body?.status !== undefined) {
       const status = String(req.body.status);

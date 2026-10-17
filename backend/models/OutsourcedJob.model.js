@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const OutsourcedJobSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true, maxlength: 160 },
+  outsourcedAgentId: { type: mongoose.Schema.Types.ObjectId, ref: "OutsourcedAgent", default: null },
   agentName: { type: String, required: true, trim: true, maxlength: 120, default: "Abdul" },
   status: {
     type: String,

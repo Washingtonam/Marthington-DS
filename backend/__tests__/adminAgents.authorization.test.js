@@ -15,6 +15,12 @@ jest.mock("../models/OutsourcedJob.model", () => ({
   create: jest.fn(),
   findByIdAndUpdate: jest.fn(),
 }));
+jest.mock("../models/OutsourcedAgent.model", () => ({
+  find: jest.fn(),
+  findOne: jest.fn(),
+  create: jest.fn(),
+  findByIdAndUpdate: jest.fn(),
+}));
 jest.mock("../models/NimcFep.model", () => ({
   find: jest.fn(),
   create: jest.fn(),
@@ -33,6 +39,7 @@ const User = require("../models/User.model");
 const Agent = require("../models/Agent.model");
 const AgentJob = require("../models/AgentJob.model");
 const OutsourcedJob = require("../models/OutsourcedJob.model");
+const OutsourcedAgent = require("../models/OutsourcedAgent.model");
 const NimcFep = require("../models/NimcFep.model");
 const Pricing = require("../models/Pricing.model");
 const AuditLog = require("../models/AuditLog.model");
@@ -76,6 +83,9 @@ describe("agent management authorization", () => {
     ["get", "/api/admin/outsourced-jobs"],
     ["post", "/api/admin/outsourced-jobs"],
     ["put", "/api/admin/outsourced-jobs/507f1f77bcf86cd799439011"],
+    ["get", "/api/admin/outsourced-agents"],
+    ["post", "/api/admin/outsourced-agents"],
+    ["put", "/api/admin/outsourced-agents/507f1f77bcf86cd799439011"],
     ["get", "/api/admin/nimc-feps"],
     ["post", "/api/admin/nimc-feps"],
   ])("denies ordinary admins access to CRM endpoint %s %s", async (method, path) => {
@@ -93,6 +103,10 @@ describe("agent management authorization", () => {
     expect(OutsourcedJob.find).not.toHaveBeenCalled();
     expect(OutsourcedJob.create).not.toHaveBeenCalled();
     expect(OutsourcedJob.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(OutsourcedAgent.find).not.toHaveBeenCalled();
+    expect(OutsourcedAgent.findOne).not.toHaveBeenCalled();
+    expect(OutsourcedAgent.create).not.toHaveBeenCalled();
+    expect(OutsourcedAgent.findByIdAndUpdate).not.toHaveBeenCalled();
     expect(NimcFep.find).not.toHaveBeenCalled();
     expect(NimcFep.create).not.toHaveBeenCalled();
   });
@@ -138,6 +152,7 @@ describe("agent management authorization", () => {
     expect(createResponse.status).toBe(201);
     expect(OutsourcedJob.create).toHaveBeenCalledWith({
       title: "Prepare customer documents",
+      outsourcedAgentId: null,
       agentName: "Abdul",
       status: "assigned",
       notes: "",
@@ -154,6 +169,88 @@ describe("agent management authorization", () => {
       { status: "in-progress" },
       { new: true, runValidators: true },
     );
+  });
+
+  it("lets super admins manage the outsourced agent directory and assign jobs by agent ID", async () => {
+    User.findById.mockResolvedValue({
+      id: "super-admin",
+      _id: "super-admin",
+      email: "root@example.test",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    const agent = {
+      _id: "507f1f77bcf86cd799439011",
+      name: "Abdul",
+      whatsapp: "+2348000000000",
+      email: "",
+      notes: "",
+      active: true,
+      createdBy: "super-admin",
+    };
+    OutsourcedAgent.find.mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([agent]),
+      }),
+    });
+    OutsourcedAgent.create.mockResolvedValue(agent);
+    OutsourcedAgent.findByIdAndUpdate.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({ ...agent, active: false }),
+    });
+    OutsourcedAgent.findOne.mockReturnValue({
+      lean: jest.fn().mockResolvedValue(agent),
+    });
+    OutsourcedJob.create.mockResolvedValue({
+      _id: "job-2",
+      title: "Process documents",
+      outsourcedAgentId: agent._id,
+      agentName: agent.name,
+      status: "assigned",
+      notes: "",
+    });
+    const adminToken = jwt.sign({ id: "super-admin" }, secret);
+
+    const listResponse = await request(app)
+      .get("/api/admin/outsourced-agents")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.agents).toEqual([agent]);
+
+    const createResponse = await request(app)
+      .post("/api/admin/outsourced-agents")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: " Abdul ", whatsapp: "+234 800 000 0000" });
+    expect(createResponse.status).toBe(201);
+    expect(OutsourcedAgent.create).toHaveBeenCalledWith({
+      name: "Abdul",
+      whatsapp: "+2348000000000",
+      email: "",
+      notes: "",
+      createdBy: "super-admin",
+    });
+
+    const updateResponse = await request(app)
+      .put(`/api/admin/outsourced-agents/${agent._id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ active: false });
+    expect(updateResponse.status).toBe(200);
+    expect(OutsourcedAgent.findByIdAndUpdate).toHaveBeenCalledWith(
+      agent._id,
+      { active: false },
+      { new: true, runValidators: true },
+    );
+
+    const jobResponse = await request(app)
+      .post("/api/admin/outsourced-jobs")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Process documents", outsourcedAgentId: agent._id });
+    expect(jobResponse.status).toBe(201);
+    expect(OutsourcedAgent.findOne).toHaveBeenCalledWith({ _id: agent._id, active: true });
+    expect(OutsourcedJob.create).toHaveBeenCalledWith(expect.objectContaining({
+      outsourcedAgentId: agent._id,
+      agentName: "Abdul",
+    }));
   });
 
   it("lists and creates NIMC FEPs within the signed-in super admin's directory", async () => {

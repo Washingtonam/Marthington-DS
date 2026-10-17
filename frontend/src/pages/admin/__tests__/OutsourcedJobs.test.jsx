@@ -27,13 +27,18 @@ describe("OutsourcedJobs", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    api.get.mockResolvedValue({ data: { jobs: [] } });
+    api.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/outsourced-agents")
+        ? { agents: [{ _id: "agent-1", name: "Abdul", active: true }] }
+        : { jobs: [] },
+    }));
   });
 
   test("creates an outsourced job assigned to Abdul and shows it in the register", async () => {
     const savedJob = {
       _id: "job-1",
       title: "Process NIN modification",
+      outsourcedAgentId: "agent-1",
       agentName: "Abdul",
       status: "assigned",
       notes: "",
@@ -44,16 +49,39 @@ describe("OutsourcedJobs", () => {
 
     fireEvent.click((await screen.findAllByRole("button", { name: "Add outsourced job" }))[0]);
     fireEvent.change(screen.getByLabelText("Job name"), { target: { value: savedJob.title } });
-    expect(screen.getByLabelText("Outsourced agent").value).toBe("Abdul");
+    expect(screen.getByLabelText("Outsourced agent").value).toBe("agent-1");
     fireEvent.click(screen.getByRole("button", { name: "Save job" }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/api/admin/outsourced-jobs", {
       title: savedJob.title,
-      agentName: "Abdul",
+      outsourcedAgentId: "agent-1",
       status: "assigned",
       notes: "",
     }));
     expect(await screen.findByText(savedJob.title)).toBeTruthy();
-    expect(screen.getByText("Abdul")).toBeTruthy();
+    expect(screen.getAllByText("Abdul").length).toBeGreaterThan(0);
+  });
+
+  test("adds Abdul to the directory and archives agents without removing their records", async () => {
+    const abdul = { _id: "agent-2", name: "Abdul", whatsapp: "", email: "", notes: "", active: true };
+    api.get.mockResolvedValue({ data: { jobs: [], agents: [] } });
+    api.post.mockResolvedValue({ data: { agent: abdul } });
+    api.put.mockResolvedValue({ data: { agent: { ...abdul, active: false } } });
+    render(<OutsourcedJobs />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add agent" }));
+    expect(screen.getByLabelText("Agent name").value).toBe("Abdul");
+    fireEvent.click(screen.getByRole("button", { name: "Save agent" }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith("/api/admin/outsourced-agents", {
+      name: "Abdul",
+      whatsapp: "",
+      email: "",
+      notes: "",
+    }));
+    expect((await screen.findAllByText("Abdul")).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith("/api/admin/outsourced-agents/agent-2", { active: false }));
+    expect(await screen.findByText("Archived")).toBeTruthy();
   });
 });

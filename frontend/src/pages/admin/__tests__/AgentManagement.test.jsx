@@ -139,12 +139,25 @@ describe("AgentManagement", () => {
       status: "active",
       approvalStatus: "approved",
     };
-    const messageText = "Please help with my CAC registration";
+    const messageText = "NIN number: 12345678901\nPrevious modification?: No";
+    const services = [{
+      serviceCode: "modification-name",
+      category: "NIMC",
+      name: "Name Modification",
+      status: "active",
+      price: 12000,
+      metadata: {
+        formFields: [
+          { key: "nin-number", label: "NIN number", type: "text", required: true },
+          { key: "previous-modification", label: "Previous modification?", type: "select", options: ["Yes", "No"], required: true },
+        ],
+      },
+    }];
     api.get.mockImplementation((path) => Promise.resolve({
       data: path.endsWith("/jobs")
         ? { jobs: [] }
         : path.endsWith("/catalog")
-          ? { services: [] }
+          ? { services }
           : { manualAgents: [], registeredUsers: [registeredAgent] },
     }));
 
@@ -160,7 +173,14 @@ describe("AgentManagement", () => {
 
     expect((await screen.findByRole("textbox", { name: /Paste the customer’s form/ })).value).toBe(messageText);
     expect(screen.getByRole("combobox", { name: "Marthington agent" }).value).toBe("registered-agent-1");
-    expect(screen.getByText(/Message from the support inbox is prefilled below/)).toBeTruthy();
+    expect(screen.getByText(/selected support message is prefilled below/)).toBeTruthy();
+
+    fireEvent.change(await screen.findByLabelText("Service category"), { target: { value: "NIMC" } });
+    fireEvent.change(screen.getByLabelText("Service"), { target: { value: "modification-name" } });
+    fireEvent.click(screen.getByRole("button", { name: "Parse message into job fields" }));
+
+    expect(screen.getByLabelText("NIN number *").value).toBe("12345678901");
+    expect(screen.getByLabelText("Previous modification? *").value).toBe("No");
   });
 
   test("loads selected catalog service fields, parses a pasted form, and logs the job", async () => {
