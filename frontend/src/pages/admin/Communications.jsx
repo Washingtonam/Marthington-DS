@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Bell, BriefcaseBusiness, Copy, Mail, MessageCircle, Plus, RefreshCw, Search, Send } from "lucide-react";
+import { ArrowLeft, Bell, BriefcaseBusiness, Copy, Mail, MessageCircle, Plus, RefreshCw, Search, Send } from "lucide-react";
 import { useUser } from "../../context/UserContext";
 import { useToast } from "../../context/ToastContext";
 import api from "../../lib/axios";
@@ -44,7 +44,7 @@ function MessageThread({ messages, currentUserId, isSuperAdmin, onCopyMessage, o
   }, [contextMenu]);
 
   return (
-    <div role="region" aria-label="Conversation messages" className="flex min-h-64 flex-col gap-3 overflow-y-auto rounded-xl bg-slate-50 p-4 dark:bg-slate-950">
+    <div role="region" aria-label="Conversation messages" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-xl bg-slate-50 p-4 dark:bg-slate-950">
       {messages.map((message) => {
         const outgoing = String(message.senderId) === String(currentUserId);
         return (
@@ -317,6 +317,12 @@ export default function Communications() {
       console.error("Support inbox refresh failed:", refreshError);
       toastError(refreshError.response?.data?.message || "Could not refresh the inbox.");
     }
+  };
+
+  const returnToConversationList = () => {
+    setSelectedConversation(null);
+    setMessages([]);
+    setReply("");
   };
 
   useEffect(() => {
@@ -601,12 +607,12 @@ export default function Communications() {
         <AdminNotifications />
       ) : (
         <div className="grid gap-5 xl:grid-cols-[minmax(16rem,0.7fr)_minmax(0,1.3fr)]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <section className={`${selectedConversation ? "hidden md:block" : "block"} rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
             <div className="mb-4 flex items-center justify-between gap-3">
               <div><h3 className="font-bold">Agent conversations</h3><p className="mt-1 text-xs text-slate-500">Text-only messages from the platform chat.</p></div>
               <button type="button" onClick={refreshInbox} aria-label="Refresh inbox" className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"><RefreshCw size={16} /></button>
             </div>
-              <div className="space-y-2">
+              <div className="max-h-[min(65vh,42rem)] space-y-2 overflow-y-auto">
                 {[...conversations]
                   .sort((left, right) => Number(right.unreadCount > 0) - Number(left.unreadCount > 0))
                   .map((conversation) => (
@@ -618,12 +624,19 @@ export default function Communications() {
                 {!conversations.length && <p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500 dark:bg-slate-950">No agent messages yet. Messages sent through the platform chatbot will appear here.</p>}
               </div>
           </section>
-          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div><h3 className="font-bold">{selectedConversation?.user?.name || "Select a conversation"}</h3><p className="mt-1 text-sm text-slate-500">{selectedConversation?.user?.email || "Choose an agent on the left to read and reply."}</p></div>
+          <section className={`${selectedConversation ? "block" : "hidden md:flex"} h-[min(68dvh,42rem)] min-h-[22rem] flex-col gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5`}>
+            <div className="flex shrink-0 items-center gap-3">
+              {selectedConversation && (
+                <button type="button" onClick={returnToConversationList} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 md:hidden">
+                  <ArrowLeft size={16} aria-hidden="true" /> Inbox
+                </button>
+              )}
+              <div className="min-w-0"><h3 className="truncate font-bold">{selectedConversation?.user?.name || "Select a conversation"}</h3><p className="mt-1 truncate text-sm text-slate-500">{selectedConversation?.user?.email || "Choose an agent on the left to read and reply."}</p></div>
+            </div>
             {selectedConversation && (
               <>
                 <MessageThread messages={messages} currentUserId={userId} isSuperAdmin={isSuperAdmin} onCopyMessage={copyMessage} onLogJob={logJobFromMessage} />
-                <form onSubmit={sendReply} className="flex items-end gap-2">
+                <form onSubmit={sendReply} className="flex shrink-0 items-end gap-2">
                   <label className="sr-only" htmlFor="support-reply">Text reply</label>
                   <textarea id="support-reply" required maxLength={2000} rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a text reply…" className="min-h-12 flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950" />
                   <button type="submit" disabled={busy || !reply.trim()} className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--accent-foreground)] disabled:opacity-50"><Send size={16} /> Reply</button>

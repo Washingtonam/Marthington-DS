@@ -7,6 +7,7 @@ import {
   CreditCard,
   LayoutDashboard,
   LogOut,
+  Lightbulb,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -94,6 +95,7 @@ const adminGroups = [
       { to: "/admin/agents", label: "Agents", icon: Users, superAdminOnly: true },
       { to: "/admin/agents/jobs", label: "Log jobs", icon: BriefcaseBusiness, superAdminOnly: true },
       { to: "/admin/outsourced-jobs", label: "Outsourced jobs", icon: BriefcaseBusiness, superAdminOnly: true },
+      { to: "/admin/wild-thoughts", label: "Wild Thoughts", icon: Lightbulb, superAdminOnly: true },
     ],
   },
 ];

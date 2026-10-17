@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../lib/axios";
 import { toast } from "sonner";
-import { CreditCard, FileText, Users, Wallet, Clock3, ShieldCheck, Zap, ArrowRight, MessageCircle } from 'lucide-react';
+import { CreditCard, FileText, Users, Wallet, Clock3, ShieldCheck, Zap, ArrowRight, MessageCircle, Lightbulb } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import Tabs from "../../components/ui/Tabs";
@@ -322,6 +322,16 @@ export default function AdminDashboard() {
             <Zap size={16} />
             <span>Last Updated: {new Date().toLocaleTimeString()}</span>
           </div>
+          {isSuperAdminLocal && (
+            <button
+              type="button"
+              onClick={() => navigate("/admin/wild-thoughts")}
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-blue-50"
+            >
+              <Lightbulb size={16} aria-hidden="true" />
+              Capture a wild thought
+            </button>
+          )}
         </div>
       </motion.div>
 
@@ -338,6 +348,29 @@ export default function AdminDashboard() {
           <MessageCircle size={16} aria-hidden="true" /> Open communications
         </button>
       </div>
+
+      {isSuperAdminLocal && (
+        <button
+          type="button"
+          onClick={() => navigate("/admin/wild-thoughts")}
+          className="mb-8 flex w-full flex-col gap-4 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-5 text-left shadow-sm transition hover:border-amber-300 hover:shadow-md sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/60 dark:from-amber-950/30 dark:to-slate-900"
+        >
+          <span className="flex items-start gap-4">
+            <span className="rounded-xl bg-amber-100 p-3 text-amber-700 dark:bg-amber-900/60 dark:text-amber-200">
+              <Lightbulb size={22} aria-hidden="true" />
+            </span>
+            <span>
+              <span className="block font-semibold text-slate-900 dark:text-white">Wild Thoughts</span>
+              <span className="mt-1 block text-sm text-slate-600 dark:text-slate-300">
+                Capture ideas, organize them by business, and keep client leads and marketing opportunities in one place.
+              </span>
+            </span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
+            Open notebook <ArrowRight size={16} aria-hidden="true" />
+          </span>
+        </button>
+      )}
 
       {/* Tabs Navigation */}
       {isOverviewLoading ? (

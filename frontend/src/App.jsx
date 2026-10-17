@@ -52,6 +52,7 @@ import AgentManagement from "./pages/admin/AgentManagement";
 import OutsourcedJobs from "./pages/admin/OutsourcedJobs";
 import Communications from "./pages/admin/Communications";
 import NimcFepManagement from "./pages/admin/NimcFepManagement";
+import WildThoughts from "./pages/admin/WildThoughts";
 import Contact from "./pages/Contact";
 import SupportChatPage from "./pages/SupportChatPage";
 
@@ -198,6 +199,7 @@ function AppRoutes() {
       <Route path="/admin/agents/jobs" element={<SuperAdminRoute><Layout><AgentManagement view="jobs" /></Layout></SuperAdminRoute>} />
       <Route path="/admin/outsourced-jobs" element={<SuperAdminRoute><Layout><OutsourcedJobs /></Layout></SuperAdminRoute>} />
       <Route path="/admin/nimc-feps" element={<SuperAdminRoute><Layout><NimcFepManagement /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/wild-thoughts" element={<SuperAdminRoute><Layout><WildThoughts /></Layout></SuperAdminRoute>} />
       <Route path="/admin/communications" element={<AdminRoute><Layout><Communications /></Layout></AdminRoute>} />
       <Route path="/admin/user/:userId/details" element={<AdminRoute><Layout><UserDetailView /></Layout></AdminRoute>} />
 
