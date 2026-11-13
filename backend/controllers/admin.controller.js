@@ -517,8 +517,8 @@ exports.adjustWalletBalance = async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
-    if (user.role === "super_admin") {
-      return res.status(400).json({ message: "Cannot adjust super admin balance." });
+    if (user.role === "super_admin" && action !== "add") {
+      return res.status(400).json({ message: "Cannot deduct from a super admin balance." });
     }
 
     // Check balance for deduction
