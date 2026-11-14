@@ -13,60 +13,135 @@ const fields = [
   { key: "whatsapp", labels: ["whatsapp number", "whatsapp", "gsm", "phone number", "phone"] },
 ];
 
-const normalizeLabel = (value) => value.toLowerCase()
-  .replace(/[()*?:]/g, "")
-  .replaceAll("[", "")
-  .replaceAll("]", "")
-  .replace(/\s+/g, " ")
-  .trim();
-
-export function parseAgentJobForm(text) {
-  const result = {};
-  const normalizedText = String(text || "").replace(/\r\n?/g, "\n");
-  const lines = normalizedText.split("\n");
-
-  lines.forEach((line, index) => {
-    const match = line.match(/^\s*([^:]+?)(?:\?\s*:\s*|\s*:\s*|\?\s+)(.*?)\s*$/);
-    if (!match) return;
-
-    const label = normalizeLabel(match[1]);
-    const definition = fields.find((field) => field.labels.some((candidate) => normalizeLabel(candidate) === label));
-    if (!definition) return;
-
-    let value = match[2].trim();
-    if (definition.type === "choice") {
-      const options = value || lines[index + 1] || "";
-      const yes = options.match(/\byes\s*\[\s*([x✓✔]?)\s*\]/i);
-      const no = options.match(/\bno\s*\[\s*([x✓✔]?)\s*\]/i);
-      if (yes?.[1] && no?.[1]) return;
-      if (yes?.[1]) value = "Yes";
-      else if (no?.[1]) value = "No";
-      else {
-        const plainChoice = options.match(/^\s*(yes|no)\s*$/i);
-        value = plainChoice ? plainChoice[1] : "";
-      }
-    }
-
-    if (definition.type === "date" && value) {
-      const dateMatch = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-      if (dateMatch) {
-        const [, first, second, year] = dateMatch;
-        const month = Number(first) > 12 ? second : first;
-        const day = Number(first) > 12 ? first : second;
-        value = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-      }
-    }
-
-    result[definition.key] = value;
-  });
-
-  return result;
-}
-
 const normalizeFormName = (value) => String(value || "")
   .toLowerCase()
   .replace(/[^a-z0-9]+/g, " ")
   .trim();
+
+const standardFieldAliases = {
+  previousSelfServiceModification: [
+    "previous self service modification",
+    "previous modification",
+    "previous modification before",
+    "have you done modification before",
+    "have you ever done modification before via nimc self service portal",
+  ],
+  nin: ["nin", "nin number", "nin no", "national identification number", "national id number"],
+  surname: ["surname", "last name", "family name", "last name surname"],
+  firstName: ["first name", "firstname", "given name", "forename"],
+  middleName: ["middle name", "middle names", "other name", "other names"],
+  dateOfBirth: ["date of birth", "birth date", "dob"],
+  email: ["email", "email address", "e mail"],
+  whatsapp: ["whatsapp", "whatsapp number", "gsm", "phone", "phone number", "telephone", "mobile number"],
+};
+
+const standardFieldNames = Object.entries(standardFieldAliases).flatMap(([key, names]) => (
+  names.map((name) => ({ key, name: normalizeFormName(name) }))
+));
+
+function getStandardField(field) {
+  const names = [field?.key, field?.label, agentJobFieldLabels[field?.key]]
+    .map(normalizeFormName)
+    .filter(Boolean);
+  return standardFieldNames.find((alias) => names.includes(alias.name))?.key || null;
+}
+
+function getFieldNames(field, includeStandardAliases = false) {
+  const names = [field?.label, ...(field?.labels || []), field?.key, agentJobFieldLabels[field?.key]];
+  if (includeStandardAliases) {
+    const standardKey = getStandardField(field);
+    if (standardKey) names.push(...standardFieldAliases[standardKey]);
+  }
+  return [...new Set(names.map(normalizeFormName).filter(Boolean))];
+}
+
+function parseLabeledLines(text, definitions) {
+  const candidates = definitions.flatMap((definition, definitionIndex) => (
+    getFieldNames(definition.field, definition.includeStandardAliases)
+      .map((name) => ({
+        key: definition.field.key,
+        name,
+        tokens: name.split(" "),
+        priority: definitionIndex,
+      }))
+  )).sort((left, right) => (
+    right.tokens.length - left.tokens.length
+    || right.name.length - left.name.length
+    || left.priority - right.priority
+  ));
+  const values = new Map();
+
+  String(text || "").replace(/\r\n?/g, "\n").split("\n").forEach((rawLine) => {
+    const line = rawLine.replace(/^\s*(?:[-*•]\s*)?/, "");
+    const tokens = [...line.matchAll(/[a-z0-9]+/gi)];
+    for (const candidate of candidates) {
+      if (candidate.tokens.length > tokens.length) continue;
+      const matches = candidate.tokens.every((token, index) => token === tokens[index][0].toLowerCase());
+      if (!matches) continue;
+
+      const lastToken = tokens[candidate.tokens.length - 1];
+      const value = line.slice(lastToken.index + lastToken[0].length)
+        .replace(/^[\s:：?=–—\-()[\]{}.,/]+/, "")
+        .trim();
+      values.set(candidate.key, value);
+      break;
+    }
+  });
+
+  return values;
+}
+
+function normalizeDateValue(value) {
+  const match = String(value).match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (!match) return value;
+  const [, first, second, year] = match;
+  const month = Number(first) > 12 ? Number(second) : Number(first);
+  const day = Number(first) > 12 ? Number(first) : Number(second);
+  const date = new Date(Date.UTC(Number(year), month - 1, day));
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return value;
+  }
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseChoice(value, field, options) {
+  const yes = value.match(/\byes\s*\[\s*([x✓✔]?)\s*\]/i);
+  const no = value.match(/\bno\s*\[\s*([x✓✔]?)\s*\]/i);
+  if (yes && no) {
+    if (yes[1] && no[1]) return undefined;
+    if (yes[1]) value = "yes";
+    else if (no[1]) value = "no";
+    else return "";
+  }
+
+  const plainChoice = value.match(/^\s*(yes|no)\s*$/i)?.[1];
+  if (plainChoice && field.type === "checkbox") return plainChoice.toLowerCase() === "yes";
+  if (plainChoice && field.type === "select") {
+    return options.find((option) => String(option).toLowerCase() === plainChoice.toLowerCase()) || value;
+  }
+  return value;
+}
+
+export function parseAgentJobForm(text) {
+  const values = parseLabeledLines(text, fields.map((field) => ({
+    field: { ...field, label: field.labels[0] },
+    includeStandardAliases: false,
+  })));
+  const result = {};
+  fields.forEach((field) => {
+    if (!values.has(field.key)) return;
+    let value = values.get(field.key);
+    if (field.type === "choice") {
+      value = parseChoice(value, { type: "select" }, ["Yes", "No"]);
+      if (value === undefined) return;
+      if (value.toLowerCase() === "yes") value = "Yes";
+      if (value.toLowerCase() === "no") value = "No";
+    }
+    if (field.type === "date" && value) value = normalizeDateValue(value);
+    result[field.key] = value;
+  });
+  return result;
+}
 
 const formFieldOptions = (field) => (
   Array.isArray(field?.options)
@@ -90,66 +165,36 @@ export function generateCatalogServiceForm(formFields = []) {
 export function parseCatalogServiceForm(text, formFields = []) {
   const result = {};
   const parsedStandardFields = parseAgentJobForm(text);
-  const aliases = {
-    previousSelfServiceModification: "previousSelfServiceModification",
-    nin: "nin",
-    surname: "surname",
-    lastName: "surname",
-    firstName: "firstName",
-    middleName: "middleName",
-    dateOfBirth: "dateOfBirth",
-    email: "email",
-    emailAddress: "email",
-    whatsapp: "whatsapp",
-    phone: "whatsapp",
-    phoneNumber: "whatsapp",
-  };
-  const parsedLines = new Map();
-  String(text || "").replace(/\r\n?/g, "\n").split("\n").forEach((line) => {
-    const match = line.match(/^\s*([^:]+?)(?:\?\s*:\s*|\s*:\s*|\?\s+)(.*?)\s*$/);
-    if (match) parsedLines.set(normalizeFormName(match[1]), match[2].trim());
-  });
+  const visibleFields = formFields.filter((field) => field?.key && !["title", "subtitle", "upload"].includes(field.type));
+  const parsedLines = parseLabeledLines(text, visibleFields.map((field) => ({
+    field,
+    includeStandardAliases: true,
+  })));
 
-  formFields.forEach((field) => {
-    if (!field?.key || ["title", "subtitle", "upload"].includes(field.type)) return;
-    const names = [field.label, field.key].filter(Boolean).map(normalizeFormName);
-    const direct = names.find((name) => parsedLines.has(name));
-    if (direct) {
-      let value = parsedLines.get(direct);
+  visibleFields.forEach((field) => {
+    if (parsedLines.has(field.key)) {
+      let value = parsedLines.get(field.key);
       const options = formFieldOptions(field);
-      const checkedYes = value.match(/\byes\s*\[\s*([x✓✔]?)\s*\]/i);
-      const checkedNo = value.match(/\bno\s*\[\s*([x✓✔]?)\s*\]/i);
-      if (checkedYes?.[1] && checkedNo?.[1]) return;
-      const choice = checkedYes?.[1] ? "yes" : checkedNo?.[1] ? "no" : value.match(/^\s*(yes|no)\s*$/i)?.[1];
-      if (field.type === "checkbox" && choice) {
-        value = choice.toLowerCase() === "yes";
-      } else if (field.type === "select" && choice) {
-        value = options.find((option) => String(option).toLowerCase() === choice.toLowerCase()) || value;
+      value = parseChoice(value, field, options);
+      if (value === undefined) return;
+      if (field.type === "select" && value) {
+        value = options.find((option) => String(option).toLowerCase() === String(value).toLowerCase()) || value;
       }
-      if (field.type === "date" && typeof value === "string") {
-        const dateMatch = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-        if (dateMatch) {
-          const [, first, second, year] = dateMatch;
-          const month = Number(first) > 12 ? second : first;
-          const day = Number(first) > 12 ? first : second;
-          value = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-        }
-      }
+      if (field.type === "date" && typeof value === "string") value = normalizeDateValue(value);
       result[field.key] = value;
       return;
     }
 
-    const standardKey = aliases[field.key];
+    const standardKey = getStandardField(field);
     if (standardKey && Object.prototype.hasOwnProperty.call(parsedStandardFields, standardKey)) {
-      const value = parsedStandardFields[standardKey];
-      if (field.type === "checkbox" && /^(yes|no)$/i.test(value)) {
-        result[field.key] = value.toLowerCase() === "yes";
-      } else if (field.type === "select") {
-        const options = formFieldOptions(field);
-        result[field.key] = options.find((option) => String(option).toLowerCase() === value.toLowerCase()) || value;
-      } else {
-        result[field.key] = value;
+      let value = parsedStandardFields[standardKey];
+      const options = formFieldOptions(field);
+      value = parseChoice(String(value), field, options);
+      if (value === undefined) return;
+      if (field.type === "select" && value) {
+        value = options.find((option) => String(option).toLowerCase() === String(value).toLowerCase()) || value;
       }
+      result[field.key] = value;
     }
   });
   return result;

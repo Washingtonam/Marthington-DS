@@ -93,4 +93,41 @@ describe("agent job form parser", () => {
       motherMaidenName: "Parent",
     });
   });
+
+  it("parses common pasted request formats with bullets, alternate labels, and loose separators", () => {
+    const fields = [
+      { key: "nin-number", label: "NIN number", type: "text" },
+      { key: "surname", label: "Surname", type: "text" },
+      { key: "firstName", label: "First name", type: "text" },
+      { key: "dateOfBirth", label: "Date of birth", type: "date" },
+      { key: "isVerified", label: "Verified", type: "checkbox" },
+    ];
+
+    expect(parseCatalogServiceForm([
+      "- National ID Number - 12345678901",
+      "Last Name = Example",
+      "Given Name Sample",
+      "DOB: 15/03/2000",
+      "Verified? No",
+    ].join("\n"), fields)).toEqual({
+      "nin-number": "12345678901",
+      surname: "Example",
+      firstName: "Sample",
+      dateOfBirth: "2000-03-15",
+      isVerified: false,
+    });
+  });
+
+  it("does not produce an invalid date or guess when both choice boxes are checked", () => {
+    const fields = [
+      { key: "dateOfBirth", label: "Date of birth", type: "date" },
+      { key: "previousModification", label: "Previous modification?", type: "select", options: ["Yes", "No"] },
+    ];
+    expect(parseCatalogServiceForm([
+      "Date of birth: 31/02/2000",
+      "Previous modification? Yes [x] No [x]",
+    ].join("\n"), fields)).toEqual({
+      dateOfBirth: "31/02/2000",
+    });
+  });
 });

@@ -213,7 +213,7 @@ describe("AgentManagement", () => {
 
     fireEvent.change(await screen.findByLabelText("Service category"), { target: { value: "NIMC" } });
     fireEvent.change(screen.getByLabelText("Service"), { target: { value: "modification-name" } });
-    fireEvent.change(screen.getByLabelText("Paste the customer’s form"), {
+    fireEvent.change(screen.getByRole("textbox", { name: /Paste the customer’s form/ }), {
       target: { value: "NIN number: 12345678901\nPrevious modification?: No" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Parse pasted form" }));
@@ -230,6 +230,42 @@ describe("AgentManagement", () => {
       amount: 12000,
       formData: { "nin-number": "12345678901", "previous-modification": "No" },
     }));
+  });
+
+  test("explains which required fields are missing instead of silently blocking job submission", async () => {
+    const services = [{
+      serviceCode: "modification-name",
+      category: "NIMC",
+      name: "Name Modification",
+      status: "active",
+      price: 12000,
+      metadata: {
+        formFields: [
+          { key: "nin-number", label: "NIN number", type: "text", required: true },
+          { key: "firstName", label: "First name", type: "text", required: true },
+        ],
+      },
+    }];
+    api.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/jobs")
+        ? { jobs: [] }
+        : path.endsWith("/catalog")
+          ? { services }
+          : { manualAgents: [manualAgent], registeredUsers: [] },
+    }));
+
+    render(
+      <MemoryRouter initialEntries={["/admin/agents/jobs?customerType=manual&customerId=agent-1"]}>
+        <AgentManagement view="jobs" />
+      </MemoryRouter>,
+    );
+    fireEvent.change(await screen.findByLabelText("Service category"), { target: { value: "NIMC" } });
+    fireEvent.change(screen.getByLabelText("Service"), { target: { value: "modification-name" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save job" }));
+
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("NIN number, First name");
+    expect(api.post).not.toHaveBeenCalledWith("/api/admin/agents/jobs", expect.anything());
   });
 
   test("creates an offline agent inside the job form and selects it for the job", async () => {

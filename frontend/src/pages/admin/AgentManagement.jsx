@@ -43,6 +43,12 @@ const getJobServiceName = (job, catalog) => catalog.find((service) => service.se
 
 const formatDate = (date) => date ? new Date(date).toLocaleDateString() : "—";
 
+const hasFormValue = (value) => (
+  typeof value === "boolean"
+    ? true
+    : value !== null && value !== undefined && String(value).trim() !== ""
+);
+
 const whatsappUrl = (phone, message) => {
   let number = String(phone || "").replace(/\D/g, "");
   if (number.startsWith("0")) number = `234${number.slice(1)}`;
@@ -103,6 +109,9 @@ export default function AgentManagement({ view }) {
   const [amount, setAmount] = useState("");
   const [pastedForm, setPastedForm] = useState(() => initialMessage);
   const [jobFormData, setJobFormData] = useState({});
+  const [parseFeedback, setParseFeedback] = useState(null);
+  const [jobFormError, setJobFormError] = useState("");
+  const [showRequiredErrors, setShowRequiredErrors] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedRecipients, setSelectedRecipients] = useState([]);
   const [draft, setDraft] = useState(() => readDraft(userId));
@@ -155,6 +164,11 @@ export default function AgentManagement({ view }) {
   const selectedServiceFields = Array.isArray(selectedService?.metadata?.formFields)
     ? selectedService.metadata.formFields.filter((field) => field?.key && !["title", "subtitle"].includes(field.type))
     : [];
+  const missingRequiredFields = selectedServiceFields.filter((field) => (
+    field.required
+    && field.type !== "upload"
+    && !hasFormValue(jobFormData[field.key])
+  ));
 
   const allContacts = useMemo(() => [
     ...manualAgents.map((agent) => ({ ...agent, contactType: "manual", source: "Offline agent" })),
@@ -256,19 +270,60 @@ export default function AgentManagement({ view }) {
 
   const handleCreateJob = async (event) => {
     event.preventDefault();
+    setShowRequiredErrors(true);
+    setJobFormError("");
     if (!customerId) {
-      toastError("Choose an offline agent or Marthington agent for this job.");
+      const message = "Choose an offline agent or Marthington agent for this job.";
+      setJobFormError(message);
+      toastError(message);
       return;
     }
     if (!selectedService) {
-      toastError("Choose an active service from the service catalog.");
+      const message = "Choose an active service from the service catalog.";
+      setJobFormError(message);
+      toastError(message);
       return;
     }
-    const missingField = selectedServiceFields.find((field) => field.required
-      && field.type !== "upload"
-      && !String(jobFormData[field.key] ?? "").trim());
-    if (missingField) {
-      toastError(`${missingField.label || missingField.key} is required.`);
+    if (missingRequiredFields.length) {
+      const names = missingRequiredFields.map((field) => field.label || field.key);
+      const message = `Complete the required field${names.length === 1 ? "" : "s"}: ${names.join(", ")}.`;
+      setJobFormError(message);
+      toastError(message);
+      return;
+    }
+    const invalidFieldKey = selectedServiceFields.find((field) => (
+      field.type !== "upload" && !/^[A-Za-z][A-Za-z0-9_-]{0,49}$/.test(field.key)
+    ));
+    if (invalidFieldKey) {
+      const message = `The service field “${invalidFieldKey.label || invalidFieldKey.key}” has an unsupported field key. Fix its key in Services Management before logging this job.`;
+      setJobFormError(message);
+      toastError(message);
+      return;
+    }
+    const tooLongField = selectedServiceFields.find((field) => (
+      field.type !== "upload"
+      && typeof jobFormData[field.key] === "string"
+      && jobFormData[field.key].length > 500
+    ));
+    if (tooLongField) {
+      const message = `${tooLongField.label || tooLongField.key} must be 500 characters or fewer.`;
+      setJobFormError(message);
+      toastError(message);
+      return;
+    }
+    const invalidControl = event.currentTarget.querySelector(":invalid");
+    if (invalidControl) {
+      invalidControl.reportValidity();
+      const message = "Review the highlighted fields and correct any invalid values.";
+      setJobFormError(message);
+      toastError(message);
+      return;
+    }
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount < 0 || numericAmount > 100000000) {
+      const message = "Enter a valid amount between 0 and 100,000,000 NGN.";
+      setJobFormError(message);
+      toastError(message);
       return;
     }
     setBusy(true);
@@ -278,9 +333,9 @@ export default function AgentManagement({ view }) {
         ...(customerType === "manual" ? { agentId: customerId } : { registeredUserId: customerId }),
         serviceCode,
         serviceType: selectedService?.name,
-        amount: amount === "" || Number(amount) === 0
+        amount: amount === "" || numericAmount === 0
           ? Number(selectedService.price) || 0
-          : Number(amount),
+          : numericAmount,
         formData: jobFormData,
       });
       setShowJobForm(false);
@@ -288,13 +343,21 @@ export default function AgentManagement({ view }) {
       setAmount("");
       setPastedForm("");
       setJobFormData({});
+      setParseFeedback(null);
+      setJobFormError("");
+      setShowRequiredErrors(false);
       setServiceCategory("");
       setServiceCode("");
       await loadData();
       success("Job logged and added to service requests.");
     } catch (saveError) {
       console.error("Agent job creation failed:", saveError);
-      toastError(saveError.response?.data?.message || "Could not log this job.");
+      const message = saveError.response?.data?.message
+        || (saveError.response
+          ? "Could not log this job. Check the form and try again."
+          : "Could not reach the server. Check your connection and try again.");
+      setJobFormError(message);
+      toastError(message);
     } finally {
       setBusy(false);
     }
@@ -302,9 +365,24 @@ export default function AgentManagement({ view }) {
 
   const handleParseForm = () => {
     const parsed = parseCatalogServiceForm(pastedForm, selectedServiceFields);
-    setJobFormData((current) => ({ ...current, ...parsed }));
-    if (!Object.keys(parsed).length) toastError("No recognized form fields found. Check the pasted labels and try again.");
-    else success(`${Object.keys(parsed).length} form fields detected. Review them before saving.`);
+    setJobFormData(parsed);
+    setShowRequiredErrors(false);
+    setJobFormError("");
+    if (!Object.keys(parsed).length) {
+      const message = "No fields matched this service. Try one answer per line using the field labels, for example “NIN: 12345678901”.";
+      setParseFeedback({ type: "error", message });
+      toastError(message);
+      return;
+    }
+    const missing = selectedServiceFields.filter((field) => (
+      field.required && field.type !== "upload" && !hasFormValue(parsed[field.key])
+    ));
+    const message = missing.length
+      ? `${Object.keys(parsed).length} field${Object.keys(parsed).length === 1 ? "" : "s"} detected. Still needed: ${missing.map((field) => field.label || field.key).join(", ")}.`
+      : `${Object.keys(parsed).length} field${Object.keys(parsed).length === 1 ? "" : "s"} detected. Review them before saving.`;
+    setParseFeedback({ type: missing.length ? "warning" : "success", message });
+    if (missing.length) toastError(message);
+    else success(message);
   };
 
   const handleCopyServiceForm = async () => {
@@ -364,6 +442,9 @@ export default function AgentManagement({ view }) {
     setAmount("");
     setPastedForm("");
     setJobFormData({});
+    setParseFeedback(null);
+    setJobFormError("");
+    setShowRequiredErrors(false);
     setShowJobForm(true);
   };
 
@@ -371,6 +452,9 @@ export default function AgentManagement({ view }) {
     setServiceCode(value);
     const service = catalog.find((item) => item.serviceCode === value);
     setAmount(service ? String(service.price || 0) : "");
+    setParseFeedback(null);
+    setJobFormError("");
+    setShowRequiredErrors(false);
     if (initialMessage && service) {
       const formFields = Array.isArray(service.metadata?.formFields)
         ? service.metadata.formFields
@@ -586,7 +670,8 @@ export default function AgentManagement({ view }) {
       </SlideOver>
 
       <SlideOver isOpen={showJobForm} onClose={() => setShowJobForm(false)} title="Log an agent job">
-        <form onSubmit={handleCreateJob} className="space-y-5">
+        <form noValidate onSubmit={handleCreateJob} className="space-y-5">
+          {jobFormError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{jobFormError}</p>}
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-semibold">Agent type
               <select value={customerType} onChange={(event) => { setCustomerType(event.target.value); setCustomerId(""); setShowJobAgentForm(false); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
@@ -629,7 +714,7 @@ export default function AgentManagement({ view }) {
           )}
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-semibold">Service category
-              <select value={serviceCategory} onChange={(event) => { setServiceCategory(event.target.value); setServiceCode(""); setJobFormData({}); setAmount(""); }} required className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
+              <select value={serviceCategory} onChange={(event) => { setServiceCategory(event.target.value); setServiceCode(""); setJobFormData({}); setAmount(""); setParseFeedback(null); setJobFormError(""); setShowRequiredErrors(false); }} required className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
                 <option value="">Select a category</option>
                 {categories.map((category) => <option key={category} value={category}>{category}</option>)}
               </select>
@@ -653,7 +738,8 @@ export default function AgentManagement({ view }) {
           </div>
           <label className="block text-sm font-semibold">Paste the customer’s form
             {initialMessage && <span className="mt-1 block text-xs font-normal text-slate-500">The selected support message is prefilled below. Choose the service to parse recognized answers into its job fields, then review all values before saving.</span>}
-            <textarea rows={7} value={pastedForm} onChange={(event) => setPastedForm(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 font-mono text-xs leading-5 dark:border-slate-700 dark:bg-slate-950" placeholder={"Paste the customer form here using the service field labels.\nExample: NIN: ..."} />
+            <span className="mt-1 block text-xs font-normal text-slate-500">Use one answer per line. Labels can be followed by a colon, dash, or space. Copy the service template below for the most reliable match.</span>
+            <textarea rows={7} value={pastedForm} onChange={(event) => { setPastedForm(event.target.value); setJobFormData({}); setParseFeedback(null); setJobFormError(""); setShowRequiredErrors(false); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 font-mono text-xs leading-5 dark:border-slate-700 dark:bg-slate-950" placeholder={"Paste the customer form here using the service field labels.\nExample: NIN: 12345678901"} />
           </label>
           {selectedService && selectedServiceFields.length > 0 && (
             <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
@@ -668,14 +754,35 @@ export default function AgentManagement({ view }) {
             </div>
           )}
           <button type="button" disabled={!selectedService} onClick={handleParseForm} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">{initialMessage ? "Parse message into job fields" : "Parse pasted form"}</button>
+          {parseFeedback && (
+            <p
+              role={parseFeedback.type === "error" ? "alert" : "status"}
+              className={`rounded-lg p-3 text-sm ${
+                parseFeedback.type === "error"
+                  ? "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300"
+                  : parseFeedback.type === "warning"
+                    ? "bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                    : "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300"
+              }`}
+            >
+              {parseFeedback.message}
+            </p>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
-            {selectedServiceFields.map((field) => (
+            {selectedServiceFields.map((field) => {
+              const fieldMissing = showRequiredErrors && missingRequiredFields.some((missing) => missing.key === field.key);
+              const fieldClass = `mt-2 w-full rounded-xl border bg-white px-3 py-2.5 font-normal dark:bg-slate-950 ${
+                fieldMissing
+                  ? "border-red-500 dark:border-red-500"
+                  : "border-slate-200 dark:border-slate-700"
+              }`;
+              return (
               <label key={field.key} className={`block text-sm font-semibold ${field.type === "textarea" ? "sm:col-span-2" : ""}`}>
                 {field.label || agentJobFieldLabels[field.key] || field.key}{field.required ? " *" : ""}
                 {field.type === "textarea" ? (
-                  <textarea required={Boolean(field.required)} rows={4} value={jobFormData[field.key] || ""} placeholder={field.placeholder || ""} onChange={(event) => setJobFormData((current) => ({ ...current, [field.key]: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
+                  <textarea maxLength={500} required={Boolean(field.required)} aria-invalid={fieldMissing} rows={4} value={jobFormData[field.key] || ""} placeholder={field.placeholder || ""} onChange={(event) => { setJobFormData((current) => ({ ...current, [field.key]: event.target.value })); setJobFormError(""); }} className={fieldClass} />
                 ) : field.type === "select" ? (
-                  <select required={Boolean(field.required)} value={jobFormData[field.key] || ""} onChange={(event) => setJobFormData((current) => ({ ...current, [field.key]: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950">
+                  <select required={Boolean(field.required)} aria-invalid={fieldMissing} value={jobFormData[field.key] || ""} onChange={(event) => { setJobFormData((current) => ({ ...current, [field.key]: event.target.value })); setJobFormError(""); }} className={fieldClass}>
                     <option value="">Select an option</option>
                     {(Array.isArray(field.options) ? field.options : String(field.options || "").split(",").map((option) => option.trim()).filter(Boolean))
                       .map((option) => <option key={option} value={option}>{option}</option>)}
@@ -690,10 +797,11 @@ export default function AgentManagement({ view }) {
                     File fields are configured for customer submissions; attach files when processing the request.
                   </span>
                 ) : (
-                  <input required={Boolean(field.required)} type={["text", "email", "number", "date"].includes(field.type) ? field.type : "text"} value={jobFormData[field.key] || ""} placeholder={field.placeholder || ""} onChange={(event) => setJobFormData((current) => ({ ...current, [field.key]: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal dark:border-slate-700 dark:bg-slate-950" />
+                  <input maxLength={field.type === "number" ? undefined : 500} required={Boolean(field.required)} aria-invalid={fieldMissing} type={["text", "email", "number", "date"].includes(field.type) ? field.type : "text"} value={jobFormData[field.key] || ""} placeholder={field.placeholder || ""} onChange={(event) => { setJobFormData((current) => ({ ...current, [field.key]: event.target.value })); setJobFormError(""); }} className={fieldClass} />
                 )}
               </label>
-            ))}
+              );
+            })}
           </div>
           {selectedService && selectedServiceFields.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-700">No customer form fields are configured for this service in Services Management. You can still log the job and add notes in the form text above.</p>}
           <p className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600 dark:bg-slate-950 dark:text-slate-400">Parsed values are suggestions only. Review every field before saving. This logs an internal job to the admin service-request list; it does not submit to NIMC or alter a customer account.</p>
