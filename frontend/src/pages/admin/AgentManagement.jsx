@@ -49,6 +49,19 @@ const hasFormValue = (value) => (
     : value !== null && value !== undefined && String(value).trim() !== ""
 );
 
+const isSupportedJobFieldKey = (value) => {
+  const key = String(value || "").trim();
+  return Boolean(key)
+    && key.length <= 120
+    && !["__proto__", "prototype", "constructor"].includes(key)
+    && ![...key].some((character) => (
+      character === "$"
+      || character === "."
+      || character.charCodeAt(0) < 32
+      || character.charCodeAt(0) === 127
+    ));
+};
+
 const whatsappUrl = (phone, message) => {
   let number = String(phone || "").replace(/\D/g, "");
   if (number.startsWith("0")) number = `234${number.slice(1)}`;
@@ -292,10 +305,10 @@ export default function AgentManagement({ view }) {
       return;
     }
     const invalidFieldKey = selectedServiceFields.find((field) => (
-      field.type !== "upload" && !/^[A-Za-z][A-Za-z0-9_-]{0,49}$/.test(field.key)
+      field.type !== "upload" && !isSupportedJobFieldKey(field.key)
     ));
     if (invalidFieldKey) {
-      const message = `The service field “${invalidFieldKey.label || invalidFieldKey.key}” has an unsupported field key. Fix its key in Services Management before logging this job.`;
+      const message = `The service field “${invalidFieldKey.label || invalidFieldKey.key}” has an unsupported key. Use up to 120 characters and avoid periods or dollar signs.`;
       setJobFormError(message);
       toastError(message);
       return;
@@ -303,10 +316,10 @@ export default function AgentManagement({ view }) {
     const tooLongField = selectedServiceFields.find((field) => (
       field.type !== "upload"
       && typeof jobFormData[field.key] === "string"
-      && jobFormData[field.key].length > 500
+      && jobFormData[field.key].length > 2000
     ));
     if (tooLongField) {
-      const message = `${tooLongField.label || tooLongField.key} must be 500 characters or fewer.`;
+      const message = `${tooLongField.label || tooLongField.key} must be 2,000 characters or fewer.`;
       setJobFormError(message);
       toastError(message);
       return;
@@ -780,7 +793,7 @@ export default function AgentManagement({ view }) {
               <label key={field.key} className={`block text-sm font-semibold ${field.type === "textarea" ? "sm:col-span-2" : ""}`}>
                 {field.label || agentJobFieldLabels[field.key] || field.key}{field.required ? " *" : ""}
                 {field.type === "textarea" ? (
-                  <textarea maxLength={500} required={Boolean(field.required)} aria-invalid={fieldMissing} rows={4} value={jobFormData[field.key] || ""} placeholder={field.placeholder || ""} onChange={(event) => { setJobFormData((current) => ({ ...current, [field.key]: event.target.value })); setJobFormError(""); }} className={fieldClass} />
+                  <textarea maxLength={2000} required={Boolean(field.required)} aria-invalid={fieldMissing} rows={4} value={jobFormData[field.key] || ""} placeholder={field.placeholder || ""} onChange={(event) => { setJobFormData((current) => ({ ...current, [field.key]: event.target.value })); setJobFormError(""); }} className={fieldClass} />
                 ) : field.type === "select" ? (
                   <select required={Boolean(field.required)} aria-invalid={fieldMissing} value={jobFormData[field.key] || ""} onChange={(event) => { setJobFormData((current) => ({ ...current, [field.key]: event.target.value })); setJobFormError(""); }} className={fieldClass}>
                     <option value="">Select an option</option>
@@ -797,7 +810,7 @@ export default function AgentManagement({ view }) {
                     File fields are configured for customer submissions; attach files when processing the request.
                   </span>
                 ) : (
-                  <input maxLength={field.type === "number" ? undefined : 500} required={Boolean(field.required)} aria-invalid={fieldMissing} type={["text", "email", "number", "date"].includes(field.type) ? field.type : "text"} value={jobFormData[field.key] || ""} placeholder={field.placeholder || ""} onChange={(event) => { setJobFormData((current) => ({ ...current, [field.key]: event.target.value })); setJobFormError(""); }} className={fieldClass} />
+                  <input maxLength={field.type === "number" ? undefined : 2000} required={Boolean(field.required)} aria-invalid={fieldMissing} type={["text", "email", "number", "date"].includes(field.type) ? field.type : "text"} value={jobFormData[field.key] || ""} placeholder={field.placeholder || ""} onChange={(event) => { setJobFormData((current) => ({ ...current, [field.key]: event.target.value })); setJobFormError(""); }} className={fieldClass} />
                 )}
               </label>
               );

@@ -576,6 +576,84 @@ describe("agent management authorization", () => {
     expect(AgentJob.create).not.toHaveBeenCalled();
   });
 
+  it("accepts service field labels as form-data keys when logging jobs", async () => {
+    const customerId = "507f1f77bcf86cd799439011";
+    User.findById.mockResolvedValue({
+      id: "super-admin",
+      _id: "super-admin",
+      email: "root@example.test",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+    User.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          _id: customerId,
+          firstName: "Registered",
+          lastName: "Customer",
+          email: "customer@example.test",
+          phone: "+2348000000000",
+        }),
+      }),
+    });
+    Pricing.getPricing.mockResolvedValue({
+      serviceCatalog: [{
+        serviceCode: "modification-dob",
+        category: "NIMC",
+        name: "Date of Birth Modification",
+        status: "active",
+        price: 12000,
+      }],
+    });
+    AgentJob.create.mockResolvedValue({ _id: "job-form-label" });
+    const formData = {
+      "Mother’s Maiden Name (Compulsory)": "Parent Name",
+      "Father’s Village/Town": "Example Town",
+    };
+
+    const response = await request(app)
+      .post("/api/admin/agents/jobs")
+      .set("Authorization", `Bearer ${jwt.sign({ id: "super-admin" }, secret)}`)
+      .send({
+        customerType: "registered",
+        registeredUserId: customerId,
+        serviceCode: "modification-dob",
+        serviceType: "Date of Birth Modification",
+        amount: 12000,
+        formData,
+      });
+
+    expect(response.status).toBe(201);
+    expect(AgentJob.create).toHaveBeenCalledWith(expect.objectContaining({ formData }));
+  });
+
+  it("returns a specific validation message for unsupported job field values", async () => {
+    User.findById.mockResolvedValue({
+      id: "super-admin",
+      _id: "super-admin",
+      email: "root@example.test",
+      role: "super_admin",
+      status: "active",
+      approvalStatus: "approved",
+    });
+
+    const response = await request(app)
+      .post("/api/admin/agents/jobs")
+      .set("Authorization", `Bearer ${jwt.sign({ id: "super-admin" }, secret)}`)
+      .send({
+        customerType: "manual",
+        agentId: "507f1f77bcf86cd799439011",
+        serviceType: "Name Modification",
+        amount: 12000,
+        formData: { "Customer details": { name: "Example" } },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("The value for “Customer details” must be text, a number, or a checkbox value.");
+    expect(AgentJob.create).not.toHaveBeenCalled();
+  });
+
   it("uses the catalog price when a logged job amount is zero", async () => {
     const customerId = "507f1f77bcf86cd799439011";
     User.findById.mockResolvedValue({

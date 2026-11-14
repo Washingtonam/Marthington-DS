@@ -335,19 +335,35 @@ router.put("/nimc-feps/:fepId", isSuperAdmin, async (req, res) => {
 });
 
 const sanitizeJobFormData = (value) => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const entries = Object.entries(value);
-  if (entries.length > 40) return null;
-  const clean = {};
-  for (const [key, fieldValue] of entries) {
-    if (!/^[A-Za-z][A-Za-z0-9_-]{0,49}$/.test(key)) return null;
-    if (fieldValue === null || fieldValue === undefined || fieldValue === "") continue;
-    if (typeof fieldValue !== "string" && typeof fieldValue !== "number" && typeof fieldValue !== "boolean") return null;
-    const normalizedValue = String(fieldValue).trim();
-    if (normalizedValue.length > 500) return null;
-    clean[key] = normalizedValue;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { data: null, error: "Job form details must be sent as an object." };
   }
-  return clean;
+  const entries = Object.entries(value);
+  if (entries.length > 60) {
+    return { data: null, error: "Too many job form fields. A job can contain up to 60 fields." };
+  }
+  const clean = {};
+  for (const [rawKey, fieldValue] of entries) {
+    const key = rawKey.trim();
+    if (!key || key.length > 120 || /[$.\u0000-\u001f]/.test(key) || ["__proto__", "prototype", "constructor"].includes(key)) {
+      return { data: null, error: `The job form field “${rawKey.slice(0, 120)}” has an unsupported key. Use a non-empty field name up to 120 characters without periods or dollar signs.` };
+    }
+    if (fieldValue === null || fieldValue === undefined || fieldValue === "") continue;
+    if (typeof fieldValue !== "string" && typeof fieldValue !== "number" && typeof fieldValue !== "boolean") {
+      return { data: null, error: `The value for “${key}” must be text, a number, or a checkbox value.` };
+    }
+    const normalizedValue = String(fieldValue).trim();
+    if (normalizedValue.length > 2000) {
+      return { data: null, error: `The value for “${key}” is too long. Keep it to 2,000 characters or fewer.` };
+    }
+    Object.defineProperty(clean, key, {
+      value: normalizedValue,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return { data: clean, error: "" };
 };
 
 router.get("/agents", isSuperAdmin, async (req, res) => {
@@ -470,7 +486,7 @@ router.post("/agents/jobs", isSuperAdmin, async (req, res) => {
     const { agentId, registeredUserId, customerType, serviceCode } = req.body || {};
     const serviceType = String(req.body?.serviceType || "").trim();
     const amount = Number(req.body?.amount || 0);
-    const formData = sanitizeJobFormData(req.body?.formData || {});
+    const sanitizedFormData = sanitizeJobFormData(req.body?.formData || {});
     if (!["manual", "registered"].includes(customerType)) return res.status(400).json({ success: false, message: "Select a valid customer source." });
     const customerId = customerType === "manual" ? agentId : registeredUserId;
     if (!mongoose.Types.ObjectId.isValid(String(customerId || ""))) return res.status(400).json({ success: false, message: "Select a valid customer." });
@@ -480,9 +496,10 @@ router.post("/agents/jobs", isSuperAdmin, async (req, res) => {
     if (!Number.isFinite(amount) || amount < 0 || amount > 100000000) {
       return res.status(400).json({ success: false, message: "Enter a valid job amount." });
     }
-    if (!formData) {
-      return res.status(400).json({ success: false, message: "Job form data is invalid." });
+    if (sanitizedFormData.error) {
+      return res.status(400).json({ success: false, message: sanitizedFormData.error });
     }
+    const formData = sanitizedFormData.data;
     let customer;
     if (customerType === "manual") {
       customer = await Agent.findById(customerId).lean();
