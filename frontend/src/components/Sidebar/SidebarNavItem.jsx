@@ -3,8 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 
 export default function SidebarNavItem({ to, icon, label, badge = 0, open, onNavigate }) {
   const location = useLocation();
-  const isActive = location.pathname === to
-    || (to !== "/dashboard" && to !== "/admin" && location.pathname.startsWith(`${to}/`));
+  const targetPath = to.split("?")[0];
+  const isActive = location.pathname === targetPath
+    || (targetPath !== "/dashboard" && targetPath !== "/admin" && location.pathname.startsWith(`${targetPath}/`));
 
   return (
     <Link

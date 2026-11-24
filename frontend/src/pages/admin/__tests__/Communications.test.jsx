@@ -458,4 +458,28 @@ describe("Communications", () => {
     expect((await screen.findByRole("tab", { name: "Support inbox 1" })).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("status").textContent).toContain("Ayo Agent");
   });
+
+  test("searches user conversations and makes the selected chat explicit", async () => {
+    api.get.mockImplementation((path) => Promise.resolve({
+      data: path.endsWith("/conversations")
+        ? { conversations: [
+          { _id: "conversation-1", user: { name: "Ayo Agent" }, lastMessage: "Need help with a request" },
+          { _id: "conversation-2", user: { name: "Bisi User" }, lastMessage: "Payment question" },
+        ] }
+        : { conversation: { _id: "conversation-1" }, messages: [] },
+    }));
+    render(<MemoryRouter><Communications mode="inbox" /></MemoryRouter>);
+
+    expect(await screen.findByText("Choose a conversation")).toBeTruthy();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search conversations" }), {
+      target: { value: "Ayo" },
+    });
+    expect(screen.getByRole("button", { name: /Ayo Agent/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Bisi User/ })).toBeNull();
+
+    const conversationButton = screen.getByRole("button", { name: /Ayo Agent/ });
+    fireEvent.click(conversationButton);
+    await waitFor(() => expect(conversationButton.getAttribute("aria-pressed")).toBe("true"));
+    expect(await screen.findByRole("region", { name: "Conversation messages" })).toBeTruthy();
+  });
 });

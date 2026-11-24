@@ -203,11 +203,11 @@ describe("dashboard shell navigation", () => {
         }
         : {},
     }));
-    renderLayout("/admin/communications");
+    renderLayout("/admin/people");
 
-    expect(await screen.findByRole("link", { name: /Communications/ })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: /People & Support/ })).toBeTruthy();
     expect(mocks.info).toHaveBeenCalledWith(
-      "New support message from Ayo Agent. Open Communications to read it.",
+      "New support message from Ayo Agent. Open People & Support to read it.",
       7000,
     );
   });
@@ -217,19 +217,20 @@ describe("dashboard shell navigation", () => {
     mocks.user = { id: "admin-1", role: "super_admin" };
     renderLayout("/admin/agents");
 
-    expect(screen.getByRole("link", { name: "Agents" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Log jobs" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "User management" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Agents & Jobs" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "People & Support" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Log jobs" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Communications" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Notification center" })).toBeNull();
-    fireEvent.click(screen.getByRole("link", { name: "Communications" }));
-    expect(screen.getByLabelText("Current route").textContent).toBe("/admin/communications");
+    fireEvent.click(screen.getByRole("link", { name: "People & Support" }));
+    expect(screen.getByLabelText("Current route").textContent).toBe("/admin/people");
 
     cleanup();
     mocks.user = { id: "user-1", role: "user" };
     renderLayout();
-    expect(screen.queryByRole("link", { name: "Agents" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Agents & Jobs" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Log jobs" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Communications" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "People & Support" })).toBeNull();
   });
 });
 

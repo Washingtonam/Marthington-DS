@@ -337,15 +337,15 @@ export default function AdminDashboard() {
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div>
-          <h2 className="font-semibold text-slate-900 dark:text-white">Agent communications</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage message templates and respond to support chats.</p>
+          <h2 className="font-semibold text-slate-900 dark:text-white">People &amp; Support</h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage user accounts and respond to support chats.</p>
         </div>
         <button
           type="button"
-          onClick={() => navigate("/admin/communications?tab=inbox")}
+          onClick={() => navigate("/admin/people?tab=support")}
           className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)]"
         >
-          <MessageCircle size={16} aria-hidden="true" /> Open communications
+          <MessageCircle size={16} aria-hidden="true" /> Open People &amp; Support
         </button>
       </div>
 
@@ -461,10 +461,10 @@ export default function AdminDashboard() {
                   <div className="text-center py-8 text-slate-500 dark:text-slate-400">
                     <p className="mb-4">Manage user accounts and access levels</p>
                     <button
-                      onClick={() => navigate("/admin/users")}
+                      onClick={() => navigate("/admin/people?tab=users")}
                       className="text-blue-600 hover:text-blue-700 font-semibold"
                     >
-                      Open User Management →
+                      Open user directory →
                     </button>
                   </div>
                 </Card>

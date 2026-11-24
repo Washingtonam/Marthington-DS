@@ -141,13 +141,20 @@ export default function Admin() {
             <p className="text-gray-500 dark:text-gray-400 text-sm">Fast access to admin operations</p>
           </div>
         </div>
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6">
           <ActionCard
-            title="User Management"
-            desc="View, suspend, delete and manage all users"
+            title="People & Support"
+            desc="Manage users and respond to support conversations"
             icon="👥"
             color="from-blue-600 to-indigo-600"
-            onClick={() => navigate("/admin/users")}
+            onClick={() => navigate("/admin/people?tab=users")}
+          />
+          <ActionCard
+            title="Agents & Jobs"
+            desc="Manage agent directories, jobs, and agent communications"
+            icon="🧰"
+            color="from-violet-600 to-purple-600"
+            onClick={() => navigate("/admin/agents")}
           />
           <ActionCard
             title="Payment Requests"

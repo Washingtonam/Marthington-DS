@@ -41,16 +41,15 @@ import CacServices from "./pages/services/CacServices";
 // Admin
 import Admin from "./pages/admin/Admin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminUsers from "./pages/admin/AdminUsers";
 import AdminPayments from "./pages/admin/AdminPayments";
 import FinancialReports from "./pages/admin/FinancialReports";
 import AdminPricing from "./pages/admin/AdminPricing";
 import AdminRequests from "./pages/admin/AdminRequests";
 import AdminArticles from "./pages/admin/AdminArticles";
 import UserDetailView from "./pages/admin/UserDetailView";
-import AgentManagement from "./pages/admin/AgentManagement";
-import OutsourcedJobs from "./pages/admin/OutsourcedJobs";
-import Communications from "./pages/admin/Communications";
+import PeopleSupport from "./pages/admin/PeopleSupport";
+import AgentsJobs from "./pages/admin/AgentsJobs";
+import LegacyCommunicationsRedirect from "./pages/admin/LegacyCommunicationsRedirect";
 import NimcFepManagement from "./pages/admin/NimcFepManagement";
 import WildThoughts from "./pages/admin/WildThoughts";
 import Contact from "./pages/Contact";
@@ -184,7 +183,8 @@ function AppRoutes() {
 
       {/* Admin Routes */}
       <Route path="/admin" element={<AdminRoute><Layout><AdminDashboard /></Layout></AdminRoute>} />
-      <Route path="/admin/users" element={<SuperAdminRoute><Layout><AdminUsers /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/people" element={<AdminRoute><Layout><PeopleSupport /></Layout></AdminRoute>} />
+      <Route path="/admin/users" element={<SuperAdminRoute><Layout><PeopleSupport initialTab="users" /></Layout></SuperAdminRoute>} />
       <Route path="/admin/payments" element={<AdminRoute><Layout><AdminPayments /></Layout></AdminRoute>} />
       <Route path="/admin/financial-reports" element={<SuperAdminRoute><Layout><FinancialReports /></Layout></SuperAdminRoute>} />
       <Route path="/admin/requests" element={<AdminRoute><Layout><AdminRequests /></Layout></AdminRoute>} />
@@ -192,15 +192,15 @@ function AppRoutes() {
       <Route path="/admin/pricing" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/services-engine" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
       <Route path="/admin/services-engine/:category" element={<SuperAdminRoute><Layout><AdminPricing /></Layout></SuperAdminRoute>} />
-      <Route path="/admin/notifications" element={<Navigate to="/admin/communications?tab=notifications" replace />} />
+      <Route path="/admin/notifications" element={<Navigate to="/admin/people?tab=notifications" replace />} />
       <Route path="/admin/articles" element={<SuperAdminRoute><Layout><AdminArticles /></Layout></SuperAdminRoute>} />
       <Route path="/admin/settings" element={<SuperAdminRoute><Layout><BrandingSettings /></Layout></SuperAdminRoute>} />
-      <Route path="/admin/agents" element={<SuperAdminRoute><Layout><AgentManagement view="agents" /></Layout></SuperAdminRoute>} />
-      <Route path="/admin/agents/jobs" element={<SuperAdminRoute><Layout><AgentManagement view="jobs" /></Layout></SuperAdminRoute>} />
-      <Route path="/admin/outsourced-jobs" element={<SuperAdminRoute><Layout><OutsourcedJobs /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/agents" element={<SuperAdminRoute><Layout><AgentsJobs /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/agents/jobs" element={<SuperAdminRoute><Layout><AgentsJobs initialTab="jobs" /></Layout></SuperAdminRoute>} />
+      <Route path="/admin/outsourced-jobs" element={<SuperAdminRoute><Layout><AgentsJobs initialTab="outsourced" /></Layout></SuperAdminRoute>} />
       <Route path="/admin/nimc-feps" element={<SuperAdminRoute><Layout><NimcFepManagement /></Layout></SuperAdminRoute>} />
       <Route path="/admin/wild-thoughts" element={<SuperAdminRoute><Layout><WildThoughts /></Layout></SuperAdminRoute>} />
-      <Route path="/admin/communications" element={<AdminRoute><Layout><Communications /></Layout></AdminRoute>} />
+      <Route path="/admin/communications" element={<AdminRoute><Layout><LegacyCommunicationsRedirect /></Layout></AdminRoute>} />
       <Route path="/admin/user/:userId/details" element={<AdminRoute><Layout><UserDetailView /></Layout></AdminRoute>} />
 
       {/* Catch all */}

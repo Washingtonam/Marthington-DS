@@ -15,7 +15,7 @@ import {
 import { useToast } from "../../context/ToastContext";
 import { useNavigate } from "react-router-dom";
 
-export default function AdminUsers() {
+export default function AdminUsers({ embedded = false }) {
   const { user: currentUser } = useUser();
   const isSuperAdmin = currentUser?.role === "super_admin";
   const { success, error: toastError } = useToast();
@@ -483,7 +483,18 @@ export default function AdminUsers() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 text-slate-900 dark:text-slate-100">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      {embedded ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => { fetchUsers(page, currentSearch); fetchStats(); }}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <Activity size={16} aria-hidden="true" /> Refresh directory
+          </button>
+        </div>
+      ) : <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-text)]">Administration</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">User Management</h1>
@@ -499,7 +510,7 @@ export default function AdminUsers() {
         >
           <Activity size={16} aria-hidden="true" /> Refresh directory
         </button>
-      </header>
+      </header>}
 
       {/* Message Alert */}
       {message.text && (

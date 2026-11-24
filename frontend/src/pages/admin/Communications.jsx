@@ -164,14 +164,14 @@ function MessageThread({
   );
 }
 
-export default function Communications() {
+export default function Communications({ mode = "all" }) {
   const { user } = useUser();
   const { success, error: toastError } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isSuperAdmin = user?.role === "super_admin";
   const userId = user?.id || user?._id;
-  const requestedTab = searchParams.get("tab");
+  const requestedTab = mode === "all" ? searchParams.get("tab") : mode;
   const [activeTab, setActiveTab] = useState(() => (
     isSuperAdmin && ["templates", "dispatch", "notifications", "inbox"].includes(requestedTab)
       ? requestedTab
@@ -190,6 +190,7 @@ export default function Communications() {
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [reply, setReply] = useState("");
   const [query, setQuery] = useState("");
+  const [conversationQuery, setConversationQuery] = useState("");
   const [audience, setAudience] = useState("all");
   const [selectedRecipients, setSelectedRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -468,9 +469,15 @@ export default function Communications() {
     setSearchParams(tab === "templates" ? {} : { tab }, { replace: true });
   };
 
+  const filteredConversations = conversations.filter((conversation) => (
+    `${conversation.user?.name || ""} ${conversation.user?.email || ""} ${conversation.lastMessage || ""}`
+      .toLowerCase()
+      .includes(conversationQuery.trim().toLowerCase())
+  ));
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <header>
+      {mode === "all" && <header>
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-text)]">Agent workspace</p>
         <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Communications</h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
@@ -483,9 +490,9 @@ export default function Communications() {
         )}
         {desktopPermission === "denied" && <p className="mt-3 text-xs text-slate-500">Desktop alerts are blocked by your browser. Enable them in the site permissions to receive alerts while this tab is in the background.</p>}
         {desktopPermission === "unsupported" && <p className="mt-3 text-xs text-slate-500">This browser does not support desktop message alerts. In-app alerts remain enabled.</p>}
-      </header>
+      </header>}
 
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3 dark:border-slate-800" role="tablist" aria-label="Communication tools">
+      {mode === "all" && <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3 dark:border-slate-800" role="tablist" aria-label="Communication tools">
         {isSuperAdmin && (
           <>
               <button type="button" role="tab" aria-selected={activeTab === "templates"} onClick={() => changeTab("templates")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "templates" ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
@@ -515,7 +522,7 @@ export default function Communications() {
             {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
           </span>
         </button>
-      </div>
+      </div>}
 
       {activeTab === "inbox" && unreadMessageCount > 0 && (
         <div role="status" aria-live="polite" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
@@ -713,32 +720,44 @@ export default function Communications() {
       ) : activeTab === "notifications" && isSuperAdmin ? (
         <AdminNotifications />
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[minmax(16rem,0.7fr)_minmax(0,1.3fr)]">
+        <div className="grid min-h-[min(26rem,72dvh)] gap-5 xl:grid-cols-[minmax(16rem,0.7fr)_minmax(0,1.3fr)]">
           <section className={`${selectedConversation ? "hidden md:block" : "block"} rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
             <div className="mb-4 flex items-center justify-between gap-3">
-              <div><h3 className="font-bold">Agent conversations</h3><p className="mt-1 text-xs text-slate-500">Text-only messages from the platform chat.</p></div>
+              <div><h3 className="font-bold">User conversations</h3><p className="mt-1 text-xs text-slate-500">Text-only messages from the platform chat.</p></div>
               <button type="button" onClick={refreshInbox} aria-label="Refresh inbox" className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"><RefreshCw size={16} /></button>
             </div>
+              <label className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
+                <Search size={16} className="shrink-0 text-slate-400" aria-hidden="true" />
+                <span className="sr-only">Search conversations</span>
+                <input
+                  type="search"
+                  aria-label="Search conversations"
+                  value={conversationQuery}
+                  onChange={(event) => setConversationQuery(event.target.value)}
+                  placeholder="Search users or messages"
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                />
+              </label>
               <div className="max-h-[min(65vh,42rem)] space-y-2 overflow-y-auto">
-                {[...conversations]
+                {[...filteredConversations]
                   .sort((left, right) => Number(right.unreadCount > 0) - Number(left.unreadCount > 0))
                   .map((conversation) => (
-                    <button type="button" key={conversation._id} onClick={() => loadThread(conversation).catch((loadError) => { console.error("Support thread load failed:", loadError); toastError("Could not load this conversation."); })} className={`w-full rounded-xl border p-3 text-left ${conversation.unreadCount > 0 ? "border-amber-300 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20" : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"} ${selectedConversation?._id === conversation._id ? "ring-2 ring-[var(--accent)]" : ""}`}>
+                    <button type="button" key={conversation._id} aria-pressed={selectedConversation?._id === conversation._id} onClick={() => loadThread(conversation).catch((loadError) => { console.error("Support thread load failed:", loadError); toastError("Could not load this conversation."); })} className={`w-full rounded-xl border p-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${conversation.unreadCount > 0 ? "border-amber-300 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20" : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"} ${selectedConversation?._id === conversation._id ? "ring-2 ring-[var(--accent)]" : ""}`}>
                       <span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold">{conversation.user?.name || "Former agent"}</span><span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-500">{conversation.unreadCount > 0 && <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-rose-600 px-2 py-1 font-bold leading-none text-white" aria-label={`${conversation.unreadCount} unread messages`}>{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span>}{formatDate(conversation.lastMessageAt)}</span></span>
                       <span className="mt-1 block truncate text-xs text-slate-500">{conversation.lastMessage}</span>
                     </button>
                   ))}
-                {!conversations.length && <p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500 dark:bg-slate-950">No agent messages yet. Messages sent through the platform chatbot will appear here.</p>}
+                {!filteredConversations.length && <p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500 dark:bg-slate-950">{conversations.length ? "No conversations match your search." : "No user messages yet. Messages sent through the platform chat will appear here."}</p>}
               </div>
           </section>
-          <section className={`${selectedConversation ? "flex" : "hidden md:flex"} h-[min(68dvh,42rem)] min-h-[22rem] flex-col gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5`}>
+          <section className={`${selectedConversation ? "flex" : "hidden md:flex"} h-[min(72dvh,52rem)] min-h-[min(22rem,65dvh)] sm:min-h-[min(26rem,65dvh)] flex-col gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5`}>
             <div className="flex shrink-0 items-center gap-3">
               {selectedConversation && (
                 <button type="button" onClick={returnToConversationList} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 md:hidden">
                   <ArrowLeft size={16} aria-hidden="true" /> Inbox
                 </button>
               )}
-              <div className="min-w-0"><h3 className="truncate font-bold">{selectedConversation?.user?.name || "Select a conversation"}</h3><p className="mt-1 truncate text-sm text-slate-500">{selectedConversation?.user?.email || "Choose an agent on the left to read and reply."}</p></div>
+              <div className="min-w-0"><h3 className="truncate font-bold">{selectedConversation?.user?.name || "Select a conversation"}</h3><p className="mt-1 truncate text-sm text-slate-500">{selectedConversation?.user?.email || "Choose a user on the left to read and reply."}</p></div>
             </div>
             {selectedConversation && (
               <>
@@ -755,10 +774,17 @@ export default function Communications() {
                 />
                 <form onSubmit={sendReply} className="flex shrink-0 items-end gap-2">
                   <label className="sr-only" htmlFor="support-reply">Text reply</label>
-                  <textarea id="support-reply" required maxLength={2000} rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a text reply…" className="min-h-12 flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                  <textarea id="support-reply" required maxLength={2000} rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a text reply…" className="max-h-[30dvh] min-h-12 flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950" />
                   <button type="submit" disabled={busy || !reply.trim()} className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--accent-foreground)] disabled:opacity-50"><Send size={16} /> Reply</button>
                 </form>
               </>
+            )}
+            {!selectedConversation && (
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-xl bg-slate-50 p-6 text-center dark:bg-slate-950">
+                <MessageCircle size={28} className="mb-3 text-slate-400" aria-hidden="true" />
+                <h3 className="font-semibold">Choose a conversation</h3>
+                <p className="mt-1 max-w-sm text-sm text-slate-500">Select a user from the list to read their messages and reply.</p>
+              </div>
             )}
           </section>
         </div>

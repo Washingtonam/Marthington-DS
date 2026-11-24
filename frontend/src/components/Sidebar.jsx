@@ -87,14 +87,11 @@ const adminGroups = [
     title: "Management",
     icon: Settings,
     links: [
-      { to: "/admin/users", label: "User management", icon: Users, superAdminOnly: true },
+      { to: "/admin/people?tab=support", label: "People & Support", icon: MessageCircle },
       { to: "/admin/services-engine", label: "Services Management", icon: SlidersHorizontal, superAdminOnly: true },
-      { to: "/admin/communications", label: "Communications", icon: MessageCircle },
       { to: "/admin/articles", label: "Guides & updates", icon: BookOpenText, superAdminOnly: true },
       { to: "/admin/settings", label: "General settings", icon: Settings, superAdminOnly: true },
-      { to: "/admin/agents", label: "Agents", icon: Users, superAdminOnly: true },
-      { to: "/admin/agents/jobs", label: "Log jobs", icon: BriefcaseBusiness, superAdminOnly: true },
-      { to: "/admin/outsourced-jobs", label: "Outsourced jobs", icon: BriefcaseBusiness, superAdminOnly: true },
+      { to: "/admin/agents", label: "Agents & Jobs", icon: BriefcaseBusiness, superAdminOnly: true },
       { to: "/admin/wild-thoughts", label: "Wild Thoughts", icon: Lightbulb, superAdminOnly: true },
     ],
   },
@@ -205,7 +202,7 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose, on
         previousSupportMessages.current = next;
         newMessages.forEach((message) => {
           const description = isAdminWorkspace
-            ? `New support message from ${message.title}. Open Communications to read it.`
+            ? `New support message from ${message.title}. Open People & Support to read it.`
             : "Support has replied to your message. Open Chat with support to read it.";
           toastInfo(description, 7000);
           if (document.hidden && "Notification" in window && Notification.permission === "granted") {
@@ -214,7 +211,7 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose, on
             });
             notification.onclick = () => {
               window.focus();
-              window.location.href = isAdminWorkspace ? "/admin/communications?tab=inbox" : "/support-chat";
+              window.location.href = isAdminWorkspace ? "/admin/people?tab=support" : "/support-chat";
             };
           }
         });
@@ -239,7 +236,7 @@ export default function Sidebar({ open, isMobile, collapsed = false, onClose, on
         links: group.links.filter((link) => !link.superAdminOnly || isSuperAdmin)
           .map((link) => {
             if (link.to === "/admin/payments") return { ...link, badge: pendingPayments };
-            if (link.to === "/admin/communications") return { ...link, badge: visibleSupportUnreadCount };
+            if (link.to === "/admin/people?tab=support") return { ...link, badge: visibleSupportUnreadCount };
             return link;
           }),
       })).filter((group) => group.links.length > 0);
