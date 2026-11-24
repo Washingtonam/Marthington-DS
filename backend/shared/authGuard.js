@@ -53,8 +53,19 @@ const verifyToken = async (req, res, next) => {
     });
   }
 
-  req.user = { id: user.id, _id: user._id, email: user.email, role: user.role };
+  req.user = {
+    id: user.id,
+    _id: user._id,
+    email: user.email,
+    role: user.role,
+    pricingTier: user.pricingTier || "standard",
+  };
   return next();
+};
+
+const optionalVerifyToken = (req, res, next) => {
+  if (!req.headers.authorization) return next();
+  return verifyToken(req, res, next);
 };
 
 /**
@@ -79,4 +90,4 @@ const isAdmin = (req, res, next) => {
   });
 };
 
-module.exports = { verifyToken, isAdmin };
+module.exports = { verifyToken, optionalVerifyToken, isAdmin };

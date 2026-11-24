@@ -54,6 +54,7 @@ export default function AdminUsers() {
   const [fundAction, setFundAction] = useState("add");
   const [fundNote, setFundNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [tierSavingUserId, setTierSavingUserId] = useState("");
   const [message, setMessage] = useState({ type: "", text: "" });
 
   // Fetch users with pagination and search
@@ -461,6 +462,25 @@ export default function AdminUsers() {
     setFundNote("");
   };
 
+  const updatePricingTier = async (targetUser, pricingTier) => {
+    setTierSavingUserId(targetUser._id);
+    setMessage({ type: "", text: "" });
+    try {
+      const response = await api.put(`/api/admin/users/${targetUser._id}/pricing-tier`, { pricingTier });
+      setUsers((currentUsers) => currentUsers.map((user) => (
+        user._id === targetUser._id ? { ...user, pricingTier: response.data?.data?.pricingTier || pricingTier } : user
+      )));
+      setMessage({ type: "success", text: "User pricing tier updated." });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || "Failed to update user pricing tier.",
+      });
+    } finally {
+      setTierSavingUserId("");
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 text-slate-900 dark:text-slate-100">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -681,6 +701,21 @@ export default function AdminUsers() {
                       {u.approvalStatus || "approved"}
                     </span>
                   </div>
+                  {isSuperAdmin && u.role === "user" && (
+                    <label className="mb-4 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                      Customer pricing tier
+                      <select
+                        value={u.pricingTier || "standard"}
+                        disabled={tierSavingUserId === u._id}
+                        onChange={(event) => updatePricingTier(u, event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                        aria-label={`Pricing tier for ${u.email}`}
+                      >
+                        <option value="standard">Standard</option>
+                        <option value="reseller">Reseller</option>
+                      </select>
+                    </label>
+                  )}
 
                   <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
                     <div>Registered: {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</div>
@@ -788,6 +823,7 @@ export default function AdminUsers() {
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Approval</th>
+                    <th className="px-4 py-3">Pricing tier</th>
                     <th className="px-4 py-3 text-right">Balance</th>
                     <th className="px-4 py-3">Actions</th>
                   </tr>
@@ -808,6 +844,22 @@ export default function AdminUsers() {
                       <td className="px-4 py-3 align-top text-slate-700 dark:text-slate-200">{u.role || "user"}</td>
                       <td className="px-4 py-3 align-top text-slate-700 dark:text-slate-200">{u.status || "active"}</td>
                       <td className="px-4 py-3 align-top capitalize text-slate-700 dark:text-slate-200">{u.approvalStatus || "approved"}</td>
+                      <td className="px-4 py-3 align-top text-slate-700 dark:text-slate-200">
+                        {isSuperAdmin && u.role === "user" ? (
+                          <select
+                            value={u.pricingTier || "standard"}
+                            disabled={tierSavingUserId === u._id}
+                            onChange={(event) => updatePricingTier(u, event.target.value)}
+                            className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                            aria-label={`Pricing tier for ${u.email}`}
+                          >
+                            <option value="standard">Standard</option>
+                            <option value="reseller">Reseller</option>
+                          </select>
+                        ) : (
+                          u.pricingTier || "standard"
+                        )}
+                      </td>
                       <td className="px-4 py-3 align-top text-right font-semibold text-emerald-600 dark:text-emerald-400">₦{(u.walletBalanceKobo / 100 || 0).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 align-top">
                         <div className="flex gap-2">

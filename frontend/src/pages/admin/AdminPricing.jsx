@@ -38,6 +38,7 @@ const defaultServiceModel = {
   name: "",
   status: "active",
   price: 0,
+  tierPrices: { standard: "", reseller: "" },
   cost: "",
   commissionType: "FLAT",
   commissionValue: 0,
@@ -163,6 +164,10 @@ export default function AdminPricing() {
       name: service.name || "",
       status: service.status || "active",
       price: service.price || 0,
+      tierPrices: {
+        standard: service.tierPrices?.standard ?? "",
+        reseller: service.tierPrices?.reseller ?? "",
+      },
       cost: service.cost ?? "",
       commissionType: service.commissionType || "FLAT",
       commissionValue: service.commissionValue ?? 0,
@@ -453,6 +458,18 @@ export default function AdminPricing() {
         alert("Service price must be a valid amount of zero or greater.");
         return;
       }
+      const tierPrices = {};
+      for (const tier of ["standard", "reseller"]) {
+        const tierPrice = String(serviceForm.tierPrices?.[tier] ?? "").trim();
+        if (tierPrice === "") {
+          tierPrices[tier] = null;
+        } else if (!Number.isFinite(Number(tierPrice)) || Number(tierPrice) < 0) {
+          alert(`${tier === "standard" ? "Standard" : "Reseller"} price must be a valid amount of zero or greater.`);
+          return;
+        } else {
+          tierPrices[tier] = Number(tierPrice);
+        }
+      }
       const costText = String(serviceForm.cost ?? "").trim();
       const cost = costText === "" ? null : Number(costText);
       if (cost !== null && (!Number.isFinite(cost) || cost < 0)) {
@@ -468,6 +485,7 @@ export default function AdminPricing() {
         name: String(serviceForm.name).trim(),
         status: serviceForm.status,
         price,
+        tierPrices,
         cost,
         commissionType: serviceForm.commissionType,
         commissionValue: Number(serviceForm.commissionValue),
@@ -787,6 +805,34 @@ export default function AdminPricing() {
                 <BadgeDollarSign size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="number" value={serviceForm.price} onChange={(e) => updateField("price", e.target.value)} className="w-full border border-gray-200 rounded-xl p-3 pl-11" />
               </div>
+            </Field>
+            <Field label="Standard price (₦)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={serviceForm.tierPrices?.standard ?? ""}
+                onChange={(event) => setServiceForm((current) => ({
+                  ...current,
+                  tierPrices: { ...current.tierPrices, standard: event.target.value },
+                }))}
+                placeholder={`Use default: ₦${Number(serviceForm.price || 0).toLocaleString()}`}
+                className="w-full border border-gray-200 rounded-xl p-3"
+              />
+            </Field>
+            <Field label="Reseller price (₦)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={serviceForm.tierPrices?.reseller ?? ""}
+                onChange={(event) => setServiceForm((current) => ({
+                  ...current,
+                  tierPrices: { ...current.tierPrices, reseller: event.target.value },
+                }))}
+                placeholder={`Use default: ₦${Number(serviceForm.price || 0).toLocaleString()}`}
+                className="w-full border border-gray-200 rounded-xl p-3"
+              />
             </Field>
             <Field label="Cost of service (₦)" className="md:col-span-2">
               <div className="relative">

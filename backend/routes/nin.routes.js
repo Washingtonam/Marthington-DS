@@ -11,7 +11,7 @@ const VerificationRequest = require("../models/VerificationRequest.model");
 const Transaction = require("../models/transaction.model");
 const Pricing = require("../models/Pricing.model");
 const { createVerificationRequestRecord, normalizeVerificationApiPayload, isServiceAvailable } = require("../services/verification.service");
-const { verifyToken, isAdmin } = require("../shared/authGuard");
+const { verifyToken, optionalVerifyToken, isAdmin } = require("../shared/authGuard");
 const { validateVerification } = require("../shared/validators");
 const {
   SUPER_ADMIN_EMAIL,
@@ -41,7 +41,7 @@ router.get("/requests", verifyToken, servicesController.getServiceRequests);
 // ==============================================================
 // 🧩 ROUTE 1C: PUBLIC SERVICE CATALOG
 // ==============================================================
-router.get("/catalog", servicesController.getServiceCatalog);
+router.get("/catalog", optionalVerifyToken, servicesController.getServiceCatalog);
 router.get("/categories", servicesController.getServiceCategories);
 
 // ==============================================================
@@ -101,7 +101,9 @@ router.post("/verify", verifyToken, async (req, res) => {
     }
 
     const isSuperAdmin = user.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim();
-    const unitPriceNaira = pricing.nin?.unitPrice ?? 250;
+    const unitPriceNaira = pricing.nin?.tierPrices?.[user.pricingTier || "standard"]
+      ?? pricing.nin?.unitPrice
+      ?? 250;
 
     if (nin === "00000000000") {
       const mockCostKobo = Math.round(unitPriceNaira * 100);

@@ -191,6 +191,27 @@ describe("AdminPricing", () => {
     expect(await screen.findByText("₦2,000 commission")).toBeTruthy();
   });
 
+  test("saves separate Standard and Reseller prices for a service", async () => {
+    renderAdminPricing();
+
+    const serviceCard = (await screen.findAllByRole("button"))
+      .find((button) => button.textContent.includes("No Recordvalidation-noRecord"));
+    fireEvent.click(serviceCard);
+    expect(await screen.findByRole("dialog", { name: "Edit Service" })).toBeTruthy();
+
+    const standardInput = screen.getByText("Standard price (₦)").closest("label").querySelector("input");
+    const resellerInput = screen.getByText("Reseller price (₦)").closest("label").querySelector("input");
+    fireEvent.change(standardInput, { target: { value: "950" } });
+    fireEvent.change(resellerInput, { target: { value: "700" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Service" }));
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith(
+      "/api/admin/services/validation-noRecord",
+      expect.objectContaining({ tierPrices: { standard: 950, reseller: 700 } }),
+      expect.any(Object),
+    ));
+  });
+
   test("saves the configured service cost to the catalog", async () => {
     renderAdminPricing();
 

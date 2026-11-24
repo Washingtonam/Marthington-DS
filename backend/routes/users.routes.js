@@ -182,7 +182,11 @@ router.put("/profile", verifyToken, async (req, res) => {
     }
 
     const updatedUser = await User.findById(user._id).select("-password").lean();
-    return res.json({ success: true, message: "Account details updated.", data: updatedUser });
+    return res.json({
+      success: true,
+      message: "Account details updated.",
+      data: { ...updatedUser, pricingTier: updatedUser.pricingTier || "standard" },
+    });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({ success: false, message: "That email address is already in use." });

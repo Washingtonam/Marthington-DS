@@ -61,7 +61,7 @@ describe("agent account approval during registration and login", () => {
     expect(JSON.stringify(AuditLog.create.mock.calls)).not.toContain("new-secret");
   });
 
-  it("creates self-registered agents as pending and returns review status", async () => {
+  it("creates self-registered users as Standard and ignores a submitted Reseller tier", async () => {
     User.findOne.mockResolvedValue(null);
     User.create.mockImplementation(async (data) => ({
       ...data,
@@ -71,11 +71,18 @@ describe("agent account approval during registration and login", () => {
       units: 0,
     }));
 
-    const response = await request(app).post("/api/auth/register").send(registration());
+    const response = await request(app)
+      .post("/api/auth/register")
+      .send({ ...registration(), pricingTier: "reseller" });
 
     expect(response.status).toBe(201);
     expect(response.body.user.approvalStatus).toBe("pending");
-    expect(User.create).toHaveBeenCalledWith(expect.objectContaining({ approvalStatus: "pending", role: "user" }));
+    expect(response.body.user.pricingTier).toBe("standard");
+    expect(User.create).toHaveBeenCalledWith(expect.objectContaining({
+      approvalStatus: "pending",
+      role: "user",
+      pricingTier: "standard",
+    }));
   });
 
   it("keeps configured super-admin registration approved", async () => {

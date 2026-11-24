@@ -1,8 +1,10 @@
 jest.mock('../models/User.model', () => ({ findById: jest.fn() }));
+jest.mock('../models/AuditLog.model', () => ({ create: jest.fn().mockResolvedValue(undefined) }));
 
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User.model');
+const AuditLog = require('../models/AuditLog.model');
 const Pricing = require('../models/Pricing.model');
 const app = require('../app');
 
@@ -11,10 +13,44 @@ const makeSuperAdminToken = () => jwt.sign({
   email: 'admin@xcombinator.com',
   role: 'super_admin',
 }, process.env.JWT_SECRET || 'test-jwt-secret');
+const makeUserToken = () => jwt.sign({
+  id: '507f1f77bcf86cd799439011',
+  email: 'user@example.com',
+  role: 'user',
+}, process.env.JWT_SECRET || 'test-jwt-secret');
+const makeAdminToken = () => jwt.sign({
+  id: 'admin-user-2',
+  email: 'admin@example.com',
+  role: 'admin',
+}, process.env.JWT_SECRET || 'test-jwt-secret');
 
 describe('service catalog API', () => {
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('uses the configured tier price and falls back to the existing catalog price', () => {
+    const service = { price: 1000, tierPrices: { standard: 950, reseller: null } };
+
+    expect(Pricing.getServicePriceForTier(service, 'standard')).toBe(950);
+    expect(Pricing.getServicePriceForTier(service, 'reseller')).toBe(1000);
+    expect(Pricing.getServicePriceForTier({ price: 1200 }, 'reseller')).toBe(1200);
+  });
+
+  it('returns only the selected tier price from public pricing data', () => {
+    const publicPricing = Pricing.getPublicPricingForTier({
+      nin: { unitPrice: 250, tierPrices: { standard: 250, reseller: 180 } },
+      serviceCatalog: [{
+        serviceCode: 'test-service',
+        price: 1000,
+        tierPrices: { standard: 1000, reseller: 700 },
+      }],
+    }, 'reseller');
+
+    expect(publicPricing.nin.unitPrice).toBe(180);
+    expect(publicPricing.nin.tierPrices).toBeUndefined();
+    expect(publicPricing.serviceCatalog[0].price).toBe(700);
+    expect(publicPricing.serviceCatalog[0].tierPrices).toBeUndefined();
   });
 
   it('includes the DOB modification form fields and parent details in the default catalog', () => {
@@ -43,6 +79,91 @@ describe('service catalog API', () => {
     expect(response.body.services.some((service) => service.serviceCode === 'validation-noRecord')).toBe(true);
     expect(response.body.services.filter((service) => service.category === 'NIMC').length).toBeGreaterThan(0);
     expect(response.body.services.some((service) => service.serviceCode === 'cac-sole-proprietorship')).toBe(true);
+  });
+
+  it('serves a logged-in user their own tier price without returning other tier prices', async () => {
+    User.findById.mockResolvedValue({
+      id: '507f1f77bcf86cd799439011',
+      _id: '507f1f77bcf86cd799439011',
+      email: 'reseller@example.com',
+      role: 'user',
+      pricingTier: 'reseller',
+      status: 'active',
+      approvalStatus: 'approved',
+    });
+    jest.spyOn(Pricing, 'getPricing').mockResolvedValue({
+      serviceCatalog: [{
+        serviceCode: 'test-service',
+        category: 'NIMC',
+        name: 'Test Service',
+        status: 'active',
+        price: 1000,
+        tierPrices: { standard: 1000, reseller: 700 },
+      }],
+      categories: [{ slug: 'nimc', label: 'NIMC', isActive: true }],
+    });
+    jest.spyOn(Pricing, 'getCategories').mockResolvedValue([
+      { slug: 'nimc', label: 'NIMC', isActive: true },
+    ]);
+
+    const response = await request(app)
+      .get('/api/services/catalog')
+      .set('Authorization', `Bearer ${makeUserToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.services[0].price).toBe(700);
+    expect(response.body.services[0].tierPrices).toBeUndefined();
+  });
+
+  it('assigns a tier only through the super-admin user-management endpoint', async () => {
+    const adminId = 'admin-user-1';
+    const targetId = '507f1f77bcf86cd799439012';
+    const target = {
+      _id: targetId,
+      role: 'user',
+      pricingTier: 'standard',
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    User.findById.mockImplementation((id) => Promise.resolve(String(id) === adminId
+      ? {
+          id: adminId,
+          _id: adminId,
+          email: 'admin@xcombinator.com',
+          role: 'super_admin',
+          status: 'active',
+          approvalStatus: 'approved',
+        }
+      : target));
+
+    const response = await request(app)
+      .put(`/api/admin/users/${targetId}/pricing-tier`)
+      .set('Authorization', `Bearer ${makeSuperAdminToken()}`)
+      .send({ pricingTier: 'reseller' });
+
+    expect(response.status).toBe(200);
+    expect(target.pricingTier).toBe('reseller');
+    expect(target.save).toHaveBeenCalledTimes(1);
+    expect(AuditLog.create).toHaveBeenCalled();
+
+    User.findById.mockImplementation((id) => Promise.resolve({
+      id: String(id),
+      _id: String(id),
+      email: String(id) === 'admin-user-2' ? 'admin@example.com' : 'user@example.com',
+      role: String(id) === 'admin-user-2' ? 'admin' : 'user',
+      status: 'active',
+      approvalStatus: 'approved',
+    }));
+    const adminForbiddenResponse = await request(app)
+      .put(`/api/admin/users/${targetId}/pricing-tier`)
+      .set('Authorization', `Bearer ${makeAdminToken()}`)
+      .send({ pricingTier: 'reseller' });
+    expect(adminForbiddenResponse.status).toBe(403);
+
+    const forbiddenResponse = await request(app)
+      .put(`/api/admin/users/${targetId}/pricing-tier`)
+      .set('Authorization', `Bearer ${makeUserToken()}`)
+      .send({ pricingTier: 'reseller' });
+    expect(forbiddenResponse.status).toBe(403);
   });
 
   it('filters admin catalog services by the canonical NIMC category', async () => {
@@ -166,12 +287,14 @@ describe('service catalog API', () => {
       .send({
         commissionType: 'PERCENTAGE',
         commissionValue: 12.5,
+        tierPrices: { standard: 5200, reseller: 4100 },
       });
 
     expect(updateResponse.status).toBe(200);
     expect(pricing.serviceCatalog[0]).toEqual(expect.objectContaining({
       commissionType: 'PERCENTAGE',
       commissionValue: 12.5,
+      tierPrices: { standard: 5200, reseller: 4100 },
     }));
     expect(pricing.markModified).toHaveBeenCalledWith('serviceCatalog');
     expect(pricing.save).toHaveBeenCalledTimes(1);
@@ -185,6 +308,7 @@ describe('service catalog API', () => {
       serviceCode: 'existing-service',
       commissionType: 'PERCENTAGE',
       commissionValue: 12.5,
+      tierPrices: { standard: 5200, reseller: 4100 },
     }));
   });
 
@@ -262,11 +386,16 @@ describe('service catalog API', () => {
       .put('/api/admin/services/existing-service')
       .auth(token, { type: 'bearer' })
       .send({ cost: -1 });
+    const negativeTierPriceResponse = await request(app)
+      .put('/api/admin/services/existing-service')
+      .auth(token, { type: 'bearer' })
+      .send({ tierPrices: { standard: 100, reseller: -1 } });
 
     expect(createResponse.status).toBe(400);
     expect(updateResponse.status).toBe(400);
     expect(negativeCostCreateResponse.status).toBe(400);
     expect(negativeCostUpdateResponse.status).toBe(400);
+    expect(negativeTierPriceResponse.status).toBe(400);
     expect(pricing.save).not.toHaveBeenCalled();
   });
 
@@ -289,11 +418,14 @@ describe('service catalog API', () => {
       .set('Authorization', `Bearer ${makeSuperAdminToken()}`)
       .send({
         bvn: { unitPrice: 425 },
+        ninTierPrices: { standard: 250, reseller: 180 },
         platformServices: { verifyNin: { enabled: false } },
       });
 
     expect(response.status).toBe(200);
     expect(pricing.bvn.unitPrice).toBe(425);
+    expect(pricing.nin.tierPrices.standard).toBe(250);
+    expect(pricing.nin.tierPrices.reseller).toBe(180);
     expect(pricing.platformServices.verifyNin.enabled).toBe(false);
     expect(markModified).toHaveBeenCalledWith('bvn');
     expect(markModified).toHaveBeenCalledWith('platformServices');

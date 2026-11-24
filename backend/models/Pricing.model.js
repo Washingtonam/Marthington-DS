@@ -146,6 +146,10 @@ const normalizeCatalogService = (service = {}, fallback = {}) => {
     type: String(serviceData.type || fallbackData.type || '').trim(),
     status: ['active', 'paused', 'disabled'].includes(serviceData.status || fallbackData.status) ? (serviceData.status || fallbackData.status) : 'active',
     price: Number(serviceData.price ?? fallbackData.price ?? 0) || 0,
+    tierPrices: {
+      standard: serviceData.tierPrices?.standard ?? fallbackData.tierPrices?.standard ?? null,
+      reseller: serviceData.tierPrices?.reseller ?? fallbackData.tierPrices?.reseller ?? null,
+    },
     cost: serviceData.cost == null && fallbackData.cost == null
       ? null
       : Math.max(Number(serviceData.cost ?? fallbackData.cost), 0),
@@ -190,6 +194,10 @@ const pricingSchema = new mongoose.Schema({
       type: { type: String, default: '' },
       status: { type: String, enum: ['active', 'paused', 'disabled'], default: 'active' },
       price: { type: Number, default: 0 },
+      tierPrices: {
+        standard: { type: Number, min: 0, default: null },
+        reseller: { type: Number, min: 0, default: null },
+      },
       cost: { type: Number, default: null, min: 0 },
       commissionType: { type: String, enum: ['FLAT', 'PERCENTAGE'], default: undefined },
       commissionValue: { type: Number, min: 0, default: undefined },
@@ -222,6 +230,10 @@ const pricingSchema = new mongoose.Schema({
       type: Number,
       default: 150,
       min: 1,
+    },
+    tierPrices: {
+      standard: { type: Number, min: 0, default: null },
+      reseller: { type: Number, min: 0, default: null },
     },
   },
 
@@ -324,6 +336,28 @@ pricingSchema.statics.getPricing = async function () {
 
 pricingSchema.statics.getDefaultServiceCatalog = function () {
   return catalogFallback.map((service) => normalizeCatalogService(service));
+};
+
+pricingSchema.statics.getServicePriceForTier = function (service, tier = "standard") {
+  const tierPrice = service?.tierPrices?.[tier];
+  if (tierPrice == null) return Number(service?.price ?? 0) || 0;
+  const price = Number(tierPrice);
+  return Number.isFinite(price) && price >= 0 ? price : Number(service?.price ?? 0) || 0;
+};
+
+pricingSchema.statics.getPublicPricingForTier = function (pricing, tier = "standard") {
+  const pricingData = pricing?.toObject ? pricing.toObject() : { ...(pricing || {}) };
+  if (pricingData.nin) {
+    pricingData.nin.unitPrice = pricingData.nin.tierPrices?.[tier] ?? pricingData.nin.unitPrice;
+    delete pricingData.nin.tierPrices;
+  }
+  pricingData.serviceCatalog = (pricingData.serviceCatalog || []).map((service) => {
+    const publicService = { ...service };
+    publicService.price = this.getServicePriceForTier(service, tier);
+    delete publicService.tierPrices;
+    return publicService;
+  });
+  return pricingData;
 };
 
 pricingSchema.statics.replaceServiceCatalog = function (catalog) {

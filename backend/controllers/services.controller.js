@@ -204,7 +204,7 @@ exports.getRequestById = async (req, res) => {
 exports.getPricing = async (req, res) => {
   try {
     const pricing = await Pricing.getPricing();
-    return res.json(pricing);
+    return res.json(Pricing.getPublicPricingForTier(pricing, req.user?.pricingTier || "standard"));
   } catch (error) {
     console.error('PRICING_FETCH_ERROR:', error);
     return res.status(500).json({ error: 'Failed to load pricing' });
@@ -262,6 +262,11 @@ exports.getServiceCatalog = async (req, res) => {
       const matchesCategory = !category || normalizeCategorySlug(service.category) === normalizeCategorySlug(category);
       const matchesStatus = !status || String(service.status || 'active') === status.toLowerCase();
       return isVisibleCategory && matchesCategory && matchesStatus;
+    }).map((service) => {
+      const publicService = service.toObject ? service.toObject() : { ...service };
+      publicService.price = Pricing.getServicePriceForTier(service, req.user?.pricingTier || "standard");
+      delete publicService.tierPrices;
+      return publicService;
     });
 
     return res.json({
@@ -306,9 +311,11 @@ const findCatalogService = (catalog, serviceIdentifier, typeIdentifier) => {
   }) || null;
 };
 
-const resolveServicePrice = (pricing, service, type, slipType, catalogService) => {
-  const directPrice = Number(catalogService?.price ?? 0);
-  if (catalogService && directPrice > 0) {
+const resolveServicePrice = (pricing, service, type, slipType, catalogService, pricingTier = "standard") => {
+  const directPrice = catalogService
+    ? Pricing.getServicePriceForTier(catalogService, pricingTier)
+    : Number(catalogService?.price ?? 0);
+  if (catalogService && (directPrice > 0 || catalogService.tierPrices?.[pricingTier] != null)) {
     return {
       amount: directPrice,
       amountKobo: Math.round(directPrice * 100)
@@ -412,7 +419,12 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
         service,
         type
       );
-      const resolvedPrice = resolveServicePrice(pricing, service, type, slipType, catalogService);
+      const user = await User.findById(userId).session(session);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const resolvedPrice = resolveServicePrice(pricing, service, type, slipType, catalogService, user.pricingTier);
 
       if (!resolvedPrice) {
         throw new Error('Unable to resolve service price from current pricing configuration.');
@@ -424,11 +436,6 @@ const processServiceRequest = async ({ userId, service, type, nin, slipType, pro
 
       const { amount, amountKobo } = resolvedPrice;
       const normalizedCategory = String(catalogService?.category || category || 'NIMC').trim().toUpperCase() || 'NIMC';
-
-      const user = await User.findById(userId).session(session);
-      if (!user) {
-        throw new Error('User not found');
-      }
 
       if (user.walletBalanceKobo == null) {
         user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);

@@ -10,6 +10,8 @@ const pricingSections = [
     fields: [
       { path: "unitPrice", label: "Customer unit price (₦)" },
       { path: "agentPrice", label: "Agent unit price (₦)" },
+      { path: "ninTierPrices.standard", label: "Standard user unit price (₦)" },
+      { path: "ninTierPrices.reseller", label: "Reseller unit price (₦)" },
     ],
   },
 ];
@@ -17,6 +19,7 @@ const pricingSections = [
 const initialPricing = {
   unitPrice: "250",
   agentPrice: "150",
+  ninTierPrices: { standard: "250", reseller: "250" },
   verifyNinEnabled: true,
 };
 
@@ -50,6 +53,10 @@ export default function CoreServicePricing() {
         setValues({
           unitPrice: String(data?.nin?.unitPrice ?? 250),
           agentPrice: String(data?.nin?.agentPrice ?? 150),
+          ninTierPrices: {
+            standard: String(data?.nin?.tierPrices?.standard ?? data?.nin?.unitPrice ?? 250),
+            reseller: String(data?.nin?.tierPrices?.reseller ?? data?.nin?.unitPrice ?? 250),
+          },
           verifyNinEnabled: data?.platformServices?.verifyNin?.enabled !== false,
         });
         setLoaded(true);
@@ -88,6 +95,10 @@ export default function CoreServicePricing() {
       const payload = {
         unitPrice: Number(values.unitPrice),
         agentPrice: Number(values.agentPrice),
+        ninTierPrices: {
+          standard: Number(values.ninTierPrices.standard),
+          reseller: Number(values.ninTierPrices.reseller),
+        },
         platformServices: { verifyNin: { enabled: values.verifyNinEnabled } },
       };
       await api.put("/api/admin/pricing", payload);
@@ -118,7 +129,7 @@ export default function CoreServicePricing() {
     <section className="mb-8 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
       <div className="mb-5">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Platform service pricing</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage the API-powered Verify NIN service. NIMC and CAC catalog services are managed below.</p>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage Verify NIN prices by customer tier. NIMC and CAC catalog services are managed below.</p>
       </div>
 
       {loading ? (

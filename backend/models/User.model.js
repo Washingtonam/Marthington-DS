@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema({
     commissionBalanceKobo: { type: Number, default: 0 },
     units: { type: Number, default: 0 },
     role: { type: String, enum: ["user", "admin", "super_admin"], default: "user" },
+    pricingTier: { type: String, enum: ["standard", "reseller"], default: "standard" },
     status: { type: String, enum: ["active", "suspended"], default: "active" },
     approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" },
     lastLogin: { type: Date, default: null },

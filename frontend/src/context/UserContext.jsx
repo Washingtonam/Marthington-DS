@@ -21,6 +21,7 @@ export function UserProvider({ children }) {
     const normalized = {
       ...userData,
       id: userData.id || userData._id,
+      pricingTier: userData.pricingTier || "standard",
       units: userData.units || 0,
       walletBalance: Number(
         userData.walletBalance

@@ -1,7 +1,7 @@
 
 const express = require("express");
 const cors = require("cors");
-const { verifyToken } = require("./shared/authGuard");
+const { verifyToken, optionalVerifyToken } = require("./shared/authGuard");
 const app = express();
 
 // Allowed frontend origins for production (explicit - do not use '*')
@@ -112,11 +112,15 @@ app.get("/api/transactions", verifyToken, async (req, res) => {
 });
 
 // Public pricing endpoint (frontend requests GET /api/pricing)
-app.get("/api/pricing", async (req, res) => {
+app.get("/api/pricing", optionalVerifyToken, async (req, res) => {
     try {
         const Pricing = require("./models/Pricing.model");
         const pricing = await Pricing.getPricing();
-        res.json(pricing);
+        const isAdmin = ["admin", "super_admin"].includes(req.user?.role);
+        const pricingData = isAdmin
+            ? (pricing.toObject ? pricing.toObject() : { ...pricing })
+            : Pricing.getPublicPricingForTier(pricing, req.user?.pricingTier || "standard");
+        res.json(pricingData);
     } catch (err) {
         console.error("PRICING_FETCH_ERROR:", err);
         res.status(500).json({ message: "Failed to load pricing" });

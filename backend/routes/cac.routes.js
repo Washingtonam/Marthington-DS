@@ -23,6 +23,9 @@ router.post("/submit", verifyToken, async (req, res) => {
     const { serviceType, businessName1, businessName2, companyEmail, companyPhone, category, state, lga, shopNo, streetAddress, proprietors, witness, secretary, paymentSource } = req.body;
 
     const pricing = await Pricing.getPricing();
+    const user = await User.findById(userId).session(session);
+    if (!user) throw new Error("User not found");
+
     const rates = {
       sole_proprietorship: pricing?.cacServices?.soleProprietorship ?? 28000,
       partnership: pricing?.cacServices?.partnership ?? 32000,
@@ -39,16 +42,15 @@ router.post("/submit", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "This CAC service is not currently available." });
     }
 
-    const cost = catalogService ? Number(catalogService.price || 0) : rates[serviceType];
+    const cost = catalogService
+      ? Pricing.getServicePriceForTier(catalogService, user?.pricingTier || "standard")
+      : rates[serviceType];
     if (!Number.isFinite(cost)) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({ message: "Unable to resolve the current CAC service price." });
     }
     const costKobo = Math.round(Number(cost) * 100);
-
-    const user = await User.findById(userId).session(session);
-    if (!user) throw new Error("User not found");
 
     if (user.walletBalanceKobo == null) {
       user.walletBalanceKobo = Math.round((user.walletBalance || 0) * 100);

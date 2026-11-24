@@ -92,6 +92,7 @@ router.post("/register", async (req, res) => {
       lga,
       password: hashedPassword,
       role: assignedRole,
+      pricingTier: "standard",
       approvalStatus: assignedRole === "super_admin" ? "approved" : "pending",
     });
 
@@ -107,6 +108,7 @@ router.post("/register", async (req, res) => {
         walletBalance: newUser.walletBalance || 0,
         walletBalanceKobo: newUser.walletBalanceKobo || 0,
         role: newUser.role,
+        pricingTier: newUser.pricingTier || "standard",
         approvalStatus: newUser.approvalStatus,
       },
     });
@@ -198,6 +200,7 @@ router.post("/login", async (req, res) => {
         walletBalance: user.walletBalance || 0,
         walletBalanceKobo: user.walletBalanceKobo || 0,
         role: user.role,
+        pricingTier: user.pricingTier || "standard",
       },
     });
 

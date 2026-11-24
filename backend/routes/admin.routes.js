@@ -2517,6 +2517,46 @@ router.put("/users/:userId/profile", isSuperAdmin, async (req, res) => {
   }
 });
 
+router.put("/users/:userId/pricing-tier", isSuperAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { pricingTier } = req.body || {};
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: "Invalid user identifier." });
+    }
+    if (!["standard", "reseller"].includes(pricingTier)) {
+      return res.status(400).json({ success: false, message: "Choose a valid customer pricing tier." });
+    }
+
+    const user = await User.findById(userId);
+    if (!user || user.role !== "user") {
+      return res.status(404).json({ success: false, message: "Registered user not found." });
+    }
+
+    user.pricingTier = pricingTier;
+    await user.save();
+    try {
+      await AuditLog.create({
+        action: "USER_PRICING_TIER_UPDATED",
+        performedBy: req.user.email || req.user.id,
+        userId: user._id,
+        note: `Customer pricing tier changed to ${pricingTier}.`,
+      });
+    } catch (auditError) {
+      console.warn("User pricing tier audit log creation failed:", auditError.message);
+    }
+
+    return res.json({
+      success: true,
+      message: "User pricing tier updated.",
+      data: { _id: user._id, pricingTier: user.pricingTier },
+    });
+  } catch (error) {
+    console.error("ADMIN USER PRICING TIER UPDATE ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to update user pricing tier." });
+  }
+});
+
 // GET combined user history (transactions + service requests)
 router.get('/users/:userId/history', isAdmin, async (req, res) => {
   try {
@@ -3009,6 +3049,7 @@ router.put("/pricing", isSuperAdmin, async (req, res) => {
     const priceValues = [
       req.body.unitPrice,
       req.body.agentPrice,
+      ...Object.values(req.body.ninTierPrices || {}),
       req.body.bvn?.unitPrice,
       ...Object.values(req.body.validation || {}),
       ...Object.values(req.body.ipe || {}),
@@ -3027,11 +3068,15 @@ router.put("/pricing", isSuperAdmin, async (req, res) => {
     ) {
       return res.status(400).json({ success: false, message: "NIN and BVN verification prices must be greater than zero." });
     }
+    if (req.body.ninTierPrices && Object.keys(req.body.ninTierPrices).some((tier) => !["standard", "reseller"].includes(tier))) {
+      return res.status(400).json({ success: false, message: "Invalid NIN pricing tier." });
+    }
 
     let pricing = await Pricing.findOne();
     if (!pricing) pricing = new Pricing({});
 
     if (!pricing.nin) pricing.nin = {};
+    if (!pricing.nin.tierPrices) pricing.nin.tierPrices = {};
     if (!pricing.ninServices) pricing.ninServices = { validation: {}, selfService: {}, ipe: {}, modification: {} };
     if (!pricing.ninServices.selfService) pricing.ninServices.selfService = {};
     if (!pricing.bvn) pricing.bvn = {};
@@ -3044,6 +3089,9 @@ router.put("/pricing", isSuperAdmin, async (req, res) => {
       agentPrice: req.body.agentPrice ?? pricing.nin.agentPrice,
       mode: req.body.mode ?? pricing.nin.mode,
     });
+    if (req.body.ninTierPrices) {
+      Object.assign(pricing.nin.tierPrices, req.body.ninTierPrices);
+    }
 
     if (req.body.bvn) {
       Object.assign(pricing.bvn, {
@@ -3123,6 +3171,7 @@ router.post("/services", isSuperAdmin, async (req, res) => {
       status = 'active',
       price = 0,
       cost = null,
+      tierPrices,
       commissionType,
       commissionValue,
       metadata = {},
@@ -3135,6 +3184,8 @@ router.post("/services", isSuperAdmin, async (req, res) => {
     if (priceError) return res.status(400).json({ success: false, message: priceError });
     const costError = validateServiceCost(cost);
     if (costError) return res.status(400).json({ success: false, message: costError });
+    const tierPricesError = validateTierPrices(tierPrices);
+    if (tierPricesError) return res.status(400).json({ success: false, message: tierPricesError });
     const commissionError = validateServiceCommission(commissionType, commissionValue);
     if (commissionError) return res.status(400).json({ success: false, message: commissionError });
 
@@ -3161,6 +3212,7 @@ router.post("/services", isSuperAdmin, async (req, res) => {
       name,
       status: ['active', 'paused', 'disabled'].includes(status) ? status : 'active',
       price: Number(price) || 0,
+      ...(tierPrices !== undefined ? { tierPrices: normalizeTierPrices(tierPrices) } : {}),
       cost: cost == null || String(cost).trim() === '' ? null : Number(cost),
       ...(commissionType !== undefined ? { commissionType, commissionValue: Number(commissionValue) } : {}),
       metadata,
@@ -3189,6 +3241,8 @@ router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
     const { commissionType, commissionValue } = req.body || {};
     const priceError = req.body?.price !== undefined ? validateServicePrice(req.body.price) : '';
     if (priceError) return res.status(400).json({ success: false, message: priceError });
+    const tierPricesError = req.body?.tierPrices !== undefined ? validateTierPrices(req.body.tierPrices) : '';
+    if (tierPricesError) return res.status(400).json({ success: false, message: tierPricesError });
     const costError = req.body?.cost !== undefined ? validateServiceCost(req.body.cost) : '';
     if (costError) return res.status(400).json({ success: false, message: costError });
     const commissionError = validateServiceCommission(commissionType, commissionValue);
@@ -3218,6 +3272,9 @@ router.put("/services/:serviceCode", isSuperAdmin, async (req, res) => {
       target.status = ['active', 'paused', 'disabled'].includes(req.body.status) ? req.body.status : target.status;
     }
     if (req.body.price !== undefined) target.price = Number(req.body.price) || 0;
+    if (req.body.tierPrices !== undefined) {
+      target.tierPrices = { ...(target.tierPrices || {}), ...normalizeTierPrices(req.body.tierPrices) };
+    }
     if (req.body.cost !== undefined) {
       target.cost = req.body.cost == null || String(req.body.cost).trim() === '' ? null : Number(req.body.cost);
     }
@@ -3255,6 +3312,31 @@ function validateServiceCommission(commissionType, commissionValue) {
     return 'Percentage commission cannot exceed 100%.';
   }
   return '';
+}
+
+function validateTierPrices(tierPrices) {
+  if (tierPrices === undefined) return "";
+  if (!tierPrices || typeof tierPrices !== "object" || Array.isArray(tierPrices)) {
+    return "Tier prices must be provided as an object.";
+  }
+  if (Object.keys(tierPrices).some((tier) => !["standard", "reseller"].includes(tier))) {
+    return "Tier prices may only include Standard and Reseller.";
+  }
+  if (Object.values(tierPrices).some((price) => (
+    price !== null && (!Number.isFinite(Number(price)) || Number(price) < 0)
+  ))) {
+    return "Tier prices must be valid non-negative amounts or null to use the default price.";
+  }
+  return "";
+}
+
+function normalizeTierPrices(tierPrices) {
+  return ["standard", "reseller"].reduce((normalized, tier) => {
+    if (Object.prototype.hasOwnProperty.call(tierPrices, tier)) {
+      normalized[tier] = tierPrices[tier] == null ? null : Number(tierPrices[tier]);
+    }
+    return normalized;
+  }, {});
 }
 
 function validateServicePrice(price) {
